@@ -1,21 +1,12 @@
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { MODEL, HISTORY, aiBody, keys, pool, wave } from '../engine.ts'
-import type { AiPick, AiRun, Deck, Wave } from '../engine.ts'
-import { hashContent } from './version.ts'
+import { MODEL, keys } from '../engine.ts'
+import type { AiPick, AiRun, Deck } from '../engine.ts'
+import { hashContent, hashRequests, jobsFor, requestBody, validate } from './version.ts'
+import type { Job, RecordedRun } from './version.ts'
 
 const URL_AI = 'https://api.liquid.ai/decisions/v1/systemone'
 const round3 = (x: number) => Math.round(x * 1000) / 1000
-
-export const validate = (ks: string[], answer: any): AiPick => {
-  const p = answer?.probabilities
-  if (!ks.includes(answer?.choice)) throw new Error(`bad choice: ${String(answer?.choice)}`)
-  if (!p || typeof p !== 'object') throw new Error('missing probabilities')
-  const got = Object.keys(p)
-  if (got.length !== ks.length || !ks.every((k) => got.includes(k))) throw new Error('probability keys differ from criteria')
-  for (const k of ks) if (typeof p[k] !== 'number' || !(p[k] >= 0 && p[k] <= 1)) throw new Error(`probability out of range: ${k}`)
-  return { choice: answer.choice, probabilities: Object.fromEntries(ks.map((k) => [k, round3(p[k])])) }
-}
 
 export const spread = (a: AiPick[], b: AiPick[]) => {
   let choiceDiffs = 0
@@ -29,8 +20,6 @@ export const spread = (a: AiPick[], b: AiPick[]) => {
   return { choiceDiffs, maxProbDiff: round3(maxProbDiff) }
 }
 
-type Job = { w: Wave; history: Wave[] }
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 const post = async (d: Deck, key: string, job: Job): Promise<any> => {
@@ -40,7 +29,7 @@ const post = async (d: Deck, key: string, job: Job): Promise<any> => {
       const res = await fetch(URL_AI, {
         method: 'POST',
         headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify(aiBody(d, job.w, job.history)),
+        body: requestBody(d, job),
         signal: AbortSignal.timeout(30000),
       })
       if (res.ok) return await res.json()
@@ -79,34 +68,19 @@ const main = async () => {
   }
   const { decks } = await import('../levels/index.ts')
   const d: Deck = decks.lifecycle
-  const jobs: Job[] = []
-  const slots: { level?: number; pool?: string; seed?: number }[] = []
-  for (const l of d.levels) {
-    const waves = l.sequence.map((s) => wave(d, s))
-    waves.forEach((w, i) => {
-      jobs.push({ w, history: waves.slice(Math.max(0, i - HISTORY), i) })
-      slots.push({ level: l.id })
-    })
-  }
-  for (const r of d.rules) {
-    for (let step = 1; step <= d.steps; step++) {
-      for (const s of pool(d, r.id, step)) {
-        jobs.push({ w: wave(d, s), history: [] })
-        slots.push({ pool: `${r.id}:${step}`, seed: s.seed })
-      }
-    }
-  }
+  const jobs = jobsFor(d)
   const usage = { tokens: 0 }
   const first = await runAll(d, key, jobs, usage)
   const second = await runAll(d, key, jobs, usage)
   const standard: AiRun['standard'] = {}
   const poolOut: AiRun['pool'] = {}
-  slots.forEach((s, i) => {
-    if (s.level !== undefined) (standard[s.level] ??= []).push(first[i])
-    else (poolOut[s.pool!] ??= []).push({ seed: s.seed!, ...first[i] })
+  jobs.forEach(({ slot }, i) => {
+    if ('level' in slot) (standard[slot.level] ??= []).push(first[i])
+    else (poolOut[slot.pool] ??= []).push({ seed: slot.seed, ...first[i] })
   })
-  const run: AiRun = {
+  const run: RecordedRun = {
     hash: hashContent(d),
+    requestHash: hashRequests(d, jobs),
     model: MODEL,
     date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }),
     standard,

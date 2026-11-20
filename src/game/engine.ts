@@ -1,15 +1,18 @@
+import type { ChoiceRecord } from './levels/records.ts'
+
 export type Mode = 'standard' | 'adaptive'
 export type Spec = { rule: string; step: number; seed: number }
 export type Wave = Spec & { symbols: string[]; answers: number[]; evidence: string }
 export type Policy = { high: number; low: number; window: number; confirm: number }
 export type Evidence = { id: string; kind: 'comment' | 'job' | 'run'; api: string; url: string; quote: string[] }
 export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'evidence'> }
-export type Level = { id: number; start: { rule: string; step: number }; sequence: Spec[] }
+export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[] }
 export type Deck = {
   id: string; steps: number; policy: Policy; rules: Rule[]; research?: Rule['make']
   poolSize: number; evidence: Evidence[]; question?: string; levels: Level[]
+  choiceRecords?: (wave: Wave) => ChoiceRecord[]
 }
-export type Decision = { spec: Spec; pick: number; hit: boolean | null }
+export type Decision = { spec: Spec; pick: number; hit: boolean | null; anchor: boolean; secs: number }
 export type Game = { mode: Mode; level: number; rule: string; step: number; streak: number; decisions: Decision[] }
 export type AiPick = { choice: string; probabilities: Record<string, number> }
 export type AiRun = {
@@ -73,11 +76,12 @@ export const advance = (d: Deck, s: { rule: string; step: number; streak: number
   return { rule: s.rule, step, streak, switched: false }
 }
 
-export const shoot = (d: Deck, g: Game, pick: number): Game => {
+export const shoot = (d: Deck, g: Game, pick: number, secs = 0): Game => {
   const spec = upcoming(d, g)
   if (!spec) return g
   const hit = spec.rule === 'research' ? null : wave(d, spec).answers.includes(pick)
-  const next = { ...g, decisions: [...g.decisions, { spec, pick, hit }] }
+  const anchor = d.levels.find((l) => l.id === g.level)!.anchors.includes(g.decisions.length)
+  const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
   if (g.mode === 'standard' || hit === null) return next
   const { rule, step, streak } = advance(d, g, estimate(d, next))
   return { ...next, rule, step, streak }
@@ -86,7 +90,8 @@ export const shoot = (d: Deck, g: Game, pick: number): Game => {
 export const replay = (d: Deck, level: number, mode: Mode, picks: number[]): Game =>
   picks.reduce((g, p) => shoot(d, g, p), begin(d, level, mode))
 
-export const score = (g: Game) => g.decisions.filter((x) => x.hit).length
+export const score = (g: Game) =>
+  g.decisions.reduce((t, x) => (x.anchor && x.hit ? t + 100 + Math.max(0, Math.round(100 - 10 * x.secs)) : t), 0)
 
 export const aiPick = (run: AiRun, g: Game, i: number): AiPick | undefined => {
   const { spec } = g.decisions[i]
@@ -94,11 +99,21 @@ export const aiPick = (run: AiRun, g: Game, i: number): AiPick | undefined => {
   return run.pool[`${spec.rule}:${spec.step}`]?.find((e) => e.seed === spec.seed)
 }
 
-export const aiScore = (d: Deck, run: AiRun, g: Game) =>
-  g.decisions.filter((x, i) => {
-    const pick = aiPick(run, g, i)
-    return pick && wave(d, x.spec).answers.includes(Number(pick.choice.slice(1)))
-  }).length
+// atypical: 0 = AI-like, 50 = as surprising as a uniform random pick, 100 = very atypical
+export const deviation = (d: Deck, run: AiRun, g: Game): { agree: number; atypical: number } | null => {
+  const rows = g.decisions.flatMap((x, i) => {
+    const ai = aiPick(run, g, i)
+    if (!ai) return []
+    const p = ai.probabilities['r' + x.pick] ?? 0
+    const surprise = Math.min(2, Math.max(0, -Math.log(Math.max(p, 0.001)) / Math.log(Math.max(2, wave(d, x.spec).symbols.length))))
+    return [{ same: x.pick === Number(ai.choice.slice(1)), surprise: 50 * surprise }]
+  })
+  if (!rows.length) return null
+  return {
+    agree: Math.round((100 * rows.filter((r) => r.same).length) / rows.length),
+    atypical: Math.round(rows.reduce((t, r) => t + r.surprise, 0) / rows.length),
+  }
+}
 
 export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
   model: MODEL,

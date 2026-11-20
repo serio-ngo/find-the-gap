@@ -3,13 +3,13 @@ import type { Field } from './render.ts'
 export const bindInput = (
   root: HTMLElement,
   field: Pick<Field, 'rockAt'>,
-  handlers: { pick(i: number): void; togglePause(): void },
+  handlers: { togglePause(): void; focus(i: number): void; aim(x: number): void },
 ) => {
   const twins = () => [...root.querySelectorAll<HTMLButtonElement>('[data-rock]')]
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-      if (['play', 'paused'].includes(root.dataset.phase!) && !root.querySelector('dialog[open]')) {
+      if (['play', 'paused'].includes(root.dataset.phase!)) {
         handlers.togglePause()
         e.preventDefault()
       }
@@ -29,11 +29,24 @@ export const bindInput = (
     if (i >= 0) twins()[i]?.click()
   }
 
+  const onFocus = (e: FocusEvent) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-rock]')
+    if (el) handlers.focus(e.type === 'focusin' && el.matches(':focus-visible') ? twins().indexOf(el as HTMLButtonElement) : -1)
+  }
+
+  const onMove = (e: PointerEvent) => handlers.aim(e.clientX - (e.currentTarget as HTMLElement).getBoundingClientRect().left)
+
   const canvas = root.querySelector('canvas')
   root.addEventListener('keydown', onKey)
+  root.addEventListener('focusin', onFocus)
+  root.addEventListener('focusout', onFocus)
   canvas?.addEventListener('pointerdown', onPointer)
+  canvas?.addEventListener('pointermove', onMove)
   return () => {
     root.removeEventListener('keydown', onKey)
+    root.removeEventListener('focusin', onFocus)
+    root.removeEventListener('focusout', onFocus)
+    canvas?.removeEventListener('pointermove', onMove)
     canvas?.removeEventListener('pointerdown', onPointer)
   }
 }

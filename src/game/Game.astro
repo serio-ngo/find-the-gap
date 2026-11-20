@@ -1,89 +1,98 @@
 ---
 import './game.css'
 import strings from './strings.json'
+import { decks } from './levels/index.ts'
+import { hashEdition } from './eval/version.ts'
 
 interface Props { level: number; lang: 'pl' | 'en' }
 const { level, lang } = Astro.props
 const v = strings.visible[lang]
 const l = strings.labels[lang]
+const files = import.meta.glob<string>(['./*.ts', './Game.astro', './game.css', './strings.json', './levels/**/*.{ts,json}'], { query: '?raw', import: 'default', eager: true })
+const editions = Object.fromEntries(Object.values(decks).map((deck) => [deck.id, hashEdition(deck, files)]))
 const path = `${lang === 'en' ? '/en' : ''}/find-the-gap`
-const frames = [['◆ ● ◆ ▲', l.frame1], ['◆ ◆ ✓ ▲', l.frame2], ['🧑 ✓ 🤖 ✕', l.frame3]]
-const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['facebook', 'f']]
+const paths = {
+  play: 'M7 4l13 8-13 8z', pause: 'M8 5v14M16 5v14', calm: 'M3 12c3-4 6-4 9 0s6 4 9 0', adaptive: 'M4 18l5-6 4 3 7-10',
+  inspect: 'M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M7 12h10', details: 'M12 11v6m0-10v1M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0z',
+  again: 'M4 12a8 8 0 1 0 3-6M4 4v5h5', next: 'M5 12h14M13 6l6 6-6 6', share: 'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6',
+  copy: 'M9 9h11v11H9zM5 15V4h11', switch: 'M3 7h4l10 10h4M3 17h4l3-3m4-4l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3', download: 'M12 3v12M7 10l5 5 5-5M5 20h14', delete: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+  x: 'M5 5l14 14M19 5L5 19', bluesky: 'M12 11C10 7 6 5 4 5c0 4 1 7 4 8-3 1-3 4 0 5 3 0 4-3 4-5 0 2 1 5 4 5 3-1 3-4 0-5 3-1 4-4 4-8-2 0-6 2-8 6z',
+  linkedin: 'M5 10v9M5 5v1M10 19v-9M10 14c0-3 7-5 7 0v5', facebook: 'M14 21v-8h3l.5-3H14V8c0-1.5 1-2 2-2h1.5V3H15c-3 0-4 2-4 4.5V10H8v3h3v8',
+}
+const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
 ---
-<section class="ftg" data-phase="start" data-level={level} data-lang={lang} data-url={new URL(`${path}/${level}`, Astro.site).href} data-next={`${path}/${level + 1}`} data-strings={JSON.stringify({ v, l })}>
+<section class="ftg" data-phase="start" data-level={level} data-lang={lang} data-editions={JSON.stringify(editions)} data-url={new URL(`${path}/${level}`, Astro.site).href} data-next={`${path}/${level + 1}`} data-strings={JSON.stringify({ v, l })}>
   <div class="ftg-hud">
-    <span role="group" aria-label={l.hits}>▲ <output class="ftg-hits">0</output></span>
-    <span class="ftg-step" role="img" aria-label={`${l.step} 1`}>◆◇◇◇◇</span>
+    <span class="ftg-stat"><span role="group" aria-label={v.score}><output class="ftg-hits">0</output></span>
     <span class="ftg-wave" role="group" aria-label={l.wave}>1/10</span>
-    <span class="ftg-switch" role="status" aria-live="polite"></span>
-    <button class="ftg-pausebtn" aria-label={l.pause}>⏸</button>
-    <button class="ftg-info" aria-label={l.guide}>ⓘ</button>
-    <button class="ftg-mode" aria-pressed="false" aria-label={l.adaptive}>🛸</button>
-    <button class="ftg-calm" aria-pressed="false">{v.calm}</button>
+    <span class="ftg-switch" role="img" aria-label={l.switch} hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.switch} /></svg></span></span>
+    <span class="ftg-btns">
+    <button class="ftg-pausebtn" aria-label={l.pause}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.pause} /></svg></button>
+    <button class="ftg-mode" aria-pressed="false" aria-label={l.adaptive}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.adaptive} /></svg></button>
+    <button class="ftg-calm" aria-pressed="false" aria-label={l.calm}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.calm} /></svg></button>
+    <button class="ftg-inspect" aria-pressed="false" aria-controls="ftg-readout" aria-label={l.inspect} title={l.inspect} hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.inspect} /></svg></button>
+    </span>
   </div>
   <div class="ftg-field">
     <canvas aria-hidden="true"></canvas>
     <div class="ftg-rocks"></div>
-    <div class="ftg-start"><button class="ftg-play">▶ {v.play}</button></div>
-    <div class="ftg-pause" hidden><strong>{v.paused}</strong><button class="ftg-resume">{v.resume}</button></div>
+    <div class="ftg-start"><button class="ftg-play"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg> {v.play}</button></div>
+    <div class="ftg-pause" hidden><strong>{v.paused}</strong><button class="ftg-resume" aria-label={l.resume}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg> {v.resume}</button></div>
   </div>
+  <ol id="ftg-readout" class="ftg-readout" aria-label={l.readout} hidden></ol>
   <div class="ftg-sr" role="status" aria-live="polite"></div>
-  <dialog class="ftg-dialog" aria-label={l.guide}>
-    <div class="ftg-guide">
-      {frames.map(([glyphs, label]) => <figure role="img" aria-label={label}>{glyphs}</figure>)}
-    </div>
-    <form method="dialog"><button aria-label={l.close}>✕</button></form>
-  </dialog>
   <section class="ftg-end" role="region" aria-label={`${v.title} ${v.level} ${level}`} hidden>
     <h2 class="ftg-score" tabindex="-1"></h2>
-    <div class="ftg-rows"></div>
-    <div class="ftg-steps" role="img" hidden></div>
-    <table><thead class="ftg-head"></thead><tbody class="ftg-table"></tbody></table>
-    <div class="ftg-style">
-      <span class="ftg-tempo" role="img"></span>
-      <span class="ftg-flex" role="img"></span>
-      <span class="ftg-atypical" role="img" aria-label={`${l.styleAtypical}: ${l.atypicalNeeds}`}>🧭 —</span>
-      <details><summary aria-label={l.notDiagnosis}>ⓘ</summary>{l.notDiagnosis}</details>
-    </div>
+    <div class="ftg-duel"></div>
+    <dl class="ftg-ind" hidden>
+      <dt>{v.agreement}</dt><dd class="ftg-agree"></dd>
+      <dt>{v.atypical}</dt><dd class="ftg-atyp"></dd>
+    </dl>
+    <ol class="ftg-top" aria-label={l.top}></ol>
+    <details class="ftg-replay">
+      <summary aria-label={l.details} title={l.details}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.details} /></svg></summary>
+      <ol class="ftg-decisions" aria-label={l.details}></ol>
+    </details>
     <div class="ftg-share">
-      <button class="ftg-again" aria-label={l.replay}>↻ {v.again}</button>
-      <a class="ftg-next" href={`${path}/${level + 1}`} aria-label={l.next}>▶ {v.next}</a>
-      <button class="ftg-sheet" aria-label={l.shareSheet} hidden>{v.share}</button>
-      <button class="ftg-copy" aria-label={l.copy}>{v.copy}</button>
-      {networks.map(([id, icon]) => <a class="ftg-net" data-net={id} aria-label={l[id as keyof typeof l]} target="_blank" rel="noopener">{icon}</a>)}
-      <a class="ftg-download" download="find-the-gap.json" aria-label={l.download}>⬇</a>
-      <button class="ftg-delete" aria-label={l.delete}>🗑</button>
+      <button class="ftg-again" aria-label={l.replay}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.again} /></svg></button>
+      <a class="ftg-next" href={`${path}/${level + 1}`} aria-label={l.next}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.next} /></svg></a>
+      <button class="ftg-sheet" aria-label={l.shareSheet} hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.share} /></svg></button>
+      <button class="ftg-copy" aria-label={l.copy}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.copy} /></svg></button>
+      {networks.map((id) => <a class="ftg-net" data-net={id} aria-label={l[id]} target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths[id]} /></svg></a>)}
+      <a class="ftg-download" download="find-the-gap.json" aria-label={l.download}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.download} /></svg></a>
+      <button class="ftg-delete" aria-label={l.delete}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.delete} /></svg></button>
     </div>
   </section>
 </section>
 <script>
   import { decks } from './levels/index.ts'
-  import { begin, upcoming, wave, shoot, score, aiPick, aiScore } from './engine.ts'
+  import { aiPick, begin, upcoming, wave, shoot, score, deviation } from './engine.ts'
   import type { AiRun, Game, Mode, Wave } from './engine.ts'
+  import { presentObjects } from './objects.ts'
+  import { colors, paintObject } from './gen.ts'
   import { createField } from './render.ts'
   import { bindInput } from './input.ts'
   import { resultText, links, share, copy } from './share.ts'
-  import { save, exportSaves, clearSaves } from './stats.ts'
+  import { save, load, exportSaves, clearSaves } from './stats.ts'
 
   const root = document.querySelector<HTMLElement>('.ftg')!
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!
   const { v, l } = JSON.parse(root.dataset.strings!) as { v: Record<string, string>; l: Record<string, string> }
   const query = new URLSearchParams(location.search)
   const deck = decks[query.get('deck') === 'fixture' ? 'fixture' : 'lifecycle']
+  const edition = JSON.parse(root.dataset.editions!)[deck.id] as string
   const level = deck.levels.find((x) => x.id === Number(root.dataset.level))?.id ?? 1
   const total = deck.levels.find((x) => x.id === level)!.sequence.filter((s) => s.rule !== 'research').length
   const run = Object.values(import.meta.glob<{ default: AiRun }>('./eval/ai-run.json', { eager: true }))[0]?.default
   const ai = deck.question ? run : undefined
-  const icons: Record<string, string> = { pair: '👯', odd: '☝️', changed: '≠', missing: '🔗', research: '🔬', colour: '🎨', count: '#' }
-  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-  const mark = (h: boolean | null) => (h === null ? '—' : h ? '✓' : '✕')
 
   const fieldEl = $('.ftg-field')
   const rocksEl = $('.ftg-rocks')
   const endEl = $('.ftg-end')
   const pauseEl = $('.ftg-pause')
   const live = $('.ftg-sr')
-  const guide = $<HTMLDialogElement>('.ftg-dialog')
+  const inspectBtn = $<HTMLButtonElement>('.ftg-inspect')
+  const readout = $('.ftg-readout')
   const modeBtn = $<HTMLButtonElement>('.ftg-mode')
   const calmBtn = $('.ftg-calm')
   const motion = matchMedia('(prefers-reduced-motion: reduce)')
@@ -94,13 +103,16 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
   let busy = false
   let t0 = 0
   let pausedAt = 0
-  let times: number[] = []
   let toggled = false
   let download = ''
+  let neutral: string[] = []
+  let clues: string[] = []
+  let rounds: ReturnType<typeof presentObjects>[] = []
 
   const phase = (p: string) => {
     root.dataset.phase = p
     modeBtn.disabled = p === 'play' || p === 'paused'
+    inspectBtn.hidden = p !== 'play'
   }
 
   const setCalm = (b: boolean) => {
@@ -129,56 +141,69 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
     const spec = upcoming(deck, g)
     if (!spec) return end()
     const w = wave(deck, spec)
-    const names = w.symbols.map((s, i) => l.rock.replace('{n}', String(i + 1)).replace('{s}', s))
+    const i = g.decisions.length
+    const objects = presentObjects(deck, w, `${deck.id}:${level}:${g.mode}:${i}`)
+    rounds[i] = objects
+    neutral = objects.map((o, i) => l.rock.replace('{n}', String(i + 1)).replace('{s}', l[o.shape.family] ?? l.object))
+    clues = objects.map((o) => l[o.clue] ?? o.clue)
     rocksEl.replaceChildren(
-      ...w.symbols.map((s, i) => {
+      ...objects.map((_, i) => {
         const b = document.createElement('button')
         b.className = 'ftg-rock'
         b.dataset.rock = String(i)
-        b.setAttribute('aria-label', names[i])
-        b.textContent = s
         b.onclick = () => pick(i, w)
         return b
       }),
     )
-    field.show(w, names)
+    field.show(w, objects, neutral)
+    inspect(false)
     const research = w.rule === 'research'
     $('.ftg-hits').textContent = String(score(g))
-    $('.ftg-wave').textContent = research ? '🔬' : `${g.decisions.length + 1}/${total}`
+    $('.ftg-wave').textContent = research ? '?' : `${g.decisions.length + 1}/${total}`
     $('.ftg-wave').setAttribute('aria-label', research ? l.research : l.wave)
-    $('.ftg-step').textContent = '◆'.repeat(w.step) + '◇'.repeat(deck.steps - w.step)
-    $('.ftg-step').setAttribute('aria-label', `${l.step} ${w.step}`)
     t0 = performance.now()
     busy = false
     rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
   }
 
+  const inspect = (enabled: boolean) => {
+    inspectBtn.setAttribute('aria-pressed', String(enabled))
+    readout.hidden = !enabled
+    readout.replaceChildren(...(enabled ? clues : []).map((clue) => {
+      const li = document.createElement('li')
+      li.textContent = clue
+      return li
+    }))
+    rocksEl.querySelectorAll('button').forEach((b, i) => {
+      b.setAttribute('aria-label', enabled ? `${neutral[i]}. ${clues[i]}` : neutral[i])
+    })
+    field.inspect(enabled)
+  }
+
   const pick = async (i: number, w: Wave) => {
     if (busy || root.dataset.phase !== 'play') return
     busy = true
-    times.push(performance.now() - t0)
-    const before = g
-    g = shoot(deck, g, i)
-    const { hit } = g.decisions.at(-1)!
-    live.textContent = `${l.wave} ${g.decisions.length}: ${hit === null ? l.research : hit ? l.hit : l.miss}`
-    if (hit !== null) {
-      rocksEl.querySelectorAll<HTMLElement>('button').forEach((b, j) => {
-        if (j === i) b.dataset.state = hit ? 'hit' : 'miss'
-        else if (w.answers.includes(j)) b.dataset.state = 'right'
-      })
-      await field.shoot(i, hit, w.answers)
-    }
-    $('.ftg-switch').innerHTML = g.rule !== before.rule ? `<span aria-hidden="true">🔀</span><span class="ftg-sr">${l.rule}</span>` : ''
+    const objects = rounds[g.decisions.length]
+    const rule = g.rule
+    g = shoot(deck, g, objects[i].sourceIndex, (performance.now() - t0) / 1000)
+    const d = g.decisions.at(-1)!
+    // Adaptive mode marks a rule switch for the next wave without naming the new rule.
+    const switched = g.mode === 'adaptive' && g.rule !== rule
+    $('.ftg-switch').hidden = !switched
+    live.textContent = [d.anchor && d.hit !== null ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
+    const answers = d.anchor ? objects.flatMap((o, index) => w.answers.includes(o.sourceIndex) ? [index] : []) : undefined
+    await field.shoot(i, d.anchor ? d.hit : null, answers)
     nextWave()
   }
 
   const start = () => {
     g = begin(deck, level, mode)
-    times = []
+    rounds = []
+    $('.ftg-switch').hidden = true
     endEl.hidden = true
+    $<HTMLDetailsElement>('.ftg-replay').open = false
     fieldEl.hidden = false
     $('.ftg-start').hidden = true
-    $('.ftg-switch').innerHTML = ''
     phase('play')
     field.resume()
     nextWave()
@@ -190,68 +215,112 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
     $<HTMLAnchorElement>('.ftg-download').href = download
   }
 
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
+  const mark = (h: boolean | null) => h === null ? '—' : h ? '✓' : '✕'
+  const outcome = (h: boolean | null) => h === null ? l.research : h ? l.hit : l.miss
+  const stateMark = (h: boolean | null) => `<span role="img" aria-label="${esc(outcome(h))}">${mark(h)}</span>`
+  const link = (url: string, label: string) => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`
+
+  const showReplay = () => {
+    const rows = g.decisions.map((d, i) => {
+      const w = wave(deck, d.spec)
+      const objects = rounds[i]
+      const a = ai && aiPick(ai, g, i)
+      const aiIndex = a ? Number(a.choice.slice(1)) : -1
+      const ap = objects.findIndex((o) => o.sourceIndex === aiIndex)
+      const target = objects.findIndex((o) => o.sourceIndex === d.pick)
+      const ahit = a && d.hit !== null ? w.answers.includes(aiIndex) : null
+      const choice = (p: number) => `${p + 1}. ${esc(l[objects[p].clue] ?? objects[p].clue)}`
+      const refs = () => objects.map(({ constructed, sourceIndex }, p) =>
+        `<li><details class="ftg-object-evidence"><summary>${choice(p)} ${w.answers.includes(sourceIndex) ? stateMark(true) : ''}${constructed ? `<small>${esc(l.control)}</small>` : ''}</summary></details></li>`
+      ).join('')
+      const exhibit = (p: number) => {
+        const { shape, sources, stages, context } = objects[p]
+        const paths: string[] = []
+        paintObject(shape, ({ points, fill, stroke, width }) => {
+          const d = points.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(3)} ${y.toFixed(3)}`).join('')
+          paths.push(`<path d="${d}${fill ? 'Z' : ''}" fill="${fill ? colors[fill] : 'none'}" stroke="${stroke ? colors[stroke] : 'none'}" stroke-width="${width}"/>`)
+        }, true)
+        const citations = [...new Map([...sources, ...(context ? [context] : [])].map((s) => [JSON.stringify(s), s])).values()]
+          .map(({ url, quote }) => `<li>${link(url, quote)}</li>`).join('')
+        const path = stages.map(({ pr, stage, run, url, conclusion, steps }) =>
+          `<li><details><summary>${link(url, `#${pr} ${stage} · ${run} · ${conclusion}`)}</summary><ul>${steps.map((step) => `<li>${esc(step)}</li>`).join('')}</ul></details></li>`
+        ).join('')
+        return `<div class="ftg-object-report"><svg viewBox="-1.1 -1.1 2.2 2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths.join('')}</svg><div>${citations ? `<ul>${citations}</ul>` : ''}${path ? `<ol>${path}</ol>` : ''}</div></div>`
+      }
+      const pct = a ? Math.round(100 * a.probabilities[a.choice]) : 0
+      const seconds = new Intl.NumberFormat(root.dataset.lang, { style: 'unit', unit: 'second', maximumFractionDigits: 1 }).format(d.secs)
+      const html = `<li class="ftg-decision">
+        <details><summary>
+          <span>${esc(v.you)} ${choice(target)} ${stateMark(d.hit)}</span>
+          ${a ? `<span>${esc(v.ai)} ${choice(ap)} ${stateMark(ahit)} <span role="img" aria-label="${esc(l.confidence)} ${pct}%">${pct}%</span></span>` : ''}
+          <span>${esc(seconds)}</span>
+        </summary><ul class="ftg-sources" aria-label="${esc(l.sources)}"></ul></details>
+      </li>`
+      return { hit: d.hit, ahit, html, refs, exhibit }
+    })
+    const strip = (name: string, hits: (boolean | null)[]) => {
+      const played = hits.filter((h) => h !== null)
+      return `<div><span>${esc(name)} <strong>${played.filter(Boolean).length}/${played.length}</strong></span> <span>${played.map(stateMark).join(' ')}</span></div>`
+    }
+    $('.ftg-duel').innerHTML = strip(v.you, rows.map((r) => r.hit)) + (ai ? strip(v.ai, rows.map((r) => r.ahit)) : '')
+    $('.ftg-decisions').innerHTML = rows.map((r) => r.html).join('')
+    root.querySelectorAll<HTMLDetailsElement>('.ftg-decision > details').forEach((entry, i) => {
+      entry.ontoggle = () => {
+        if (!entry.open) return
+        entry.querySelector('.ftg-sources')!.innerHTML = rows[i].refs()
+        entry.querySelectorAll<HTMLDetailsElement>('.ftg-object-evidence').forEach((object, p) => {
+          object.ontoggle = () => {
+            if (!object.open) return
+            object.insertAdjacentHTML('beforeend', rows[i].exhibit(p))
+            object.ontoggle = null
+          }
+        })
+        entry.ontoggle = null
+      }
+    })
+  }
+
   const end = () => {
     phase('end')
     field.pause()
     fieldEl.hidden = true
+    rocksEl.replaceChildren()
+    readout.hidden = true
     endEl.hidden = false
-    save(deck.id, level, score(g), { mode: g.mode, picks: g.decisions.map((d) => d.pick) })
+    const sc = score(g)
+    save(deck.id, level, sc, { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions })
     refreshDownload()
-    const rows = g.decisions.map((d, i) => {
-      const w = wave(deck, d.spec)
-      const a = ai && aiPick(ai, g, i)
-      const ap = a ? Number(a.choice.slice(1)) : -1
-      return { d, w, a, ap, ahit: a && d.hit !== null ? w.answers.includes(ap) : null }
-    })
-    const played = rows.filter((r) => r.d.hit !== null)
-    const you = played.map((r) => r.d.hit as boolean)
-    const bot = played.map((r) => !!r.ahit)
-    const line = (h: boolean[]) => h.map((x) => mark(x)).join(' ')
-    $('.ftg-score').textContent = ai ? `${v.you} ${score(g)} : ${aiScore(deck, ai, g)} 🤖` : `${v.you} ${score(g)}/${total}`
-    $('.ftg-rows').innerHTML = `<div>${v.you} ${line(you)}</div>${ai ? `<div>🤖 ${line(bot)}</div>` : ''}`
-    const rule = (r: string) => ({ pair: l.rulePair, odd: l.ruleOdd, changed: l.ruleChanged, missing: l.ruleMissing, research: l.research })[r as 'pair'] ?? ''
-    const cols = [l.wave, l.colRule, l.colYou, ...(ai ? [l.colAi, l.colConf] : []), l.colSource]
-    $('.ftg-head').innerHTML = `<tr>${cols.map((c) => `<th scope="col"><span class="ftg-sr">${esc(c)}</span></th>`).join('')}</tr>`
-    $('.ftg-table').innerHTML = rows
-      .map(({ d, w, a, ap, ahit }, i) => {
-        const pct = a ? Math.round(a.probabilities[a.choice] * 100) : 0
-        const src = deck.evidence.find((e) => e.id === w.evidence)?.url
-        return `<tr><td>${i + 1}</td><td><span role="img" aria-label="${esc(rule(d.spec.rule))}">${icons[d.spec.rule] ?? ''}</span></td><td>${esc(w.symbols[d.pick])} ${mark(d.hit)}</td>${
-          ai ? `<td>${a ? `${esc(w.symbols[ap])} ${mark(ahit)}` : '—'}</td><td>${a ? `<span class="ftg-bar" role="img" style="width:${pct}%" aria-label="${l.colConf} ${pct}%"></span>` : ''}</td>` : ''
-        }<td>${src ? `<a href="${src}" target="_blank" rel="noopener">${v.source}</a>` : ''}</td></tr>`
-      })
-      .join('')
-    const rules = g.decisions.map((d) => d.spec.rule)
-    const switched = (i: number) => i > 0 && rules[i] !== 'research' && rules[i - 1] !== 'research' && rules[i] !== rules[i - 1]
-    const stepsEl = $('.ftg-steps')
-    stepsEl.hidden = g.mode !== 'adaptive'
-    if (!stepsEl.hidden) {
-      const steps = g.decisions.map((d) => d.spec.step)
-      stepsEl.dataset.steps = steps.join(',')
-      stepsEl.dataset.rules = rules.join(',')
-      stepsEl.setAttribute('aria-label', `${l.step}: ${steps.join(' ')}`)
-      stepsEl.textContent = steps.map((s, i) => (switched(i) ? '🔀' : '') + '▁▂▃▅▇'[s - 1]).join(' ')
+    const top = load(deck.id, level, undefined, edition)?.top ?? [sc]
+    const cur = top.lastIndexOf(sc)
+    $('.ftg-score').textContent = `${v.score} ${sc}`
+    $('.ftg-top').replaceChildren(
+      ...top.map((t, n) => {
+        const li = document.createElement('li')
+        li.textContent = String(t)
+        if (n === cur) {
+          li.setAttribute('aria-current', 'true')
+          li.setAttribute('aria-label', `${l.current}: ${t}`)
+        }
+        return li
+      }),
+    )
+    const dev = ai && deviation(deck, ai, g)
+    showReplay()
+    $('.ftg-ind').hidden = !dev
+    root.querySelectorAll<HTMLElement>('.ftg-copy, .ftg-net').forEach((b) => (b.hidden = !dev))
+    $('.ftg-sheet').hidden = !dev || !navigator.share
+    if (dev) {
+      $('.ftg-agree').textContent = `${dev.agree}%`
+      $('.ftg-atyp').textContent = String(dev.atypical)
+      const url = root.dataset.url!
+      const text = resultText({ deck: v.title, level, score: sc, agree: dev.agree, atypical: dev.atypical, names: { score: v.score, agreement: v.agreement, atypical: v.atypical }, url })
+      const net = links(text, url)
+      root.querySelectorAll<HTMLAnchorElement>('.ftg-net').forEach((a) => (a.href = net[a.dataset.net as keyof typeof net]))
+      const notify = async (label: string, done: Promise<boolean>) => (live.textContent = `${label}: ${(await done) ? l.hit : l.miss}`)
+      $('.ftg-copy').onclick = () => notify(l.copy, copy(text))
+      $('.ftg-sheet').onclick = () => notify(l.shareSheet, share(text))
     }
-    const pct = Math.round((score(g) / total) * 100)
-    const secs = times.reduce((a, b) => a + b, 0) / times.length / 1000
-    $('.ftg-tempo').textContent = `${secs < 3 ? '🐇' : '🐢'} ${pct}%`
-    $('.ftg-tempo').setAttribute('aria-label', `${l.styleTempo}: ${secs.toFixed(1)} s, ${pct}%`)
-    const waits = g.decisions.flatMap((_, i) => {
-      const k = g.decisions.findIndex((d, j) => j >= i && d.hit)
-      return switched(i) && k >= 0 ? [k - i + 1] : []
-    })
-    const flex = waits.length ? String(Math.round(waits.reduce((a, b) => a + b, 0) / waits.length)) : '—'
-    $('.ftg-flex').textContent = `🔀 ${flex}`
-    $('.ftg-flex').setAttribute('aria-label', `${l.styleFlex}: ${flex}`)
-    root.querySelectorAll<HTMLElement>('.ftg-copy, .ftg-net').forEach((b) => (b.hidden = !ai))
-    const url = root.dataset.url!
-    const text = resultText({ deck: v.title, level, mode: g.mode, you, ai: bot, lang: root.dataset.lang as 'pl' | 'en', url })
-    const net = links(text, url)
-    root.querySelectorAll<HTMLAnchorElement>('.ftg-net').forEach((a) => (a.href = net[a.dataset.net as keyof typeof net]))
-    const notify = async (label: string, done: Promise<boolean>) => (live.textContent = `${label} ${(await done) ? '✓' : '✕'}`)
-    $('.ftg-copy').onclick = () => notify(l.copy, copy(text))
-    $('.ftg-sheet').onclick = () => notify(l.shareSheet, share(text))
-    $('.ftg-sheet').hidden = !ai || !navigator.share
     const nextEl = $<HTMLAnchorElement>('.ftg-next')
     nextEl.hidden = !deck.levels.some((x) => x.id === level + 1)
     nextEl.href = `${root.dataset.next}${location.search}`
@@ -264,16 +333,16 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
   modeBtn.hidden = !ai
   phase('start')
   bindInput(root, field, {
-    pick: (i) => rocksEl.querySelectorAll('button')[i]?.click(),
     togglePause: () => setPause(root.dataset.phase === 'play'),
+    focus: (i) => field.focus(i),
+    aim: (x) => field.aim(x),
   })
   $('.ftg-play').onclick = start
   $('.ftg-again').onclick = start
   $('.ftg-resume').onclick = () => setPause(false)
   $('.ftg-pausebtn').onclick = () => setPause(root.dataset.phase === 'play')
-  $('.ftg-info').onclick = () => {
-    setPause(true)
-    guide.showModal()
+  inspectBtn.onclick = () => {
+    if (!busy && root.dataset.phase === 'play') inspect(inspectBtn.getAttribute('aria-pressed') !== 'true')
   }
   modeBtn.onclick = () => setMode(mode === 'adaptive' ? 'standard' : 'adaptive')
   calmBtn.onclick = () => (toggled = true) && setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')

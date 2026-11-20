@@ -1,28 +1,34 @@
 import { expect, test } from '@playwright/test'
-import { score } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
-import { open, play, strings } from './helpers.ts'
+import { expectEnd, open, play } from './helpers.ts'
 
 const fixture = decks.fixture
 
-test('?deck=fixture plays to its own end without a duel', async ({ page }) => {
+test('?deck=fixture plays to its own end with a score, no indicators and no table', async ({ page }) => {
   await open(page, 'en', 1, '?deck=fixture')
   const g = await play(page, { deck: fixture })
-  await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
-  const title = page.getByRole('heading', { level: 2 })
-  await expect(title).toHaveText(new RegExp(`^${strings.visible.en.you} ${score(g)}/\\d+$`))
-  await expect(title).not.toContainText('🤖')
-  await expect(page.locator('.ftg-table tr')).toHaveCount(g.decisions.length)
+  await expectEnd(page, g)
+  await expect(page.locator('.ftg-ind')).toBeHidden()
+  await expect(page.locator('table')).toHaveCount(0)
   expect(g.decisions).toHaveLength(fixture.levels[0].sequence.length)
 })
 
 test('saves keep levels and decks apart', async ({ page }) => {
+  test.slow() // three full plays, each wave animates
   await open(page, 'en', 1)
+  await page.evaluate(() => localStorage.setItem('ftg:lifecycle:1', '{"plays":1,"top":[999]}'))
   await play(page)
+  await expect(page.locator('.ftg-top li')).toHaveCount(1)
+  await expect(page.locator('.ftg-top li')).not.toHaveText('999')
   await open(page, 'en', 2)
   await play(page, { level: 2 })
   await open(page, 'en', 1, '?deck=fixture')
   await play(page, { deck: fixture })
-  const keys = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('ftg:')).sort())
-  expect(keys).toEqual(['ftg:fixture:1', 'ftg:lifecycle:1', 'ftg:lifecycle:2'])
+  const records = await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith('ftg:')).sort().map(([k, s]) => [k, JSON.parse(s)]))
+  expect(records.map(([k]) => k)).toEqual(['ftg:fixture:1:', 'ftg:lifecycle:1', 'ftg:lifecycle:1:', 'ftg:lifecycle:2:'].map((k) => k.endsWith(':') ? expect.stringMatching(new RegExp(`^${k}[a-f0-9]{64}$`)) : k))
+  expect(records[1][1]).toEqual({ plays: 1, top: [999] })
+  for (const [k, save] of [records[0], ...records.slice(2)]) {
+    expect(k.endsWith(save.last.edition)).toBe(true)
+    expect(save.last.decisions).toHaveLength(save.last.picks.length)
+  }
 })

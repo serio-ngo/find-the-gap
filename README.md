@@ -6,13 +6,11 @@ A pattern game built from real software delivery evidence.
 - Phase 2: site integration, tracked in serio-ngo/audioblog#133.
 - Design docs (private).
 
-## Status: failed, not for merge
+## Play
 
-Phase 1 runs offline and its checks pass, with the first review's findings fixed, but the owner rejected the design on 20 November 2026.
-Open before a new attempt (design: serio-ngo/ops#86):
-- Shootable objects (asteroids, alien ships or similar) from a deterministic algorithm that balances looks against how closely they map to the source data.
-- UI with almost no text.
-- Minimal end-screen stats, as in the vision.
+Open `/find-the-gap/1` in Polish or `/en/find-the-gap/1` in English. Scan the field to split every rock and compare the cores, then select one by mouse, touch or keyboard. A shot records one choice and cracks that rock. Two waves per level award points; on the others the next wave flies in while the rock bursts. Adaptive mode shows a shuffle icon after a rule switch. The final research wave accepts any pick.
+
+The four levels draw from public workflow evidence. Every choice is an asteroid drawn from its own record: crystals for the step outputs of its job, craters and inner bands for the stages, and a core with the clue that the scan splits open. Replaying the same presentation recreates it. After the game, the decision history shows the selected evidence and the stored d1.1 comparison. [Level data, visual design and history](LEVELS.md)
 
 ## Run
 

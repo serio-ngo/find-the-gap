@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  advance, aiBody, aiScore, begin, canonical, estimate, pool, replay, rng, score, shoot, upcoming, wave,
+  advance, aiBody, begin, canonical, deviation, estimate, pool, replay, rng, score, shoot, upcoming, wave,
 } from '../../src/game/engine.ts'
-import type { AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
+import type { AiPick, AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
 
 const policy = { high: 0.8, low: 0.55, window: 4, confirm: 2 }
 
@@ -29,7 +29,7 @@ const deck: Deck = {
   poolSize: 3,
   evidence: [],
   question: 'q',
-  levels: [{ id: 1, start: { rule: 'a', step: 1 }, sequence }],
+  levels: [{ id: 1, start: { rule: 'a', step: 1 }, anchors: [3, 4], sequence }],
 }
 
 const picks = [0, 1, 2, 0, 1, 0, 2, 1, 0, 1, 0]
@@ -51,7 +51,7 @@ describe('engine', () => {
   })
 
   it('estimate uses the last four non-research waves of the current rule', () => {
-    const d = (r: string, hit: boolean | null) => ({ spec: { rule: r, step: 1, seed: 1 }, pick: 0, hit })
+    const d = (r: string, hit: boolean | null) => ({ spec: { rule: r, step: 1, seed: 1 }, pick: 0, hit, anchor: false, secs: 0 })
     const g: Game = {
       mode: 'adaptive', level: 1, rule: 'a', step: 1, streak: 0,
       decisions: [d('a', true), d('a', true), d('b', false), d('a', true), d('research', null), d('a', false), d('a', false), d('a', false)],
@@ -69,8 +69,17 @@ describe('engine', () => {
     expect(next.decisions[0].hit).toBe(wave(deck, sequence[0]).answers.includes(0))
     const end = picks.reduce((acc, p) => shoot(deck, acc, p), g)
     expect(end.decisions[10].hit).toBeNull()
-    const expected = sequence.slice(0, 10).filter((s, i) => wave(deck, s).answers.includes(picks[i])).length
-    expect(score(end)).toBe(expected)
+    expect(end.decisions.map((x) => x.anchor)).toEqual(picks.map((_, i) => i === 3 || i === 4))
+    expect(score(end)).toBe(400)
+  })
+
+  it('score counts only anchor hits: 100 plus up to 100 for speed', () => {
+    const at = (secs: number[]) =>
+      secs.reduce((g, s, i) => shoot(deck, g, picks[i], s), begin(deck, 1, 'standard'))
+    expect(score(at([0, 0, 0, 0, 0]))).toBe(400)
+    expect(score(at([0, 0, 0, 3, 20]))).toBe(270)
+    expect(score(replay(deck, 1, 'standard', [1, 1, 1, 1, 0]))).toBe(0)
+    expect(score(replay(deck, 1, 'standard', [0, 0, 0, 0, 0]))).toBe(200)
   })
 
   it('replay equals folding shoot over the picks and repeats exactly', () => {
@@ -99,16 +108,26 @@ describe('engine', () => {
     }
   })
 
-  it('aiScore counts right AI choices and skips research', () => {
-    const g = replay(deck, 1, 'standard', picks)
-    const choices = sequence.map((s, i) =>
-      i === 10 ? 'r0' : i % 2 === 0 ? `r${wave(deck, s).answers[0]}` : 'r2',
-    )
-    const run: AiRun = {
+  describe('deviation', () => {
+    const run = (picks: AiPick[]): AiRun => ({
       hash: 'h', model: 'm', date: 'd', pool: {}, spread: { choiceDiffs: 0, maxProbDiff: 0 },
-      standard: { 1: choices.map((choice) => ({ choice, probabilities: {} })) },
-    }
-    expect(aiScore(deck, run, g)).toBe(5)
+      standard: { 1: picks },
+    })
+    const g = replay(deck, 1, 'standard', picks)
+    const n = (i: number) => wave(deck, sequence[i]).symbols.length
+    it('is null without any AI pick', () => expect(deviation(deck, run([]), g)).toBeNull())
+    it('agree is the share of equal picks, research included', () => {
+      const ai = picks.map((p, i) => ({ choice: `r${i < 4 ? p : p + 1}`, probabilities: { [`r${p}`]: 1 } }))
+      expect(deviation(deck, run(ai), g)!.agree).toBe(36)
+    })
+    it('atypical is 0 at p=1, 50 at p=1/n, 100 when p is missing', () => {
+      const one = (p: number | undefined) =>
+        deviation(deck, run(picks.map((k, i) => ({ choice: 'r0', probabilities: p === undefined ? {} : { [`r${k}`]: p } }))), g)!.atypical
+      expect(one(1)).toBe(0)
+      expect(one(undefined)).toBe(100)
+      const ai = picks.map((k, i) => ({ choice: 'r0', probabilities: { [`r${k}`]: 1 / n(i) } }))
+      expect(deviation(deck, run(ai), g)!.atypical).toBe(50)
+    })
   })
 
   it('aiBody holds rocks and history but never the current answers', () => {

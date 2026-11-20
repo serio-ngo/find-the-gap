@@ -2,17 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copy, links, resultText, share } from '../../src/game/share.ts'
 
 const url = 'https://serio.org.pl/find-the-gap/3'
-const base = { deck: 'Find the Gap', level: 3, mode: 'adaptive' as const, you: [true, true, false], ai: [true, false, true], lang: 'pl' as const, url }
+const base = { deck: 'Find the Gap', level: 3, score: 7, agree: 80, atypical: 2, names: { score: 'Score', agreement: 'Agreement', atypical: 'Atypical' }, url }
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('share', () => {
-  it('formats the adaptive Polish block', () => {
-    expect(resultText(base)).toBe(`🛸 Find the Gap #3\nTy 2 🟩🟩🟥\n🤖 2 🟩🟥🟩\n${url}`)
-  })
-  it('omits the prefix in standard and says You in English', () => {
-    expect(resultText({ ...base, mode: 'standard', lang: 'en' }).split('\n')[0]).toBe('Find the Gap #3')
-    expect(resultText({ ...base, lang: 'en' }).split('\n')[1]).toBe('You 2 🟩🟩🟥')
+  it('formats the result block with passed-in labels', () => {
+    expect(resultText(base)).toBe(`Find the Gap #3\nScore 7\nAgreement 80%\nAtypical 2\n${url}`)
   })
   it('builds network links', () => {
     const l = links('a b', url), t = encodeURIComponent('a b'), u = encodeURIComponent(url)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { fetchText, parseFacts, verify } from '../../scripts/check-sources.ts'
+import { archivedLog, fetchText, matchesJob, parseFacts, verify } from '../../scripts/check-sources.ts'
 import type { Evidence } from '../../src/game/engine.ts'
+import { sandboxUrl, workflowJobs } from '../../src/game/levels/records.ts'
 
 const ev = (kind: Evidence['kind'], api: string): Evidence => ({ id: 'x', kind, api, url: 'u', quote: [] })
 const stub = (routes: Record<string, { status?: number; body: unknown }>) => {
@@ -82,4 +83,26 @@ it('fetchText retries a thrown network error', async () => {
   }) as typeof fetch
   expect(await fetchText(ev('comment', 'x'), 't', fetchFn)).toBe('ok')
   expect(calls).toBe(2)
+})
+
+it('verifies every workflow step in order and ignores unselected fields', () => {
+  const pinned = workflowJobs[0]
+  const actual = {
+    ...pinned,
+    run_id: pinned.run,
+    html_url: `${sandboxUrl}/actions/runs/${pinned.run}/job/${pinned.id}`,
+    steps: pinned.steps.map((s) => ({ ...s, status: 'completed' })),
+  }
+  expect(matchesJob(pinned, actual)).toBe(true)
+  expect(matchesJob(pinned, { ...actual, steps: [...actual.steps].reverse() })).toBe(false)
+  expect(matchesJob(pinned, { ...actual, steps: actual.steps.slice(1) })).toBe(false)
+  expect(matchesJob(pinned, { ...actual, conclusion: 'failure' })).toBe(false)
+})
+
+it('uses frozen excerpts only when an actual sandbox job log has expired', () => {
+  const url = 'https://api.github.com/repos/serio-ngo/lifecycle-sandbox/actions/jobs/135181131850/logs'
+  expect(archivedLog({ status: 404, url })).toBe(true)
+  expect(archivedLog({ status: 410, url })).toBe(true)
+  expect(archivedLog({ status: 403, url })).toBe(false)
+  expect(archivedLog({ status: 404, url: url.slice(0, -5) })).toBe(false)
 })

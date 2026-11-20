@@ -1,7 +1,8 @@
 import { expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { aiPick, aiScore, begin, score, shoot, upcoming, wave } from '../../src/game/engine.ts'
+import { begin, shoot, upcoming, wave } from '../../src/game/engine.ts'
 import type { AiRun, Deck, Game, Mode } from '../../src/game/engine.ts'
+import { presentObjects } from '../../src/game/objects.ts'
 import { decks } from '../../src/game/levels/index.ts'
 
 export type Lang = 'pl' | 'en'
@@ -21,35 +22,48 @@ export const wrong = (d: Deck, g: Game) => {
   return Math.max(0, w.symbols.findIndex((_, i) => !w.answers.includes(i)))
 }
 
+export const displayed = (d: Deck, g: Game, i = g.decisions.length) =>
+  presentObjects(d, wave(d, g.decisions[i]?.spec ?? upcoming(d, g)!), `${d.id}:${g.level}:${g.mode}:${i}`)
+
 export const open = (page: Page, lang: Lang = 'en', level = 1, query = '') => page.goto(urlPath(lang, level, query))
-export const playButton = (page: Page, lang: Lang = 'en') => page.getByRole('button', { name: `▶ ${strings.visible[lang].play}`, exact: true })
+export const playButton = (page: Page, lang: Lang = 'en') => page.getByRole('button', { name: strings.visible[lang].play, exact: true })
 
 type Options = {
   deck?: Deck
   level?: number
   mode?: Mode
   lang?: Lang
-  by?: 'click' | 'keys' | 'tap'
+  by?: 'click' | 'keys'
   pick?: (g: Game) => number
   limit?: number
   begun?: boolean
+  inspect?: boolean
+  start?: Game
 }
 
 export async function play(page: Page, o: Options = {}) {
-  const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false } = o
+  const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false, inspect = false } = o
   const labels = strings.labels[lang]
   if (!begun) await playButton(page, lang).click()
-  let g = begin(d, level, mode)
+  let g = o.start ?? begin(d, level, mode)
   for (let spec = upcoming(d, g); spec && g.decisions.length < limit; spec = upcoming(d, g)) {
     const i = pick(g)
     const w = wave(d, spec)
-    const twin = page.getByRole('button', { name: labels.rock.replace('{n}', String(i + 1)).replace('{s}', w.symbols[i]), exact: true })
+    const objects = displayed(d, g)
+    const slot = objects.findIndex((o) => o.sourceIndex === i)
+    const names = objects.map((o, k) => labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]))
+    // the page must show exactly the wave the engine replay expects (this is what proves the adaptive path)
+    await expect.poll(() => page.locator('.ftg-rocks button').evaluateAll((bs) => bs.map((b) => b.ariaLabel))).toEqual(names)
+    if (inspect) {
+      await page.getByRole('button', { name: labels.inspect }).click()
+      await expect(page.locator('.ftg-readout li')).toHaveText(objects.map((o) => w.symbols[o.sourceIndex]).map((s) => labels[s] ?? s))
+    }
     const before = await page.locator('.ftg-wave').textContent()
     if (by === 'keys') {
-      for (let k = 0; k < i; k++) await page.keyboard.press('ArrowRight')
-      await page.keyboard.press(i % 2 ? 'Enter' : 'Space')
-    } else if (by === 'tap') await twin.tap()
-    else await twin.click()
+      if (inspect) await page.locator('[data-rock="0"]').focus()
+      for (let k = 0; k < slot; k++) await page.keyboard.press('ArrowRight')
+      await page.keyboard.press(slot % 2 ? 'Enter' : 'Space')
+    } else await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click') // targets are drawn on canvas; the twin buttons are invisible
     g = shoot(d, g, i)
     await page.waitForFunction(
       (b) => document.querySelector('.ftg')!.getAttribute('data-phase') === 'end' || document.querySelector('.ftg-wave')!.textContent !== b,
@@ -59,9 +73,14 @@ export async function play(page: Page, o: Options = {}) {
   return g
 }
 
+// Timing varies, so the shown score lies between 100 and 200 per anchor hit. Returns the shown score.
 export async function expectEnd(page: Page, g: Game, lang: Lang = 'en') {
   await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText(`${strings.visible[lang].you} ${score(g)} : ${aiScore(deck, run, g)} 🤖`)
+  const h = g.decisions.filter((d) => d.anchor && d.hit).length
+  const text = (await page.locator('.ftg-score').textContent())!
+  const m = text.match(new RegExp(`^${strings.visible[lang].score} (\\d+)$`))
+  expect(m, text).not.toBeNull()
+  expect(Number(m![1])).toBeGreaterThanOrEqual(100 * h)
+  expect(Number(m![1])).toBeLessThanOrEqual(200 * h)
+  return Number(m![1])
 }
-
-export const aiChoice = (g: Game, i: number) => Number(aiPick(run, g, i)!.choice.slice(1))

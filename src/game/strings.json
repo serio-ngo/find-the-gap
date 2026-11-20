@@ -1,30 +1,32 @@
 {
   "visible": {
-    "pl": { "title": "Find the Gap", "play": "Graj", "level": "Poziom", "paused": "Pauza", "resume": "Wznów", "you": "Ty", "next": "Dalej", "again": "Jeszcze raz", "share": "Udostępnij", "copy": "Kopiuj", "source": "Źródło", "calm": "Spokojnie" },
-    "en": { "title": "Find the Gap", "play": "Play", "level": "Level", "paused": "Paused", "resume": "Resume", "you": "You", "next": "Next", "again": "Again", "share": "Share", "copy": "Copy", "source": "Source", "calm": "Calm" }
+    "pl": { "title": "Find the Gap", "play": "Graj", "level": "Poziom", "paused": "Pauza", "resume": "Wznów", "score": "Wynik", "agreement": "Zgodność z AI", "atypical": "Atypowość", "you": "Ty", "ai": "AI" },
+    "en": { "title": "Find the Gap", "play": "Play", "level": "Level", "paused": "Paused", "resume": "Resume", "score": "Score", "agreement": "AI agreement", "atypical": "Atypicality", "you": "You", "ai": "AI" }
   },
   "labels": {
     "pl": {
-      "pause": "Pauza", "resume": "Wznów", "calm": "Tryb spokojny", "guide": "Jak grać: przewodnik w trzech obrazach",
-      "frame1": "Obraz 1: skały dryfują i pokazują symbole", "frame2": "Obraz 2: wskaż skałę pasującą do reguły", "frame3": "Obraz 3: zobacz, co wybrało AI",
-      "standard": "Tryb standardowy", "adaptive": "Tryb adaptacyjny 🛸", "rule": "Reguła się zmieniła 🔀",
-      "rock": "Skała {n}: {s}", "hit": "Trafienie", "miss": "Pudło", "research": "Fala badawcza 🔬, bez dobrej odpowiedzi", "ai": "AI 🤖",
-      "replay": "Jeszcze raz: zagraj poziom ponownie ↻", "next": "Dalej: następny poziom ▶", "shareSheet": "Udostępnij: otwórz menu udostępniania", "copy": "Kopiuj wynik",
+      "pause": "Pauza", "resume": "Wznów", "calm": "Tryb spokojny", "adaptive": "Tryb adaptacyjny",
+      "rock": "Obiekt {n}: {s}", "wave": "Fala", "research": "Fala badawcza, bez dobrej odpowiedzi",
+      "object": "obiekt", "basalt": "skała bazaltowa", "iron": "skała żelazowo-niklowa", "ice": "skała lodowa", "carbon": "skała węglowa",
+      "olivine": "skała oliwinowa", "chondrite": "chondryt", "obsidian": "obsydian", "blue": "niebieski", "red": "czerwony",
+      "inspect": "Zbadaj obiekty", "readout": "Odczyty z obiektów", "details": "Przebieg gry i źródła", "sources": "Źródła i etapy",
+      "confidence": "Pewność AI", "switch": "Reguła się zmieniła", "control": "Próba porównawcza",
+      "hit": "Trafienie", "miss": "Pudło", "current": "Twój bieżący wynik", "top": "Twoje najlepsze wyniki",
+      "replay": "Jeszcze raz: zagraj poziom ponownie", "next": "Dalej: następny poziom", "shareSheet": "Udostępnij: otwórz menu udostępniania", "copy": "Kopiuj wynik",
       "x": "Udostępnij na X", "bluesky": "Udostępnij na Bluesky", "linkedin": "Udostępnij na LinkedIn", "facebook": "Udostępnij na Facebooku",
-      "download": "Pobierz historię", "delete": "Usuń historię",
-      "styleTempo": "Styl: tempo i dokładność", "styleFlex": "Styl: elastyczność", "styleAtypical": "Styl: nietypowość",
-      "notDiagnosis": "to nie diagnoza", "step": "Krok", "wave": "Fala", "hits": "Trafienia", "close": "Zamknij", "atypicalNeeds": "wymaga 50 wkładów", "colRule": "Reguła", "colYou": "Twój wybór", "colAi": "Wybór AI", "colConf": "Pewność AI", "colSource": "Źródło", "rulePair": "Para", "ruleOdd": "Intruz", "ruleChanged": "Zmieniona wartość", "ruleMissing": "Brakujące ogniwo"
+      "download": "Pobierz historię", "delete": "Usuń historię"
     },
     "en": {
-      "pause": "Pause", "resume": "Resume", "calm": "Calm mode", "guide": "How to play: three-frame picture guide",
-      "frame1": "Frame 1: rocks drift in and show symbols", "frame2": "Frame 2: shoot the rock that fits the rule", "frame3": "Frame 3: see what the AI chose",
-      "standard": "Standard mode", "adaptive": "Adaptive mode 🛸", "rule": "The rule changed 🔀",
-      "rock": "Rock {n}: {s}", "hit": "Hit", "miss": "Miss", "research": "Research wave 🔬, no right answer", "ai": "AI 🤖",
-      "replay": "Again: play the level again ↻", "next": "Next: next level ▶", "shareSheet": "Share: open the share sheet", "copy": "Copy result",
+      "pause": "Pause", "resume": "Resume", "calm": "Calm mode", "adaptive": "Adaptive mode",
+      "rock": "Object {n}: {s}", "wave": "Wave", "research": "Research wave, no right answer",
+      "object": "object", "basalt": "basalt rock", "iron": "iron-nickel rock", "ice": "ice rock", "carbon": "carbon rock",
+      "olivine": "olivine rock", "chondrite": "chondrite rock", "obsidian": "obsidian rock", "blue": "blue", "red": "red",
+      "inspect": "Scan objects", "readout": "Object readings", "details": "Decisions and sources", "sources": "Sources and stages",
+      "confidence": "AI confidence", "switch": "The rule changed", "control": "Comparison control",
+      "hit": "Hit", "miss": "Miss", "current": "Your current score", "top": "Your best scores",
+      "replay": "Again: play the level again", "next": "Next: next level", "shareSheet": "Share: open the share sheet", "copy": "Copy result",
       "x": "Share on X", "bluesky": "Share on Bluesky", "linkedin": "Share on LinkedIn", "facebook": "Share on Facebook",
-      "download": "Download history", "delete": "Delete history",
-      "styleTempo": "Style: tempo and accuracy", "styleFlex": "Style: flexibility", "styleAtypical": "Style: atypicality",
-      "notDiagnosis": "not a diagnosis", "step": "Step", "wave": "Wave", "hits": "Hits", "close": "Close", "atypicalNeeds": "needs 50 contributions", "colRule": "Rule", "colYou": "Your choice", "colAi": "AI choice", "colConf": "AI confidence", "colSource": "Source", "rulePair": "Pair", "ruleOdd": "Odd one out", "ruleChanged": "Changed value", "ruleMissing": "Missing link"
+      "download": "Download history", "delete": "Delete history"
     }
   }
 }

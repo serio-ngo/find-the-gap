@@ -1,9 +1,7 @@
-export type Result = { deck: string; level: number; mode: 'standard' | 'adaptive'; you: boolean[]; ai: boolean[]; lang: 'pl' | 'en'; url: string }
-
-const row = (h: boolean[]) => `${h.filter(Boolean).length} ${h.map((x) => (x ? '🟩' : '🟥')).join('')}`
+export type Result = { deck: string; level: number; score: number; agree: number; atypical: number; names: { score: string; agreement: string; atypical: string }; url: string }
 
 export const resultText = (r: Result): string =>
-  [`${r.mode === 'adaptive' ? '🛸 ' : ''}${r.deck} #${r.level}`, `${r.lang === 'pl' ? 'Ty' : 'You'} ${row(r.you)}`, `🤖 ${row(r.ai)}`, r.url].join('\n')
+  [`${r.deck} #${r.level}`, `${r.names.score} ${r.score}`, `${r.names.agreement} ${r.agree}%`, `${r.names.atypical} ${r.atypical}`, r.url].join('\n')
 
 export const links = (text: string, url: string) => {
   const t = encodeURIComponent(text), u = encodeURIComponent(url)

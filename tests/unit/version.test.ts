@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { AiPick, AiRun, Deck, Spec } from '../../src/game/engine.ts'
-import { checkRun, hashContent, loadRun } from '../../src/game/eval/version.ts'
-import { spread, validate } from '../../src/game/eval/run-ai.ts'
+import type { AiPick, Deck, Spec } from '../../src/game/engine.ts'
+import { lifecycle } from '../../src/game/levels/lifecycle.ts'
+import { checkRun, hashContent, hashEdition, hashRequests, jobsFor, loadRun, validate } from '../../src/game/eval/version.ts'
+import type { RecordedRun } from '../../src/game/eval/version.ts'
+import { spread } from '../../src/game/eval/run-ai.ts'
 
 beforeAll(() => {
   vi.stubGlobal('fetch', () => {
@@ -23,18 +25,20 @@ const make = (sym = 'a', seed = 1, high = 0.8, question = 'q?'): Deck => {
     poolSize: 2,
     evidence: [],
     question,
-    levels: [{ id: 1, start: { rule: 'a', step: 1 }, sequence }],
+    levels: [{ id: 1, start: { rule: 'a', step: 1 }, anchors: [2, 7], sequence }],
   }
 }
 
 const pick: AiPick = { choice: 'r0', probabilities: { r0: 0.9, r1: 0.1 } }
-const full = (d: Deck, hash: string): AiRun => ({
+const scored = { ...pick, probabilities: { r0: 0.8, r1: 0.1, r2: 0.1 } }
+const full = (d: Deck, hash: string): RecordedRun => ({
   hash,
+  requestHash: hashRequests(d),
   model: 'd1.1',
   date: '2026-11-20',
-  standard: { 1: Array.from({ length: 11 }, () => pick) },
+  standard: { 1: [...Array.from({ length: 10 }, () => scored), pick] },
   pool: Object.fromEntries(
-    [1, 2].map((step) => [`a:${step}`, [1000, 1001].map((seed) => ({ ...pick, seed }))]),
+    [1, 2].map((step) => [`a:${step}`, [1000, 1001].map((seed) => ({ ...scored, seed }))]),
   ),
   spread: { choiceDiffs: 0, maxProbDiff: 0 },
 })
@@ -50,6 +54,30 @@ describe('hashContent', () => {
       expect(hashContent(d)).not.toBe(base)
     }
   })
+  it('ignores anchors', () => {
+    const d = make()
+    d.levels[0].anchors = [1]
+    expect(hashContent(d)).toBe(base)
+  })
+  it('keeps the committed run fresh for the lifecycle deck', () => {
+    expect(loadRun('src/game/eval/ai-run.json')?.hash).toBe(hashContent(lifecycle))
+  })
+})
+
+it('keeps all 124 wire bodies byte-identical for the committed legacy run', () => {
+  expect(jobsFor(lifecycle)).toHaveLength(124)
+  expect(hashRequests(lifecycle)).toBe('9cfa3b0efc3c146b5870bcbd3060fe4ca25947c652f7f6b962ce817f62841417')
+  expect(checkRun(loadRun('src/game/eval/ai-run.json'), hashContent(lifecycle), lifecycle)).toBeNull()
+})
+
+it('versions normalized visual and evidence inputs, including anchors, independently of the AI run', () => {
+  const d = make()
+  const base = hashEdition(d, { 'objects.ts': 'a\nb' })
+  expect(hashEdition(d, { 'objects.ts': 'a\r\nb' })).toBe(base)
+  expect(hashEdition(d, { 'objects.ts': 'b' })).not.toBe(base)
+  d.levels[0].anchors = [9]
+  expect(hashEdition(d, { 'objects.ts': 'a\nb' })).not.toBe(base)
+  expect(hashRequests(d)).toBe(hashRequests(make()))
 })
 
 describe('checkRun', () => {
@@ -58,6 +86,7 @@ describe('checkRun', () => {
   it('accepts a complete fresh run', () => expect(checkRun(full(d, hash), hash, d)).toBeNull())
   it('rejects a missing run', () => expect(checkRun(undefined, hash, d)).toMatch(/missing/))
   it('rejects a stale run', () => expect(checkRun(full(d, 'old'), hash, d)).toMatch(/stale/))
+  it('rejects mismatched actual request bodies', () => expect(checkRun({ ...full(d, hash), requestHash: 'old' }, hash, d)).toMatch(/request bodies stale/))
   it('rejects a missing level pick', () => {
     const r = full(d, hash)
     r.standard[1].pop()
@@ -67,6 +96,16 @@ describe('checkRun', () => {
     const r = full(d, hash)
     r.pool['a:2'].pop()
     expect(checkRun(r, hash, d)).toMatch(/pool/)
+  })
+  it('rejects a standard pick outside that request’s choices', () => {
+    const r = full(d, hash)
+    r.standard[1][0] = { ...scored, choice: 'r4' }
+    expect(checkRun(r, hash, d)).toMatch(/standard level 1, wave 1: bad choice/)
+  })
+  it('rejects a pool pick with incomplete probability keys', () => {
+    const r = full(d, hash)
+    r.pool['a:2'][1] = { ...pick, seed: 1001 }
+    expect(checkRun(r, hash, d)).toMatch(/pool a:2, seed 1001: probability keys differ/)
   })
 })
 
