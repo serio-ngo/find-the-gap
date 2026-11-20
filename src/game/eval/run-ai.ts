@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { aiBody, keys, pool, wave } from '../engine.ts'
+import { MODEL, HISTORY, aiBody, keys, pool, wave } from '../engine.ts'
 import type { AiPick, AiRun, Deck, Wave } from '../engine.ts'
 import { hashContent } from './version.ts'
 
@@ -31,20 +31,30 @@ export const spread = (a: AiPick[], b: AiPick[]) => {
 
 type Job = { w: Wave; history: Wave[] }
 
-const ask = async (d: Deck, key: string, job: Job, usage: { tokens: number }): Promise<AiPick> => {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+const post = async (d: Deck, key: string, job: Job): Promise<any> => {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(URL_AI, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-      body: JSON.stringify(aiBody(d, job.w, job.history)),
-      signal: AbortSignal.timeout(30000),
-    })
-    if ((res.status === 429 || res.status >= 500) && attempt < 2) continue
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const json: any = await res.json()
-    usage.tokens += json.usage?.input_tokens ?? json.usage?.prompt_tokens ?? 0
-    return validate(keys(job.w), json.answers?.ai)
+    let status = 0
+    try {
+      const res = await fetch(URL_AI, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify(aiBody(d, job.w, job.history)),
+        signal: AbortSignal.timeout(30000),
+      })
+      if (res.ok) return await res.json()
+      status = res.status
+    } catch {}
+    if ((status && status !== 429 && status < 500) || attempt === 3) throw new Error(status ? `HTTP ${status}` : 'network error')
+    await sleep(1000 * 2 ** attempt)
   }
+}
+
+const ask = async (d: Deck, key: string, job: Job, usage: { tokens: number }): Promise<AiPick> => {
+  const json = await post(d, key, job)
+  usage.tokens += json.usage?.input_tokens ?? json.usage?.prompt_tokens ?? 0
+  return validate(keys(job.w), json.answers?.ai)
 }
 
 const runAll = async (d: Deck, key: string, jobs: Job[], usage: { tokens: number }) => {
@@ -74,7 +84,7 @@ const main = async () => {
   for (const l of d.levels) {
     const waves = l.sequence.map((s) => wave(d, s))
     waves.forEach((w, i) => {
-      jobs.push({ w, history: waves.slice(Math.max(0, i - 3), i) })
+      jobs.push({ w, history: waves.slice(Math.max(0, i - HISTORY), i) })
       slots.push({ level: l.id })
     })
   }
@@ -97,7 +107,7 @@ const main = async () => {
   })
   const run: AiRun = {
     hash: hashContent(d),
-    model: 'd1.1',
+    model: MODEL,
     date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }),
     standard,
     pool: poolOut,

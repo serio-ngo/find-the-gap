@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { deck, expectEnd, open, play, strings, wrong } from './helpers.ts'
+import { deck, expectEnd, open, play, playButton, strings, wrong } from './helpers.ts'
 
 const l = strings.labels.en
 
@@ -14,6 +14,12 @@ test('every button and link has an accessible name and the canvas is hidden from
   await named()
   await play(page)
   await named()
+})
+
+test('the score heading takes focus when the end screen appears', async ({ page }) => {
+  await open(page)
+  await play(page)
+  await expect(page.getByRole('heading', { level: 2 })).toBeFocused()
 })
 
 test('a keyboard-only player finishes level 1 through the rock twins', async ({ page }) => {
@@ -33,4 +39,13 @@ test('a live region announces a miss', async ({ page }) => {
   await open(page)
   await play(page, { limit: 1, pick: (g) => wrong(deck, g) })
   await expect(page.getByRole('status').filter({ hasText: l.miss })).toHaveCount(1)
+})
+
+test('Escape closes the guide', async ({ page }) => {
+  await open(page)
+  await playButton(page).click()
+  await page.getByRole('button', { name: l.guide }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toBeHidden()
 })

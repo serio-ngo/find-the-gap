@@ -90,6 +90,15 @@ describe('engine', () => {
     expect(upcoming(deck, begin(deck, 1, 'standard'))).toEqual(sequence[0])
   })
 
+  it('adaptive never repeats the previous seed', () => {
+    let g = begin(deck, 1, 'adaptive')
+    for (let i = 0; i < 10; i++) {
+      const spec = upcoming(deck, g)!
+      expect(spec.seed).not.toBe(g.decisions.at(-1)?.spec.seed)
+      g = shoot(deck, g, 0)
+    }
+  })
+
   it('aiScore counts right AI choices and skips research', () => {
     const g = replay(deck, 1, 'standard', picks)
     const choices = sequence.map((s, i) =>

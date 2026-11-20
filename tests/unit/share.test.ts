@@ -23,13 +23,13 @@ describe('share', () => {
   })
   it('share returns false without navigator.share', async () => {
     vi.stubGlobal('navigator', {})
-    expect(await share('t', url)).toBe(false)
+    expect(await share('t')).toBe(false)
   })
   it('share uses navigator.share', async () => {
     const s = vi.fn(async () => {})
     vi.stubGlobal('navigator', { share: s })
-    expect(await share('t', url)).toBe(true)
-    expect(s).toHaveBeenCalledWith({ text: 't', url })
+    expect(await share('t')).toBe(true)
+    expect(s).toHaveBeenCalledWith({ text: 't' })
   })
   it('copy reports success and failure', async () => {
     vi.stubGlobal('navigator', { clipboard: { writeText: async () => {} } })

@@ -1,19 +1,39 @@
 import { pathToFileURL } from 'node:url'
-import { pool, wave } from '../src/game/engine.ts'
+import { canonical, content } from '../src/game/engine.ts'
 import type { Evidence } from '../src/game/engine.ts'
+import { facts, lifecycle, lifecycleDeck } from '../src/game/levels/lifecycle.ts'
+import type { Facts } from '../src/game/levels/lifecycle.ts'
 
 const root = 'https://api.github.com/'
 
-export const verify = (text: string, lines: string[][]): string[] => {
-  const rows = text.split('\n')
-  return lines.filter((g) => !rows.some((r) => g.every((s) => r.includes(s)))).map((g) => g.join(' + '))
+export const verify = (text: string, quote: string[]): string[] => quote.filter((q) => !text.includes(q))
+
+export const parseFacts = (t: Record<string, string>): Facts => {
+  const one = (text: string, re: RegExp) => {
+    const m = text.match(re)
+    if (!m) throw new Error(`no match for ${re}`)
+    return m
+  }
+  const head = one(t.checkout, /HEAD is now at ([0-9a-f]+) Merge [0-9a-f]+ into ([0-9a-f]{7})/)
+  return {
+    criteria: [...t.report.matchAll(/^\|\s*(AC\d+)\s*\|\s*(.+?)\s*\|\s*passed\s*\|/gm)].map((m) => [m[1], m[2]]),
+    reportSha: one(t.report, /Acceptance: pass\*{0,2} for `([0-9a-f]+)`/)[1],
+    testedSha: head[1],
+    baseSha: head[2],
+    expected: one(t.regression, /Expected: "([^"]*)"/)[1],
+    received: one(t.regression, /Received: "([^"]*)"/)[1],
+  }
 }
 
 export const fetchText = async (e: Evidence, token: string, fetchFn: typeof fetch = fetch): Promise<string> => {
   const headers = { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'user-agent': 'find-the-gap-check' }
-  const get = async (url: string) => {
-    const r = await fetchFn(url, { headers, redirect: 'follow' })
-    if (!r.ok) throw new Error(`GET ${url} failed with ${r.status}`)
+  const get = async (url: string, tries = 3): Promise<Response> => {
+    const r = await fetchFn(url, { headers, redirect: 'follow' }).catch((err: unknown) => {
+      if (tries > 1) return null
+      throw err
+    })
+    if (!r) return get(url, tries - 1)
+    if (!r.ok) throw Object.assign(new Error(`GET ${url} failed with ${r.status}`), { status: r.status })
     return r
   }
   if (e.kind === 'comment') return ((await (await get(root + e.api)).json()) as { body: string }).body
@@ -30,24 +50,31 @@ const main = async () => {
     console.error('GH_TOKEN or GITHUB_TOKEN required')
     process.exit(1)
   }
-  const { decks } = await import('../src/game/levels/index.ts')
+  const texts: Record<string, string> = {}
   let bad = 0
-  for (const d of Object.values(decks).filter((x) => x.evidence.length)) {
-    for (const e of d.evidence) {
-      const miss = verify(await fetchText(e, token), e.lines)
-      miss.length ? miss.forEach((g) => console.log(`missing ${e.id}: ${g}`)) : console.log(`ok ${e.id}`)
-      bad += miss.length
+  for (const e of lifecycle.evidence) {
+    let text: string
+    try {
+      text = await fetchText(e, token)
+    } catch (x: any) {
+      if (e.kind === 'comment' || ![404, 410].includes(x.status)) throw x
+      console.log(`archived ${e.id}`)
+      texts[e.id] = e.quote.join('\n')
+      continue
     }
-    const ids = new Set(d.evidence.map((e) => e.id))
-    for (const l of d.levels) {
-      for (const s of [...l.sequence, ...d.rules.flatMap((r) => Array.from({ length: d.steps }, (_, i) => pool(d, r.id, i + 1)).flat())]) {
-        const w = wave(d, s)
-        if (!ids.has(w.evidence)) {
-          console.log(`missing ${w.evidence}: level ${l.id} wave ${s.rule}`)
-          bad++
-        }
-      }
-    }
+    texts[e.id] = text
+    const miss = verify(text, e.quote)
+    miss.length ? miss.forEach((q) => console.log(`missing ${e.id}: ${q}`)) : console.log(`ok ${e.id}`)
+    bad += miss.length
+  }
+  const parsed = parseFacts(texts)
+  if (canonical(parsed) !== canonical(facts)) {
+    console.log(`facts differ: ${canonical(parsed)}`)
+    bad++
+  }
+  if (canonical(content(lifecycleDeck(parsed))) !== canonical(content(lifecycle))) {
+    console.log('deck differs from the one built from the sources')
+    bad++
   }
   if (bad) process.exit(1)
 }

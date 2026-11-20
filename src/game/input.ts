@@ -9,8 +9,10 @@ export const bindInput = (
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-      handlers.togglePause()
-      e.preventDefault()
+      if (['play', 'paused'].includes(root.dataset.phase!) && !root.querySelector('dialog[open]')) {
+        handlers.togglePause()
+        e.preventDefault()
+      }
       return
     }
     const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0

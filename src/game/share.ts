@@ -15,9 +15,9 @@ export const links = (text: string, url: string) => {
   }
 }
 
-export const share = async (text: string, url: string): Promise<boolean> => {
+export const share = async (text: string): Promise<boolean> => {
   if (!navigator.share) return false
-  try { await navigator.share({ text, url }); return true } catch { return false }
+  try { await navigator.share({ text }); return true } catch { return false }
 }
 
 export const copy = async (text: string): Promise<boolean> => {

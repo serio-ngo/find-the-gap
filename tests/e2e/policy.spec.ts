@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { replay } from '../../src/game/engine.ts'
 import type { Game } from '../../src/game/engine.ts'
-import { deck, open, play, right, wrong } from './helpers.ts'
+import { deck, open, play, right, strings, wrong } from './helpers.ts'
 
 const patterns: [string, (g: Game) => number][] = [
   ['always wrong', (g) => wrong(deck, g)],
@@ -25,7 +25,7 @@ test('replaying the same picks twice gives identical paths', async ({ page }) =>
   const first = await play(page, { mode: 'adaptive', pick: patterns[2][1] })
   const one = await path(page)
   const picks = first.decisions.map((d) => d.pick)
-  await page.getByRole('button', { name: /Play again/ }).click()
+  await page.getByRole('button', { name: strings.labels.en.replay, exact: true }).click()
   await play(page, { mode: 'adaptive', begun: true, pick: (g) => picks[g.decisions.length] })
   await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
   expect(await path(page)).toEqual(one)

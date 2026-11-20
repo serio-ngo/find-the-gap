@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { fetchText, verify } from '../../scripts/check-sources.ts'
+import { fetchText, parseFacts, verify } from '../../scripts/check-sources.ts'
 import type { Evidence } from '../../src/game/engine.ts'
 
-const ev = (kind: Evidence['kind'], api: string): Evidence => ({ id: 'x', kind, api, url: 'u', lines: [] })
+const ev = (kind: Evidence['kind'], api: string): Evidence => ({ id: 'x', kind, api, url: 'u', quote: [] })
 const stub = (routes: Record<string, { status?: number; body: unknown }>) => {
   const calls: { url: string; init?: RequestInit }[] = []
   const f = (async (url: string, init?: RequestInit) => {
@@ -15,11 +15,30 @@ const stub = (routes: Record<string, { status?: number; body: unknown }>) => {
 }
 
 describe('verify', () => {
-  it('passes when a group sits on one line', () => {
-    expect(verify('a b c\nd', [['a', 'c']])).toEqual([])
+  it('passes when every quote line is in the text', () => {
+    expect(verify('a b c\nd', ['b c', 'd'])).toEqual([])
   })
-  it('reports groups split across lines', () => {
-    expect(verify('a\nc', [['a', 'c'], ['a']])).toEqual([['a', 'c'].join(' + ')])
+  it('reports lines that are missing', () => {
+    expect(verify('a\nc', ['a', 'a c'])).toEqual(['a c'])
+  })
+})
+
+describe('parseFacts', () => {
+  it('reads the facts from the source texts', () => {
+    const report = ['**Acceptance: pass** for `abc1234` · x', '| Criterion | Test | Result |', '| AC1 | one | passed |', '| AC2 | one | passed |', '| AC3 | two | passed |'].join('\n')
+    const checkout = '2026 HEAD is now at 1111111 Merge ' + 'a'.repeat(40) + ' into ' + 'b'.repeat(40)
+    const regression = 'x Expected: "1.0"\nx Received: "1.00"'
+    expect(parseFacts({ report, checkout, regression })).toEqual({
+      criteria: [['AC1', 'one'], ['AC2', 'one'], ['AC3', 'two']],
+      reportSha: 'abc1234',
+      testedSha: '1111111',
+      baseSha: 'bbbbbbb',
+      expected: '1.0',
+      received: '1.00',
+    })
+  })
+  it('throws when a source lacks its line', () => {
+    expect(() => parseFacts({ report: '', checkout: '', regression: '' })).toThrow()
   })
 })
 
@@ -52,4 +71,15 @@ describe('fetchText', () => {
     expect(err).toContain('https://api.github.com/repos/o/r/x')
     expect(err).not.toContain('secret')
   })
+})
+
+it('fetchText retries a thrown network error', async () => {
+  let calls = 0
+  const fetchFn = (async () => {
+    calls++
+    if (calls === 1) throw new TypeError('fetch failed')
+    return new Response(JSON.stringify({ body: 'ok' }), { status: 200 })
+  }) as typeof fetch
+  expect(await fetchText(ev('comment', 'x'), 't', fetchFn)).toBe('ok')
+  expect(calls).toBe(2)
 })

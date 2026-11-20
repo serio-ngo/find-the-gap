@@ -35,14 +35,14 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
     <form method="dialog"><button aria-label={l.close}>✕</button></form>
   </dialog>
   <section class="ftg-end" role="region" aria-label={`${v.title} ${v.level} ${level}`} hidden>
-    <h2 class="ftg-score"></h2>
+    <h2 class="ftg-score" tabindex="-1"></h2>
     <div class="ftg-rows"></div>
     <div class="ftg-steps" role="img" hidden></div>
-    <table><tbody class="ftg-table"></tbody></table>
+    <table><thead class="ftg-head"></thead><tbody class="ftg-table"></tbody></table>
     <div class="ftg-style">
       <span class="ftg-tempo" role="img"></span>
       <span class="ftg-flex" role="img"></span>
-      <span class="ftg-atypical" role="img" aria-label={`${l.styleAtypical}: —`}>🧭 —</span>
+      <span class="ftg-atypical" role="img" aria-label={`${l.styleAtypical}: ${l.atypicalNeeds}`}>🧭 —</span>
       <details><summary aria-label={l.notDiagnosis}>ⓘ</summary>{l.notDiagnosis}</details>
     </div>
     <div class="ftg-share">
@@ -86,8 +86,8 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
   const guide = $<HTMLDialogElement>('.ftg-dialog')
   const modeBtn = $<HTMLButtonElement>('.ftg-mode')
   const calmBtn = $('.ftg-calm')
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
-  const field = createField($('canvas') as HTMLCanvasElement, { calm: reduce })
+  const motion = matchMedia('(prefers-reduced-motion: reduce)')
+  const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches })
 
   let mode: Mode = ai && query.get('mode') === 'adaptive' ? 'adaptive' : 'standard'
   let g: Game
@@ -95,6 +95,8 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
   let t0 = 0
   let pausedAt = 0
   let times: number[] = []
+  let toggled = false
+  let download = ''
 
   const phase = (p: string) => {
     root.dataset.phase = p
@@ -183,7 +185,9 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
   }
 
   const refreshDownload = () => {
-    $<HTMLAnchorElement>('.ftg-download').href = URL.createObjectURL(new Blob([exportSaves()], { type: 'application/json' }))
+    URL.revokeObjectURL(download)
+    download = URL.createObjectURL(new Blob([exportSaves()], { type: 'application/json' }))
+    $<HTMLAnchorElement>('.ftg-download').href = download
   }
 
   const end = () => {
@@ -205,12 +209,15 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
     const line = (h: boolean[]) => h.map((x) => mark(x)).join(' ')
     $('.ftg-score').textContent = ai ? `${v.you} ${score(g)} : ${aiScore(deck, ai, g)} 🤖` : `${v.you} ${score(g)}/${total}`
     $('.ftg-rows').innerHTML = `<div>${v.you} ${line(you)}</div>${ai ? `<div>🤖 ${line(bot)}</div>` : ''}`
+    const rule = (r: string) => ({ pair: l.rulePair, odd: l.ruleOdd, changed: l.ruleChanged, missing: l.ruleMissing, research: l.research })[r as 'pair'] ?? ''
+    const cols = [l.wave, l.colRule, l.colYou, ...(ai ? [l.colAi, l.colConf] : []), l.colSource]
+    $('.ftg-head').innerHTML = `<tr>${cols.map((c) => `<th scope="col"><span class="ftg-sr">${esc(c)}</span></th>`).join('')}</tr>`
     $('.ftg-table').innerHTML = rows
       .map(({ d, w, a, ap, ahit }, i) => {
         const pct = a ? Math.round(a.probabilities[a.choice] * 100) : 0
         const src = deck.evidence.find((e) => e.id === w.evidence)?.url
-        return `<tr><td>${i + 1}</td><td>${icons[d.spec.rule] ?? ''}</td><td>${esc(w.symbols[d.pick])} ${mark(d.hit)}</td>${
-          ai ? `<td>${a ? `${esc(w.symbols[ap])} ${mark(ahit)}` : '—'}</td><td>${a ? `<span class="ftg-bar" role="img" style="width:${pct}%" aria-label="${pct}%"></span>` : ''}</td>` : ''
+        return `<tr><td>${i + 1}</td><td><span role="img" aria-label="${esc(rule(d.spec.rule))}">${icons[d.spec.rule] ?? ''}</span></td><td>${esc(w.symbols[d.pick])} ${mark(d.hit)}</td>${
+          ai ? `<td>${a ? `${esc(w.symbols[ap])} ${mark(ahit)}` : '—'}</td><td>${a ? `<span class="ftg-bar" role="img" style="width:${pct}%" aria-label="${l.colConf} ${pct}%"></span>` : ''}</td>` : ''
         }<td>${src ? `<a href="${src}" target="_blank" rel="noopener">${v.source}</a>` : ''}</td></tr>`
       })
       .join('')
@@ -241,23 +248,24 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
     const text = resultText({ deck: v.title, level, mode: g.mode, you, ai: bot, lang: root.dataset.lang as 'pl' | 'en', url })
     const net = links(text, url)
     root.querySelectorAll<HTMLAnchorElement>('.ftg-net').forEach((a) => (a.href = net[a.dataset.net as keyof typeof net]))
-    $('.ftg-copy').onclick = () => copy(text)
-    $('.ftg-sheet').onclick = () => share(text, url)
+    const notify = async (label: string, done: Promise<boolean>) => (live.textContent = `${label} ${(await done) ? '✓' : '✕'}`)
+    $('.ftg-copy').onclick = () => notify(l.copy, copy(text))
+    $('.ftg-sheet').onclick = () => notify(l.shareSheet, share(text))
     $('.ftg-sheet').hidden = !ai || !navigator.share
     const nextEl = $<HTMLAnchorElement>('.ftg-next')
     nextEl.hidden = !deck.levels.some((x) => x.id === level + 1)
     nextEl.href = `${root.dataset.next}${location.search}`
+    $('.ftg-score').focus()
   }
 
-  setCalm(reduce)
+  setCalm(motion.matches)
+  motion.onchange = (e) => !toggled && setCalm(e.matches)
   setMode(mode)
   modeBtn.hidden = !ai
   phase('start')
   bindInput(root, field, {
     pick: (i) => rocksEl.querySelectorAll('button')[i]?.click(),
-    togglePause: () => {
-      if (!guide.open) setPause(root.dataset.phase === 'play')
-    },
+    togglePause: () => setPause(root.dataset.phase === 'play'),
   })
   $('.ftg-play').onclick = start
   $('.ftg-again').onclick = start
@@ -268,7 +276,7 @@ const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['faceboo
     guide.showModal()
   }
   modeBtn.onclick = () => setMode(mode === 'adaptive' ? 'standard' : 'adaptive')
-  calmBtn.onclick = () => setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')
+  calmBtn.onclick = () => (toggled = true) && setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')
   $('.ftg-delete').onclick = () => {
     clearSaves()
     refreshDownload()

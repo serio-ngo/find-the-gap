@@ -30,6 +30,20 @@ const names = async (page: Page) => {
   return out
 }
 
+for (const lang of ['pl', 'en'] as const)
+  test(`every ${lang} button with visible text carries it in its accessible name`, async ({ page }) => {
+    await open(page, lang)
+    await play(page, { lang })
+    const bad = await page.locator('.ftg').evaluate((root) => {
+      const letters = (s: string) => s.replace(/[^p{L}s]/gu, '').replace(/s+/g, ' ').trim().toLowerCase()
+      return [...root.querySelectorAll<HTMLElement>('button:not([data-rock]), a.ftg-next')]
+        .filter((e) => e.checkVisibility() && letters(e.textContent!))
+        .filter((e) => !letters(e.ariaLabel ?? e.textContent!).startsWith(letters(e.textContent!)))
+        .map((e) => e.textContent)
+    })
+    expect(bad).toEqual([])
+  })
+
 for (const [lang, url] of [['pl', '/find-the-gap/1/'], ['en', '/en/find-the-gap/1/']] as const)
   test(`the ${lang} page declares its language and uses only its own strings`, async ({ page }) => {
     await page.goto(url)

@@ -2,7 +2,7 @@ export type Mode = 'standard' | 'adaptive'
 export type Spec = { rule: string; step: number; seed: number }
 export type Wave = Spec & { symbols: string[]; answers: number[]; evidence: string }
 export type Policy = { high: number; low: number; window: number; confirm: number }
-export type Evidence = { id: string; kind: 'comment' | 'job' | 'run'; api: string; url: string; lines: string[][] }
+export type Evidence = { id: string; kind: 'comment' | 'job' | 'run'; api: string; url: string; quote: string[] }
 export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'evidence'> }
 export type Level = { id: number; start: { rule: string; step: number }; sequence: Spec[] }
 export type Deck = {
@@ -26,6 +26,9 @@ export const rng = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 }
 
+export const MODEL = 'd1.1'
+export const HISTORY = 3
+
 export const round05 = (x: number) => Math.round(x * 20) / 20
 
 export const keys = (w: Wave) => w.symbols.map((_, i) => `r${i}`)
@@ -48,7 +51,9 @@ export const upcoming = (d: Deck, g: Game): Spec | null => {
   const i = g.decisions.length
   const waves = sequence.at(-1)?.rule === 'research' ? sequence.length - 1 : sequence.length
   if (g.mode === 'standard' || i >= waves) return sequence[i] ?? null
-  return pool(d, g.rule, g.step)[Math.floor(rng(g.level * 100 + i)() * d.poolSize)]
+  const p = pool(d, g.rule, g.step)
+  const j = Math.floor(rng(g.level * 100 + i)() * d.poolSize)
+  return p[p[j].seed === g.decisions.at(-1)?.spec.seed ? (j + 1) % d.poolSize : j]
 }
 
 export const estimate = (d: Deck, g: Game): number => {
@@ -96,12 +101,12 @@ export const aiScore = (d: Deck, run: AiRun, g: Game) =>
   }).length
 
 export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
-  model: 'd1.1',
+  model: MODEL,
   state: {
     rule: w.rule,
     step: w.step,
     rocks: w.symbols,
-    history: history.slice(-3).map((h) => ({ rocks: h.symbols, answers: h.answers })),
+    history: history.slice(-HISTORY).map((h) => ({ rocks: h.symbols, answers: h.answers })),
   },
   questions: {
     ai: {
@@ -114,6 +119,8 @@ export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
 
 export const content = (d: Deck): unknown => ({
   id: d.id,
+  model: MODEL,
+  history: HISTORY,
   steps: d.steps,
   poolSize: d.poolSize,
   policy: d.policy,

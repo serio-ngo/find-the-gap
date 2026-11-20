@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
+  reporter: process.env.CI ? [['html', { open: 'never' }], ['line']] : [['html', { open: 'never' }]],
   retries: process.env.CI ? 1 : 0,
   use: { baseURL: 'http://localhost:4329', reducedMotion: 'reduce' },
   projects: [
