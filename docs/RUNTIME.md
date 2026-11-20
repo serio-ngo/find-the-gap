@@ -13,7 +13,7 @@ A small Astro project around one folder, `src/game/` ([modules and embedding](..
 
 ## Phase 2: the site
 
-Everything that needs a server: the route, the cache, the rate limit, the research upload and the live d1.1 game master, on `serio.org.pl`. The game keeps playing when the route is absent. Host steps: [checklist](../src/game/README.md#host-checklist).
+Everything that needs a server: the route, the cache, the rate limit, the research upload and the live d1.1 game master, on `serio.org.pl`. The route ships in `src/game/worker/` and is off until the host sets `PUBLIC_GAME_API`; the game keeps playing without it. Host steps: [checklist](../src/game/README.md#host-checklist).
 
 - **Routes:** `POST /api/game/step` and `POST /api/game/result` on the host Worker, an `RL_GAME` rate limit, two D1 tables (`game_cache`, `game_results`) and a daily counter that caps d1.1 calls.
 - **Checks:** same origin, strict schema, a 2 kB body. Model input is built only from the Worker's own copy of the level; a request with text or unknown indices gets 400. Worker logs keep no state and no IP.

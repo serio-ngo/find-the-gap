@@ -84,7 +84,7 @@ const evidence: Evidence[] = [
 ]
 
 const [report, checkout, regression] = evidence
-const regressionJob = `${regression.url}/job/${regressionJobId}`
+const regressionJob = `${regression!.url}/job/${regressionJobId}`
 const reportStages = workflowStages(22)
 const regressionStages = workflowStages(20)
 const failedStages = regressionStages.slice(0, 4)
@@ -102,12 +102,12 @@ export const lifecycleDeck = (f: Facts): Deck => {
     ev: string,
     g: (step: number, seed: number, r: () => number, n: number) => Rock[],
   ): Rule & { rocks: (step: number, seed: number) => Rock[] } => {
-    const rocks = (step: number, seed: number) => g(step, seed, rng(seed), counts[step - 1])
+    const rocks = (step: number, seed: number) => g(step, seed, rng(seed), counts[step - 1]!)
     return { id, rocks, make: (step, seed) => waveData(rocks(step, seed), ev) }
   }
 
   const pair = rule('pair', 'report', (step, seed, r, n) => {
-    const rocks = f.criteria.map((c, i): Rock => [label(step, c), shared[i], i])
+    const rocks = f.criteria.map((c, i): Rock => [label(step, c), shared[i]!, i])
     if (step === 1 && seed === 0) return rocks
     const fields = ['reportSha', 'testedSha', 'baseSha', 'received'] as const
     const tokens = shuffle(r, [...fields])
@@ -133,7 +133,7 @@ export const lifecycleDeck = (f: Facts): Deck => {
   })
 
   const missing = rule('missing', 'report', (step, _seed, r) => {
-    const rocks = f.criteria.map((c, i): Rock => [label(step, c), later[i], i])
+    const rocks = f.criteria.map((c, i): Rock => [label(step, c), later[i]!, i])
     return step === 1 ? rocks : shuffle(r, rocks)
   })
 
@@ -142,23 +142,23 @@ export const lifecycleDeck = (f: Facts): Deck => {
     [f.reportSha, false, 'reportSha'],
     [f.testedSha, false, 'testedSha'],
     [`${f.expected}→${f.received}`, false, 'comparison'],
-    [label(1, f.criteria[1]), false, 1],
+    [label(1, f.criteria[1]!), false, 1],
   ]
 
   const regressionSource = (field: 'expected' | 'received'): Origin[] => f[field] === facts[field]
-    ? [{ url: regressionJob, quote: regression.quote[field === 'expected' ? 0 : 1] }]
+    ? [{ url: regressionJob, quote: regression!.quote[field === 'expected' ? 0 : 1]! }]
     : []
   const revisionSources = (field: Revision): Origin[] => f[field] === facts[field] ? [
-    { url: field === 'reportSha' ? report.url : checkout.url, quote: field === 'reportSha' ? report.quote[0] : checkout.quote[0] },
+    { url: field === 'reportSha' ? report!.url : checkout!.url, quote: field === 'reportSha' ? report!.quote[0]! : checkout!.quote[0]! },
     { url: `${sandboxUrl}/commit/${revisions[field]}`, quote: `sha: ${revisions[field]}` },
   ] : []
 
   const record = ([clue, , field]: Rock, stages: StageRecord[], context: Origin): ChoiceRecord => {
     const base = { clue, stages, context }
     if (typeof field === 'number') {
-      const [id, name] = f.criteria[field]
+      const [id, name] = f.criteria[field]!
       const quote = `| ${id} | ${name} | passed |`
-      return { ...base, marks: [id, clue.split(' ')[1], name], sources: report.quote.includes(quote) ? [{ url: report.url, quote }] : [] }
+      return { ...base, marks: [id, clue.split(' ')[1]!, name], sources: report!.quote.includes(quote) ? [{ url: report!.url, quote }] : [] }
     }
     if (field === 'comparison' || field === 'control') {
       const other = field === 'control' ? 'expected' : 'received'
@@ -180,7 +180,7 @@ export const lifecycleDeck = (f: Facts): Deck => {
     research: () => waveData(researchRocks(), 'report'),
     choiceRecords: ({ rule, step, seed }) => {
       const ruleIndex = rules.findIndex((r) => r.id === rule)
-      const rocks = rule === 'research' ? researchRocks() : rules[ruleIndex].rocks(step, seed)
+      const rocks = rule === 'research' ? researchRocks() : rules[ruleIndex]!.rocks(step, seed)
       const contextRng = rng(seed ^ Math.imul(step * (rules.length + 1) + ruleIndex, 0x9e3779b1))
       const timeline = (stages: StageRecord[]) => ({ stages, contexts: shuffle(contextRng, contextsFor(stages)) })
       const reporting = timeline(reportStages)
@@ -188,7 +188,7 @@ export const lifecycleDeck = (f: Facts): Deck => {
       return rocks.map((rock, i) => {
         const field = rock[2]
         const { stages, contexts } = field === 'received' || field === 'comparison' || field === 'control' ? regression : reporting
-        return record(rock, stages, contexts[i % contexts.length])
+        return record(rock, stages, contexts[i % contexts.length]!)
       })
     },
     poolSize: 4,

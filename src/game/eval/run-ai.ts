@@ -1,20 +1,19 @@
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { MODEL, keys } from '../engine.ts'
+import { MODEL, URL_AI, keys, validate } from '../engine.ts'
 import type { AiPick, AiRun, Deck } from '../engine.ts'
-import { hashContent, hashRequests, jobsFor, requestBody, validate } from './version.ts'
+import { hashContent, hashRequests, jobsFor, requestBody } from './version.ts'
 import type { Job, RecordedRun } from './version.ts'
 
-const URL_AI = 'https://api.liquid.ai/decisions/v1/systemone'
 const round3 = (x: number) => Math.round(x * 1000) / 1000
 
 export const spread = (a: AiPick[], b: AiPick[]) => {
   let choiceDiffs = 0
   let maxProbDiff = 0
   a.forEach((x, i) => {
-    if (x.choice !== b[i].choice) choiceDiffs++
+    if (x.choice !== b[i]!.choice) choiceDiffs++
     for (const k of Object.keys(x.probabilities)) {
-      maxProbDiff = Math.max(maxProbDiff, Math.abs(x.probabilities[k] - b[i].probabilities[k]))
+      maxProbDiff = Math.max(maxProbDiff, Math.abs(x.probabilities[k]! - b[i]!.probabilities[k]!))
     }
   })
   return { choiceDiffs, maxProbDiff: round3(maxProbDiff) }
@@ -53,7 +52,7 @@ const runAll = async (d: Deck, key: string, jobs: Job[], usage: { tokens: number
     Array.from({ length: 4 }, async () => {
       while (next < jobs.length) {
         const i = next++
-        out[i] = await ask(d, key, jobs[i], usage)
+        out[i] = await ask(d, key, jobs[i]!, usage)
       }
     }),
   )
@@ -67,7 +66,7 @@ const main = async () => {
     process.exit(1)
   }
   const { decks } = await import('../levels/index.ts')
-  const d: Deck = decks.lifecycle
+  const d: Deck = decks.lifecycle!
   const jobs = jobsFor(d)
   const usage = { tokens: 0 }
   const first = await runAll(d, key, jobs, usage)
@@ -75,8 +74,8 @@ const main = async () => {
   const standard: AiRun['standard'] = {}
   const poolOut: AiRun['pool'] = {}
   jobs.forEach(({ slot }, i) => {
-    if ('level' in slot) (standard[slot.level] ??= []).push(first[i])
-    else (poolOut[slot.pool] ??= []).push({ seed: slot.seed, ...first[i] })
+    if ('level' in slot) (standard[slot.level] ??= []).push(first[i]!)
+    else (poolOut[slot.pool] ??= []).push({ seed: slot.seed, ...first[i]! })
   })
   const run: RecordedRun = {
     hash: hashContent(d),

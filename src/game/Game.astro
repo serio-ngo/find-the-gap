@@ -15,7 +15,7 @@ const paths = {
   play: 'M7 4l13 8-13 8z', pause: 'M8 5v14M16 5v14', calm: 'M3 12c3-4 6-4 9 0s6 4 9 0', adaptive: 'M4 18l5-6 4 3 7-10',
   inspect: 'M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M7 12h10', details: 'M12 11v6m0-10v1M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0z',
   again: 'M4 12a8 8 0 1 0 3-6M4 4v5h5', next: 'M5 12h14M13 6l6 6-6 6', share: 'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6',
-  copy: 'M9 9h11v11H9zM5 15V4h11', switch: 'M3 7h4l10 10h4M3 17h4l3-3m4-4l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3', download: 'M12 3v12M7 10l5 5 5-5M5 20h14', delete: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+  copy: 'M9 9h11v11H9zM5 15V4h11', switch: 'M3 7h4l10 10h4M3 17h4l3-3m4-4l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3', download: 'M12 3v12M7 10l5 5 5-5M5 20h14', study: 'M4 20V10M10 20V4M16 20v-7M22 20H2', delete: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
   x: 'M5 5l14 14M19 5L5 19', bluesky: 'M12 11C10 7 6 5 4 5c0 4 1 7 4 8-3 1-3 4 0 5 3 0 4-3 4-5 0 2 1 5 4 5 3-1 3-4 0-5 3-1 4-4 4-8-2 0-6 2-8 6z',
   linkedin: 'M5 10v9M5 5v1M10 19v-9M10 14c0-3 7-5 7 0v5', facebook: 'M14 21v-8h3l.5-3H14V8c0-1.5 1-2 2-2h1.5V3H15c-3 0-4 2-4 4.5V10H8v3h3v8',
 }
@@ -60,14 +60,17 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
       <button class="ftg-copy" aria-label={l.copy}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.copy} /></svg></button>
       {networks.map((id) => <a class="ftg-net" data-net={id} aria-label={l[id]} target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths[id]} /></svg></a>)}
       <a class="ftg-download" download="find-the-gap.json" aria-label={l.download}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.download} /></svg></a>
+      <button class="ftg-study" aria-pressed="false" aria-label={l.contribute} title={l.contribute} hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.study} /></svg></button>
       <button class="ftg-delete" aria-label={l.delete}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.delete} /></svg></button>
     </div>
   </section>
 </section>
 <script>
   import { decks } from './levels/index.ts'
-  import { aiPick, begin, upcoming, wave, shoot, score, deviation } from './engine.ts'
+  import { aiPick, begin, estimate, upcoming, wave, shoot, score, deviation } from './engine.ts'
   import type { AiRun, Game, Mode, Wave } from './engine.ts'
+  import { askStep, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
+  import type { Step } from './net.ts'
   import { presentObjects } from './objects.ts'
   import { colors, paintObject } from './gen.ts'
   import { createField } from './render.ts'
@@ -85,6 +88,8 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
   const total = deck.levels.find((x) => x.id === level)!.sequence.filter((s) => s.rule !== 'research').length
   const run = Object.values(import.meta.glob<{ default: AiRun }>('./eval/ai-run.json', { eager: true }))[0]?.default
   const ai = deck.question ? run : undefined
+  const api = import.meta.env.PUBLIC_GAME_API as string | undefined
+  const deckIdx = Object.values(decks).indexOf(deck)
 
   const fieldEl = $('.ftg-field')
   const rocksEl = $('.ftg-rocks')
@@ -108,6 +113,9 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
   let neutral: string[] = []
   let clues: string[] = []
   let rounds: ReturnType<typeof presentObjects>[] = []
+  let answer: Step | null = null
+  let waves: number[][] = []
+  let sent = false
 
   const phase = (p: string) => {
     root.dataset.phase = p
@@ -162,6 +170,10 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
     $('.ftg-wave').textContent = research ? '?' : `${g.decisions.length + 1}/${total}`
     $('.ftg-wave').setAttribute('aria-label', research ? l.research : l.wave)
     t0 = performance.now()
+    answer = null
+    if (api && g.mode === 'adaptive' && !research) {
+      askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects) answer = a })
+    }
     busy = false
     rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
   }
@@ -185,8 +197,13 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
     busy = true
     const objects = rounds[g.decisions.length]
     const rule = g.rule
-    g = shoot(deck, g, objects[i].sourceIndex, (performance.now() - t0) / 1000)
+    const got = answer
+    g = shoot(deck, g, objects[i].sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
     const d = g.decisions.at(-1)!
+    const sa = ai && aiPick(ai, g, g.decisions.length - 1)
+    const ap = got?.ai ?? (sa && { pick: Number(sa.choice.slice(1)), p: sa.probabilities[sa.choice] })
+    const p = g.mode === 'adaptive' && d.hit !== null ? (got ? got[d.hit ? 'hit' : 'miss'] : estimate(deck, { ...g, rule })) : 0
+    waves.push(resultRow(deck, d, ap, p, got))
     // Adaptive mode marks a rule switch for the next wave without naming the new rule.
     const switched = g.mode === 'adaptive' && g.rule !== rule
     $('.ftg-switch').hidden = !switched
@@ -199,6 +216,8 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
   const start = () => {
     g = begin(deck, level, mode)
     rounds = []
+    waves = []
+    sent = false
     $('.ftg-switch').hidden = true
     endEl.hidden = true
     $<HTMLDetailsElement>('.ftg-replay').open = false
@@ -281,6 +300,13 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
     })
   }
 
+  const study = () => { try { return localStorage.getItem('ftg:study') === '1' } catch { return false } }
+  const contribute = () => {
+    if (!api || sent || !study()) return
+    sent = true
+    sendResult(api, resultRequest(deckIdx, level, g.mode, waves))
+  }
+
   const end = () => {
     phase('end')
     field.pause()
@@ -324,6 +350,7 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
     const nextEl = $<HTMLAnchorElement>('.ftg-next')
     nextEl.hidden = !deck.levels.some((x) => x.id === level + 1)
     nextEl.href = `${root.dataset.next}${location.search}`
+    contribute()
     $('.ftg-score').focus()
   }
 
@@ -346,8 +373,18 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
   }
   modeBtn.onclick = () => setMode(mode === 'adaptive' ? 'standard' : 'adaptive')
   calmBtn.onclick = () => (toggled = true) && setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')
+  const studyBtn = $('.ftg-study')
+  studyBtn.hidden = !api
+  studyBtn.setAttribute('aria-pressed', String(study()))
+  studyBtn.onclick = () => {
+    const on = !study()
+    try { localStorage.setItem('ftg:study', on ? '1' : '0') } catch {}
+    studyBtn.setAttribute('aria-pressed', String(on))
+    contribute()
+  }
   $('.ftg-delete').onclick = () => {
     clearSaves()
+    studyBtn.setAttribute('aria-pressed', 'false')
     refreshDownload()
   }
   document.addEventListener('visibilitychange', () => document.hidden && setPause(true))
