@@ -6,6 +6,15 @@ A pattern game built from real software delivery evidence.
 - Phase 2: site integration, tracked in serio-ngo/audioblog#133.
 - Design docs (private).
 
+## Status: failed, not for merge
+
+Phase 1 runs offline and its checks pass, but the owner rejected the result on 20 November 2026.
+Open before a new attempt:
+- Shootable objects (asteroids, alien ships or similar) from a deterministic algorithm that balances looks against how closely they map to the source data.
+- UI with almost no text.
+- Minimal end-screen stats, as in the vision.
+- Waves built only from facts quoted from the public sources, each answer checked by the source script.
+
 ## Run
 
 ```
