@@ -32,6 +32,15 @@ describe('stats', () => {
     save('a', 1, 6, { mode: 'standard', picks: [] }, s)
     expect(load('a', 1, s)).toMatchObject({ plays: 2, best: 6, top: [6] })
   })
+  it('retains legacy scores and exports each edition separately', () => {
+    const legacy = '{"plays":1,"best":9}'
+    const s = fake({ 'ftg:a:1': legacy })
+    save('a', 1, 3, { mode: 'standard', picks: [], edition: 'one' }, s)
+    save('a', 1, 6, { mode: 'standard', picks: [], edition: 'two' }, s)
+    expect(load('a', 1, s, 'one')?.top).toEqual([3])
+    expect(load('a', 1, s, 'two')?.top).toEqual([6])
+    expect(JSON.parse(exportSaves(s))).toMatchObject({ 'ftg:a:1': legacy, 'ftg:a:1:two': expect.stringContaining('"edition":"two"') })
+  })
   it('exports and clears only ftg: keys', () => {
     const s = fake({ 'ftg:a:1': '{"plays":1}', other: 'x' })
     expect(JSON.parse(exportSaves(s))).toEqual({ 'ftg:a:1': '{"plays":1}' })

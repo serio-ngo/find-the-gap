@@ -1,10 +1,10 @@
 import { rng } from './engine.ts'
 import type { Wave } from './engine.ts'
-import { shape, waveLook } from './gen.ts'
-import type { Family, Shape } from './gen.ts'
+import { colors, hash, paintObject } from './gen.ts'
+import type { Pt, Shape } from './gen.ts'
+import type { TargetObject } from './objects.ts'
 
-type Pt = [number, number]
-type Target = { x: number; y: number; vx: number; vy: number; angle: number; rate: number; n: number; key: string; bad: boolean; shape: Shape }
+type Target = { x: number; y: number; vx: number; vy: number; angle: number; rate: number; n: number; key: string; shape: Shape }
 type Shot = { to: number; outcome: boolean | null; phase: 0 | 1 | 2; t: number }
 type Shard = { x: number; y: number; vx: number; vy: number; life: number; c: string }
 
@@ -30,9 +30,8 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   let h = 1
   let dpr = 1
   let ts: Target[] = []
-  let fam: Family = 'rock'
-  let size = 1
-  let answers: number[] = []
+  let inspected = false
+  let answers: readonly number[] = []
   let shot: Shot | null = null
   let done: (() => void) | null = null
   let shards: Shard[] = []
@@ -63,7 +62,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     }
   }
 
-  const rad = () => Math.max(18, Math.min(w, h) * 0.09) * size
+  const rad = () => Math.max(22, Math.min(w, h) * 0.09)
   const sy = () => h - BAND / 2
   const k = () => (calm ? 0.35 : 1)
   // Drawn position: fly-in offset plus sub-step extrapolation so high-refresh screens stay smooth.
@@ -72,97 +71,36 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     const e = t.n <= 0 ? 0 : 1 - (1 - Math.min(1, (t.n * k()) / 30)) ** 3
     const y = t.y + t.vy * a
     const o = t.angle + t.rate * a
-    // Ships and probes bob and tilt on the spin phase; only rocks spin.
-    const rock = fam === 'rock'
-    return { x: t.x + t.vx * a, y: y - (1 - e) * (y + 2 * rad()) + (rock ? 0 : 0.04 * rad() * Math.cos(o)), angle: rock ? o : 0.1745 * Math.sin(o) }
+    return { x: t.x + t.vx * a, y: y - (1 - e) * (y + 2 * rad()) + 0.04 * rad() * Math.cos(o), angle: inspected ? 0 : 0.1745 * Math.sin(o) }
   }
 
   const sprite = (t: Target) => {
-    let c = sprites.get(t.key)
-    if (c) return c
+    const key = t.key + Number(inspected)
+    const cached = sprites.get(key)
+    if (cached) return cached
     const R = rad()
-    const s = R * 0.94
-    c = document.createElement('canvas')
+    const c = document.createElement('canvas')
     c.width = c.height = Math.ceil(2 * R * dpr)
     const g = c.getContext('2d')!
     g.scale(dpr, dpr)
     g.translate(R, R)
-    g.lineWidth = 1.5
     g.lineJoin = 'round'
-    const path = (p: Pt[], close = true) => {
+    g.lineCap = 'round'
+    paintObject(t.shape, ({ points, fill, stroke, width }) => {
       g.beginPath()
-      p.forEach(([x, y], i) => (i ? g.lineTo(x * s, y * s) : g.moveTo(x * s, y * s)))
-      if (close) g.closePath()
-    }
-    const { outline, details, dots, lum, crack } = t.shape
-    const tone = (c: string, al: number) => {
-      g.globalAlpha = al
-      g.fillStyle = c
-      g.fill()
-      g.globalAlpha = 1
-    }
-    outline.forEach((o, i) => {
-      path(o)
-      g.fillStyle = fam === 'rock' ? col.ink2 : fam === 'ship' || i === 0 ? col.paper2 : col.ink2
-      g.fill()
-      if (fam === 'rock') {
-        tone(lum > 0 ? '#fff' : '#000', Math.abs(lum) * 3)
-        // flat facets: triangles from the centre, light on the upper-left half, dark on the lower-right
-        g.save()
-        g.clip()
-        o.forEach(([x, y], j) => {
-          const [x2, y2] = o[(j + 1) % o.length]
-          path([[0, 0], [x, y], [x2, y2]])
-          if (x + x2 + y + y2 < 0) tone(col.paper3, 0.18)
-          else tone(col.field, 0.4)
-        })
-        g.restore()
-      }
-      path(o)
-      if (t.bad) tone(col.brick, 0.3)
-      g.strokeStyle = t.bad ? col.brick : col.paper3
-      g.lineWidth = fam === 'rock' ? 1.5 : 1
-      g.stroke()
-    })
-    g.lineWidth = 1.5
-    if (fam === 'ship') {
-      path(details[1])
-      tone(col.ink2, 0.6)
-      path(details[0])
-      g.fillStyle = col.ink3
-      g.fill()
-      g.strokeStyle = col.paper3
-      g.stroke()
-    } else {
-      g.globalAlpha = fam === 'rock' ? 0.45 : 1
-      g.strokeStyle = col.field
-      for (const d of details) {
-        path(d, false)
-        g.stroke()
-      }
-    }
-    g.globalAlpha = 1
-    for (const [x, y, r] of dots) {
-      g.beginPath()
-      g.arc(x * s, y * s, r * s, 0, 7)
-      if (fam === 'rock') {
-        g.fillStyle = col.field
-        g.globalAlpha = 0.4
-        g.fill()
-        g.globalAlpha = 1
-        g.strokeStyle = col.paper3
-        g.stroke()
-      } else {
-        g.fillStyle = col.brick
+      points.forEach(([x, y], i) => (i ? g.lineTo(x * R, y * R) : g.moveTo(x * R, y * R)))
+      if (fill) {
+        g.closePath()
+        g.fillStyle = colors[fill]
         g.fill()
       }
-    }
-    if (crack) {
-      path(crack, false)
-      g.strokeStyle = col.paper
-      g.stroke()
-    }
-    sprites.set(t.key, c)
+      if (stroke) {
+        g.lineWidth = Math.max(0.85, width * R)
+        g.strokeStyle = colors[stroke]
+        g.stroke()
+      }
+    }, inspected)
+    sprites.set(key, c)
     return c
   }
 
@@ -282,6 +220,18 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
         return
       }
       put(t, q.x, q.y, q.angle)
+      if (inspected) {
+        const y = q.y + R * 0.68
+        ctx.fillStyle = colors.void
+        ctx.beginPath()
+        ctx.arc(q.x, y, 7, 0, 2 * Math.PI)
+        ctx.fill()
+        ctx.fillStyle = colors.light
+        ctx.font = 'bold 10px system-ui, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(String(i + 1), q.x, y)
+      }
       if (i === focused) {
         ctx.strokeStyle = col.brick
         ctx.beginPath()
@@ -411,38 +361,40 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   sync()
 
   return {
-    show(wave: Wave, names: string[], anchor: boolean) {
+    show(wave: Wave, objects: TargetObject[], names: string[]) {
       finish()
       if (canvas.clientWidth !== w || canvas.clientHeight !== h) fit()
-      const look = waveLook(wave.symbols, wave.seed)
-      fam = look.family
-      size = look.size
-      answers = wave.answers
+      answers = []
+      inspected = false
       sprites = new Map()
       shards = []
       focused = -1
-      const rand = rng(wave.seed * 31 + wave.step)
+      const rand = rng(hash(objects[0].id))
       const R = rad()
       const speed = 0.9 + 0.3 * wave.step
-      ts = wave.symbols.map((token, i) => {
-        const bad = anchor && wave.answers.includes(i)
-        const sh = shape(token, look, { bad })
-        const a = rand() * 6.283
-        const t: Target = {
-          x: R + rand() * Math.max(0, w - 2 * R),
-          y: R + 8 + rand() * Math.max(0, h - BAND - 2 * R - 8),
+      const count = objects.length
+      const height = Math.max(2 * R, h - BAND - 8)
+      const columns = Math.min(count, Math.ceil(Math.sqrt(count * w / height)))
+      const rows = Math.ceil(count / columns)
+      const slots = objects.map((_, i) => ({ i, rank: rand() })).sort((a, b) => a.rank - b.rank)
+      ts = objects.map(({ id, shape }, i) => {
+        const slot = slots[i].i
+        const row = Math.floor(slot / columns)
+        const rowLength = Math.min(columns, count - row * columns)
+        const a = rand() * 2 * Math.PI
+        return {
+          x: w * (slot % columns + 0.5) / rowLength,
+          y: 8 + height * (row + 0.5) / rows,
           vx: Math.cos(a) * speed,
           vy: Math.sin(a) * speed,
-          angle: sh.spin.phase,
-          rate: sh.spin.rate,
-          n: -i * 6,
-          key: `${token}|${bad}`,
-          bad,
-          shape: sh,
+          angle: shape.spin.phase,
+          rate: shape.spin.rate,
+          n: -slot * 4,
+          key: id,
+          shape,
         }
-        sprite(t)
-        return t
       })
+      ts.forEach(sprite)
       canvas.setAttribute('aria-label', names.join(', '))
       draw()
     },
@@ -452,8 +404,13 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     focus(i: number) {
       focused = i
     },
-    shoot(index: number, outcome: boolean | null) {
+    inspect(enabled: boolean) {
+      inspected = enabled
+      draw()
+    },
+    shoot(index: number, outcome: boolean | null, answerIndices: readonly number[] = []) {
       finish()
+      answers = answerIndices
       tx = ts[index].x
       shot = { to: index, outcome, phase: 0, t: 0 }
       return new Promise<void>((resolve) => {

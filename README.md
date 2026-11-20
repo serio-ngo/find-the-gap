@@ -6,13 +6,11 @@ A pattern game built from real software delivery evidence.
 - Phase 2: site integration, tracked in serio-ngo/audioblog#133.
 - Design docs (private).
 
-## Status: redesign
+## Play
 
-The owner rejected the first design on 20 November 2026. This build follows the redesign:
-- Targets come from a deterministic generator; the data shapes them only subtly, except in rare anchor waves, where the bad datum is plain.
-- Only anchor waves score. The end screen shows the score, agreement with the AI, atypicality and a local top 5.
-- No explanatory text; icons carry the UI.
-- The wave content is unchanged, so the committed AI run stays valid. A global leaderboard needs a backend (phase 2).
+Open `/find-the-gap/1` in Polish or `/en/find-the-gap/1` in English. Inspect a formation to compare the marks on its targets, then select one by mouse, touch or keyboard. A shot records one choice. Two waves per level award points. The final research wave accepts any pick.
+
+The four levels draw from public workflow evidence. A target has its own hull, ordered stage outputs and source references. Replaying the same presentation recreates it. After the game, the decision history shows the selected evidence and the stored d1.1 comparison. [Level data, visual design and history](LEVELS.md)
 
 ## Run
 

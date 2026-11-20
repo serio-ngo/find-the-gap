@@ -1,3 +1,5 @@
+import type { ChoiceRecord } from './levels/records.ts'
+
 export type Mode = 'standard' | 'adaptive'
 export type Spec = { rule: string; step: number; seed: number }
 export type Wave = Spec & { symbols: string[]; answers: number[]; evidence: string }
@@ -8,6 +10,7 @@ export type Level = { id: number; start: { rule: string; step: number }; anchors
 export type Deck = {
   id: string; steps: number; policy: Policy; rules: Rule[]; research?: Rule['make']
   poolSize: number; evidence: Evidence[]; question?: string; levels: Level[]
+  choiceRecords?: (wave: Wave) => ChoiceRecord[]
 }
 export type Decision = { spec: Spec; pick: number; hit: boolean | null; anchor: boolean; secs: number }
 export type Game = { mode: Mode; level: number; rule: string; step: number; streak: number; decisions: Decision[] }

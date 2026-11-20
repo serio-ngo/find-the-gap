@@ -13,7 +13,7 @@ const patterns: [string, (g: Game) => number][] = [
 for (const [name, pick] of patterns)
   test(`adaptive waves on the page match the engine replay for picks that are ${name}`, async ({ page }) => {
     await open(page, 'en', 1, '?mode=adaptive')
-    const g = await play(page, { mode: 'adaptive', pick })
+    const g = await play(page, { mode: 'adaptive', pick, inspect: true })
     await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
     const r = replay(deck, 1, 'adaptive', g.decisions.map((d) => d.pick))
     expect(r.decisions.map((d) => d.spec)).toEqual(g.decisions.map((d) => d.spec))

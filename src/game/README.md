@@ -11,13 +11,13 @@ Self-contained: it imports nothing from outside this folder.
 ## Modules
 
 - `engine.ts`: waves, anchor scoring, deviation from the AI, adaptive policy, content, AI request body.
-- `levels/`: lifecycle and fixture decks; `anchors` are the rare scored waves and stay out of the AI-run hash.
-- `gen.ts`: deterministic target generator; structure is shared per wave, each token only nudges continuous terms.
-- `render.ts`: one-canvas loop: generated sprites, motion, collisions, stars, ship, shots.
+- `levels/` holds the lifecycle and fixture decks. `records.ts` pins the ordered steps of the source jobs. Each lifecycle choice carries its own evidence and comparison operands.
+- `objects.ts` binds a public observation to a reproducible hull for a particular wave and appearance. `gen.ts` draws the outer equipment, internal workflow assemblies and comparison marks.
+- `render.ts` handles cached canvas sprites, the scan, motion, collisions and shots. Answer indices enter the field when a shot resolves.
 - `input.ts`: keyboard, pointer, aim, focus and pause handling.
-- `stats.ts`: saves and the local top 5 in localStorage.
+- `stats.ts` stores edition-specific results, the latest decision path and the local top five.
 - `share.ts`: result text (score, AI agreement, atypicality) and share links.
-- `strings.json`: Polish and English text (8 visible strings) and accessible labels.
+- `strings.json` holds the Polish and English controls, object names and accessible labels.
 - `game.css`: styles.
-- `eval/version.ts`: content hash and stale-run check.
+- `eval/version.ts` verifies the exact recorded model inputs and computes the playable edition identifier.
 - `eval/run-ai.ts`: offline AI run.

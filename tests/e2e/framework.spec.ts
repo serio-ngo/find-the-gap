@@ -16,11 +16,19 @@ test('?deck=fixture plays to its own end with a score, no indicators and no tabl
 test('saves keep levels and decks apart', async ({ page }) => {
   test.slow() // three full plays, each wave animates
   await open(page, 'en', 1)
+  await page.evaluate(() => localStorage.setItem('ftg:lifecycle:1', '{"plays":1,"top":[999]}'))
   await play(page)
+  await expect(page.locator('.ftg-top li')).toHaveCount(1)
+  await expect(page.locator('.ftg-top li')).not.toHaveText('999')
   await open(page, 'en', 2)
   await play(page, { level: 2 })
   await open(page, 'en', 1, '?deck=fixture')
   await play(page, { deck: fixture })
-  const keys = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('ftg:')).sort())
-  expect(keys).toEqual(['ftg:fixture:1', 'ftg:lifecycle:1', 'ftg:lifecycle:2'])
+  const records = await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith('ftg:')).sort().map(([k, s]) => [k, JSON.parse(s)]))
+  expect(records.map(([k]) => k)).toEqual(['ftg:fixture:1:', 'ftg:lifecycle:1', 'ftg:lifecycle:1:', 'ftg:lifecycle:2:'].map((k) => k.endsWith(':') ? expect.stringMatching(new RegExp(`^${k}[a-f0-9]{64}$`)) : k))
+  expect(records[1][1]).toEqual({ plays: 1, top: [999] })
+  for (const [k, save] of [records[0], ...records.slice(2)]) {
+    expect(k.endsWith(save.last.edition)).toBe(true)
+    expect(save.last.decisions).toHaveLength(save.last.picks.length)
+  }
 })

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { decks } from '../src/game/levels/index.ts'
-import { checkRun, hashContent, loadRun } from '../src/game/eval/version.ts'
+import { checkRun, hashContent, hashRequests, loadRun } from '../src/game/eval/version.ts'
 
 const deck = decks.lifecycle
 const hash = hashContent(deck)
@@ -9,4 +9,4 @@ if (error) {
   console.error(error)
   process.exit(1)
 }
-console.log(`ai run ok ${hash.slice(0, 12)}`)
+console.log(`ai run ok ${hash.slice(0, 12)} (requests ${hashRequests(deck)})`)

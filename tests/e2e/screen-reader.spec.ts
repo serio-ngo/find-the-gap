@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { replay, upcoming, wave } from '../../src/game/engine.ts'
-import { deck, expectEnd, open, play, playButton, right, strings, wrong } from './helpers.ts'
+import { deck, displayed, expectEnd, open, play, playButton, right, strings, wrong } from './helpers.ts'
 
 const l = strings.labels.en
 
@@ -44,11 +43,17 @@ test('a live region announces a miss on an anchor wave', async ({ page }) => {
   await expect(live(page)).toHaveText(l.miss)
 })
 
-test('only the answers of an anchor wave carry the bad label', async ({ page }) => {
-  await open(page)
-  await playButton(page).click()
-  const bad = page.getByRole('button', { name: l.bad })
-  await expect(bad).toHaveCount(0)
-  await play(page, { limit: 2, begun: true })
-  await expect(bad).toHaveCount(wave(deck, upcoming(deck, replay(deck, 1, 'standard', [0, 0]))!).answers.length)
+test('anchor choices have neutral names before the shot and announce a hit after it', async ({ page }) => {
+  for (const lang of ['en', 'pl'] as const) {
+    await open(page, lang)
+    await playButton(page, lang).click()
+    const g = await play(page, { lang, limit: 2, begun: true })
+    const names = await page.locator('.ftg-rocks button').evaluateAll((buttons) => buttons.map((button) => button.ariaLabel))
+    const bad = { en: 'bad datum', pl: 'zła dana' }[lang]
+    expect(names.filter((name) => name?.trim()).length).toBeGreaterThanOrEqual(4)
+    expect.soft(names.join('\n')).not.toContain(bad)
+    const slot = displayed(deck, g).findIndex((o) => o.sourceIndex === right(deck, g))
+    await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click')
+    await expect(live(page)).toHaveText(strings.labels[lang].hit)
+  }
 })

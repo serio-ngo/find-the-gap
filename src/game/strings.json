@@ -1,21 +1,31 @@
 {
   "visible": {
-    "pl": { "title": "Find the Gap", "play": "Graj", "level": "Poziom", "paused": "Pauza", "resume": "Wznów", "score": "Wynik", "agreement": "Zgodność z AI", "atypical": "Atypowość" },
-    "en": { "title": "Find the Gap", "play": "Play", "level": "Level", "paused": "Paused", "resume": "Resume", "score": "Score", "agreement": "AI agreement", "atypical": "Atypicality" }
+    "pl": { "title": "Find the Gap", "play": "Graj", "level": "Poziom", "paused": "Pauza", "resume": "Wznów", "score": "Wynik", "agreement": "Zgodność z AI", "atypical": "Atypowość", "you": "Ty", "ai": "AI" },
+    "en": { "title": "Find the Gap", "play": "Play", "level": "Level", "paused": "Paused", "resume": "Resume", "score": "Score", "agreement": "AI agreement", "atypical": "Atypicality", "you": "You", "ai": "AI" }
   },
   "labels": {
     "pl": {
       "pause": "Pauza", "resume": "Wznów", "calm": "Tryb spokojny", "adaptive": "Tryb adaptacyjny",
-      "rock": "Skała {n}: {s}", "wave": "Fala", "research": "Fala badawcza, bez dobrej odpowiedzi",
-      "hit": "Trafienie", "miss": "Pudło", "bad": "zła dana", "current": "Twój wynik teraz", "top": "Twoje najlepsze wyniki",
+      "rock": "Obiekt {n}: {s}", "wave": "Fala", "research": "Fala badawcza, bez dobrej odpowiedzi",
+      "object": "obiekt", "salvage tug": "holownik ratowniczy", "split-keel courier": "kuter kurierski z dzielonym kilem",
+      "ring observatory": "obserwatorium pierścieniowe", "crystal cluster": "skupisko kryształów", "orbital probe": "sonda orbitalna",
+      "freight cutter": "kuter transportowy", "deep-water skiff": "łódź głębinowa", "blue": "niebieski", "red": "czerwony",
+      "inspect": "Zbadaj obiekty", "readout": "Odczyty z obiektów", "details": "Przebieg gry i źródła", "sources": "Źródła i etapy",
+      "confidence": "Pewność AI", "control": "Próba porównawcza",
+      "hit": "Trafienie", "miss": "Pudło", "current": "Twój bieżący wynik", "top": "Twoje najlepsze wyniki",
       "replay": "Jeszcze raz: zagraj poziom ponownie", "next": "Dalej: następny poziom", "shareSheet": "Udostępnij: otwórz menu udostępniania", "copy": "Kopiuj wynik",
       "x": "Udostępnij na X", "bluesky": "Udostępnij na Bluesky", "linkedin": "Udostępnij na LinkedIn", "facebook": "Udostępnij na Facebooku",
       "download": "Pobierz historię", "delete": "Usuń historię"
     },
     "en": {
       "pause": "Pause", "resume": "Resume", "calm": "Calm mode", "adaptive": "Adaptive mode",
-      "rock": "Rock {n}: {s}", "wave": "Wave", "research": "Research wave, no right answer",
-      "hit": "Hit", "miss": "Miss", "bad": "bad datum", "current": "Your score now", "top": "Your best scores",
+      "rock": "Object {n}: {s}", "wave": "Wave", "research": "Research wave, no right answer",
+      "object": "object", "salvage tug": "salvage tug", "split-keel courier": "split-keel courier",
+      "ring observatory": "ring observatory", "crystal cluster": "crystal cluster", "orbital probe": "orbital probe",
+      "freight cutter": "freight cutter", "deep-water skiff": "deep-water skiff", "blue": "blue", "red": "red",
+      "inspect": "Scan objects", "readout": "Object readings", "details": "Decisions and sources", "sources": "Sources and stages",
+      "confidence": "AI confidence", "control": "Comparison control",
+      "hit": "Hit", "miss": "Miss", "current": "Your current score", "top": "Your best scores",
       "replay": "Again: play the level again", "next": "Next: next level", "shareSheet": "Share: open the share sheet", "copy": "Copy result",
       "x": "Share on X", "bluesky": "Share on Bluesky", "linkedin": "Share on LinkedIn", "facebook": "Share on Facebook",
       "download": "Download history", "delete": "Delete history"
