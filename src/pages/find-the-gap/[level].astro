@@ -1,0 +1,31 @@
+---
+import Game from '../../game/Game.astro'
+import { decks } from '../../game/levels/index.ts'
+
+export const getStaticPaths = () => decks.lifecycle.levels.map((l) => ({ params: { level: String(l.id) } }))
+
+const n = Number(Astro.params.level)
+const previews = import.meta.glob('../../game/levels/preview-*.png', { eager: true, import: 'default' }) as Record<string, ImageMetadata>
+const image = new URL(previews[`../../game/levels/preview-${n}.png`].src, Astro.site).href
+const site = 'https://serio.org.pl'
+const title = `Find the Gap #${n}`
+const description = 'Krótka gra na prawdziwych danych z cyklu życia oprogramowania z AI: znajdź lukę i porównaj się z AI.'
+---
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={`${site}/find-the-gap/${n}`} />
+    <meta property="og:image" content={image} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" hreflang="en" href={`${site}/en/find-the-gap/${n}`} />
+  </head>
+  <body>
+    <Game level={n} lang="pl" />
+  </body>
+</html>

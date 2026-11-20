@@ -1,0 +1,89 @@
+import { expect, test, type Page } from '@playwright/test'
+import { score } from '../../src/game/engine.ts'
+import { open, play, playButton, strings } from './helpers.ts'
+
+const l = strings.labels.en
+
+test('a new player finishes the first wave by keyboard only', async ({ page }) => {
+  await open(page)
+  const start = page.locator('.ftg-play')
+  for (let i = 0; i < 12 && !(await start.evaluate((e) => e === document.activeElement)); i++) await page.keyboard.press('Tab')
+  await expect(playButton(page)).toBeFocused()
+  await page.keyboard.press('Enter')
+  const g = await play(page, { by: 'keys', limit: 1, begun: true })
+  await expect(page.locator('.ftg-hits')).toHaveText(String(score(g)))
+  await expect(page.getByRole('status').filter({ hasText: l.hit })).toHaveCount(1)
+})
+
+test('a new player finishes the first wave with the mouse on a rock', async ({ page }) => {
+  await open(page)
+  const g = await play(page, { limit: 1 })
+  await expect(page.locator('.ftg-hits')).toHaveText(String(score(g)))
+  await expect(page.getByRole('status').filter({ hasText: l.hit })).toHaveCount(1)
+})
+
+test('a mouse click on the canvas picks a rock', async ({ page }) => {
+  await open(page)
+  await playButton(page).click()
+  const box = (await page.locator('canvas').boundingBox())!
+  const points = await page.evaluate(
+    ({ x, y, w, h }) => {
+      const out: number[][] = []
+      for (let r = 0; r < 14; r++)
+        for (let c = 0; c < 20; c++) {
+          const px = x + ((c + 0.5) * w) / 20
+          const py = y + ((r + 0.5) * h) / 14
+          if (document.elementFromPoint(px, py)?.tagName === 'CANVAS') out.push([px, py])
+        }
+      return out
+    },
+    { x: box.x, y: box.y, w: box.width, h: box.height },
+  )
+  const status = page.locator('.ftg-sr').first()
+  let hit = false
+  for (let round = 0; round < 3 && !hit; round++)
+    for (const [x, y] of points) {
+      await page.mouse.click(x, y)
+      if (await status.textContent()) {
+        hit = true
+        break
+      }
+    }
+  expect(hit).toBe(true)
+})
+
+test('a new player finishes the first wave by touch', async ({ page }, info) => {
+  test.skip(info.project.name !== 'touch', 'tap needs the touch project')
+  await open(page)
+  const g = await play(page, { by: 'tap', limit: 1 })
+  await expect(page.locator('.ftg-hits')).toHaveText(String(score(g)))
+})
+
+for (const [name, press] of [
+  ['the button', async (p: Page) => p.getByRole('button', { name: l.pause }).click()],
+  ['the P key', async (p: Page) => p.keyboard.press('p')],
+  ['the Escape key', async (p: Page) => p.keyboard.press('Escape')],
+] as const) {
+  test(`pause by ${name} stops the wave counter`, async ({ page }) => {
+    await open(page)
+    await playButton(page).click()
+    const root = page.locator('.ftg')
+    const wave = page.locator('.ftg-wave')
+    const hits = page.locator('.ftg-hits')
+    const live = page.locator('.ftg-sr').first()
+    const before = await wave.textContent()
+    const hitsBefore = await hits.textContent()
+    await press(page)
+    await expect(root).toHaveAttribute('data-phase', 'paused')
+    const twin = page.locator('[data-rock]').first()
+    await twin.press('Enter')
+    await expect(hits).toHaveText(hitsBefore!)
+    await expect(live).toHaveText('')
+    await expect(wave).toHaveText(before!)
+    await page.getByRole('button', { name: strings.visible.en.resume }).click()
+    await expect(root).toHaveAttribute('data-phase', 'play')
+    await twin.press('Enter')
+    await expect(live).not.toHaveText('')
+    await expect(wave).not.toHaveText(before!)
+  })
+}
