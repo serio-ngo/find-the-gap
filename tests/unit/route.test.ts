@@ -4,7 +4,7 @@ import { decks } from '../../src/game/levels/index.ts'
 import { route } from '../../src/game/worker/route.ts'
 import type { GameEnv } from '../../src/game/worker/route.ts'
 
-const FIXTURE = 1 // index in decks: lifecycle 0, fixture 1
+const FIXTURE = 1
 const ORIGIN = 'https://example.org'
 
 const fakeEnv = (over: Partial<GameEnv> = {}) => {
@@ -17,7 +17,7 @@ const fakeEnv = (over: Partial<GameEnv> = {}) => {
         bind: (...v: unknown[]) => ({
           first: async () =>
             (sql.includes('game_use')
-              ? { n: ++use[sql.includes('(day, step)') ? 'step' : 'result'] }
+              ? { n: (use[sql.includes('(day, step)') ? 'step' : 'result'] += v[1] as number) }
               : cache.get(v[0] as string) ?? null) as any,
           run: async () => {
             if (sql.includes('game_cache')) cache.set(v[0] as string, { body: v[1] as string, created: v[2] as number })
@@ -170,12 +170,12 @@ describe('step', () => {
     const { env, use } = fakeEnv()
     stubFetch(async () => new Response('no', { status: 500 }))
     await send('/api/game/step', stepReq, env)
-    expect(use.step).toBe(1)
+    expect(use.step).toBe(2)
     stubFetch()
     await send('/api/game/step', stepReq, env)
-    expect(use.step).toBe(2)
+    expect(use.step).toBe(4)
     await send('/api/game/step', stepReq, env)
-    expect(use.step).toBe(2)
+    expect(use.step).toBe(4)
   })
 
   it('gives no AI pick when the two model passes disagree', async () => {
@@ -235,5 +235,18 @@ describe('result', () => {
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
     expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)).status).toBe(204)
     expect(results).toHaveLength(0)
+  })
+
+  it('rejects an invalid pick on the research wave', async () => {
+    const { env } = fakeEnv()
+    const d = decks.observations
+    const rows = (research: unknown) => d.levels[0]!.sequence.map((s) => {
+      const r = s.rule === 'research' ? d.rules.length : d.rules.findIndex((x) => x.id === s.rule)
+      return [r, s.step, s.seed, s.rule === 'research' ? research : wave(d, s).answers[0], s.rule === 'research' ? 2 : 1, 1, -1, 0, 0, 0]
+    })
+    const send0 = (research: unknown) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(research) }, env)
+    expect((await send0('x')).status).toBe(400)
+    expect((await send0(99)).status).toBe(400)
+    expect((await send0(0)).status).toBe(204)
   })
 })

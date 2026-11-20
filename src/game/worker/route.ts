@@ -42,7 +42,8 @@ const context = (b: Record<string, unknown>) => {
 
 const hitOf = (d: Deck, s: Spec, pick: number) => {
   const w = wave(d, s)
-  return { w, hit: s.rule === 'research' ? null : w.answers.includes(int(pick, w.symbols.length - 1)) }
+  const p = int(pick, w.symbols.length - 1)
+  return { w, hit: s.rule === 'research' ? null : w.answers.includes(p) }
 }
 
 const sha256 = async (s: string) =>
@@ -51,9 +52,9 @@ const sha256 = async (s: string) =>
 const json = (o: unknown) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 const FALLBACK = { fallback: true }
 
-const used = (env: GameEnv, col: 'step' | 'result') =>
-  env.DB.prepare(`INSERT INTO game_use (day, ${col}) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET ${col} = ${col} + 1 RETURNING ${col} AS n`)
-    .bind(new Date().toISOString().slice(0, 10))
+const used = (env: GameEnv, col: 'step' | 'result', n = 1) =>
+  env.DB.prepare(`INSERT INTO game_use (day, ${col}) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET ${col} = ${col} + ? RETURNING ${col} AS n`)
+    .bind(new Date().toISOString().slice(0, 10), n, n)
     .first<{ n: number }>()
     .then((r) => r?.n ?? Infinity)
 
@@ -71,7 +72,7 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
   const hit = await env.DB.prepare('SELECT body FROM game_cache WHERE key = ?').bind(key).first<{ body: string }>()
   if (hit) return json({ ...JSON.parse(hit.body), cached: true })
   if (!env.KEY) return json(FALLBACK)
-  if ((await used(env, 'step')) > DAILY_CAP) return json(FALLBACK)
+  if ((await used(env, 'step', 2)) > DAILY_CAP) return json(FALLBACK)
   const ask = async () => {
     const res = await fetch(URL_AI, {
       method: 'POST',
