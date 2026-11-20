@@ -1,6 +1,7 @@
-// Host fixture: applies the README host lines to a copy of src/game and the two pages, as audioblog@6b0b6c5 would.
-// Limits: no wrangler/astro check/audioblog code; Workers globals come from lib "dom" in .astro/worker.d.ts; the
-// main-config typecheck is tsc on a config extending the host one (astro check needs @astrojs/check).
+// Host fixture: applies the host lines read from src/game/README.md to a copy of src/game and the two pages.
+// The tsconfig/build setup below is a copy of audioblog 6b0b6c5 (audioblog is private), so this is not audioblog itself.
+// Limits: Workers globals are stand-ins from lib "dom" in .astro/worker.d.ts; .astro files are not type-checked
+// (astro check needs @astrojs/check); no wrangler; the main-config typecheck is tsc on a config extending the host one.
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -17,6 +18,13 @@ const w = (f: string, s: string) => {
 const run = (bin: string, args: string[], env = {}) =>
   execFileSync(process.execPath, [join(repo, 'node_modules', bin), ...args], { cwd: dir, env: { ...process.env, ...env }, stdio: 'pipe' })
 const ORIGIN = 'https://serio.org.pl'
+// Host lines come from the README's backtick code, so deleting one there fails this test.
+const spans = [...readFileSync(join(repo, 'src/game/README.md'), 'utf8').matchAll(/`([^`]+)`/g)].map((m) => m[1]!)
+const hostLine = (needle: string) => {
+  const line = spans.find((s) => s.includes(needle))
+  if (!line) throw new Error(`README has no host line with ${needle}`)
+  return line
+}
 
 const mainConfig = {
   extends: 'astro/tsconfigs/strict',
@@ -29,7 +37,6 @@ const workerConfig = {
     target: 'ES2023', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2023'], types: [], strict: true,
     noUncheckedIndexedAccess: true, noUnusedLocals: true, noUnusedParameters: true, noFallthroughCasesInSwitch: true,
     verbatimModuleSyntax: true, allowJs: true, resolveJsonModule: true, skipLibCheck: true, noEmit: true,
-    allowImportingTsExtensions: true, // the README host line
   },
   include: ['src/worker/**/*', '.astro/worker.d.ts'],
 }
@@ -41,17 +48,17 @@ beforeAll(() => {
   w('package.json', JSON.stringify({ name: 'host', private: true, type: 'module' }))
   w('astro.config.mjs', `import { defineConfig } from 'astro/config';\nexport default defineConfig({ site: '${ORIGIN}', trailingSlash: 'ignore' });\n`)
   w('tsconfig.json', JSON.stringify(mainConfig))
-  w('tsconfig.worker.json', JSON.stringify(workerConfig))
+  w('tsconfig.worker.json', JSON.stringify({ ...workerConfig, compilerOptions: { ...workerConfig.compilerOptions, ...JSON.parse(`{${hostLine('allowImportingTsExtensions')}}`) } }))
   w('.astro/worker.d.ts', '/// <reference lib="dom" />\n')
   w('tsconfig.check.json', JSON.stringify({ extends: './tsconfig.json', include: ['src/game/**/*.ts'], compilerOptions: { noEmit: true } }))
   w(
     'src/worker/index.ts',
-    `import { route as game } from '../game/worker/route';
+    `${hostLine('import { route as game }')}
 import type { GameEnv } from '../game/worker/route';
 export default {
   fetch(req: Request, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }) {
     const pathname = new URL(req.url).pathname;
-    if (pathname === '/api/game/step' || pathname === '/api/game/result') return game(req, env, ctx);
+    ${hostLine('/api/game/step')}
     return new Response(null, { status: 404 });
   },
 };
@@ -97,7 +104,9 @@ describe('host fixture', () => {
       worker.fetch(new Request(ORIGIN + '/api/game/step', { method: 'POST', body, headers: { origin } }), env, { waitUntil() {} })
     expect((await post('https://evil.example')).status).toBe(403)
     vi.stubGlobal('fetch', async () => new Response('{}', { status: 500 }))
-    expect(await post(ORIGIN)).toBeInstanceOf(Response)
+    const r = await post(ORIGIN)
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ fallback: true })
     vi.unstubAllGlobals()
   }, 120_000)
 })

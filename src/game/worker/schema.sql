@@ -4,7 +4,12 @@ CREATE TABLE IF NOT EXISTS game_cache (
   created INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS game_cache_created ON game_cache (created);
+-- model calls and result uploads per UTC day, counted before the call so failures count too
+CREATE TABLE IF NOT EXISTS game_use (
+  day TEXT PRIMARY KEY,
+  step INTEGER NOT NULL DEFAULT 0,
+  result INTEGER NOT NULL DEFAULT 0
+);
 
 CREATE TABLE IF NOT EXISTS game_results (
   id INTEGER PRIMARY KEY,

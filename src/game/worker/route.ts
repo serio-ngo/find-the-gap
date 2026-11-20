@@ -12,6 +12,7 @@ export type GameEnv = {
 
 const DAILY_CAP = 1000
 const MAX_BYTES = 2048
+const RESULT_CAP = 5000
 const POOL_FROM = 1000
 
 class Bad extends Error {}
@@ -50,6 +51,13 @@ const sha256 = async (s: string) =>
 const json = (o: unknown) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 const FALLBACK = { fallback: true }
 
+// counts every attempt per UTC day, failed or not; the returned count includes this one
+const used = (env: GameEnv, col: 'step' | 'result') =>
+  env.ASK_DB.prepare(`INSERT INTO game_use (day, ${col}) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET ${col} = ${col} + 1 RETURNING ${col} AS n`)
+    .bind(new Date().toISOString().slice(0, 10))
+    .first<{ n: number }>()
+    .then((r) => r?.n ?? 0)
+
 const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }) => {
   const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'wave', 'past']))
   const rows = Array.isArray(b.past) && b.past.length < seq.length ? b.past : bad()
@@ -64,31 +72,25 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
   const hit = await env.ASK_DB.prepare('SELECT body FROM game_cache WHERE key = ?').bind(key).first<{ body: string }>()
   if (hit) return json({ ...JSON.parse(hit.body), cached: true })
   if (!env.LIQUID_AI_KEY) return json(FALLBACK)
-  try {
-    const day = new Date().setUTCHours(0, 0, 0, 0)
-    const used = await env.ASK_DB.prepare('SELECT COUNT(*) AS n FROM game_cache WHERE created >= ?').bind(day).first<{ n: number }>()
-    if ((used?.n ?? 0) >= DAILY_CAP) return json(FALLBACK)
-    const res = await fetch(URL_AI, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${env.LIQUID_AI_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(1500),
-    })
-    if (!res.ok) return json(FALLBACK)
-    const a = ((await res.json()) as any).answers
-    const ai = validate(keys(w), a?.ai)
-    const out = {
-      ai: { pick: Number(ai.choice.slice(1)), p: round05(ai.probabilities[ai.choice]!) },
-      hit: round05(validate(['hit', 'miss'], a.if_hit).probabilities.hit!),
-      miss: round05(validate(['hit', 'miss'], a.if_miss).probabilities.hit!),
-    }
-    ctx.waitUntil(
-      env.ASK_DB.prepare('INSERT OR IGNORE INTO game_cache (key, body, created) VALUES (?, ?, ?)').bind(key, JSON.stringify(out), Date.now()).run(),
-    )
-    return json({ ...out, cached: false })
-  } catch {
-    return json(FALLBACK)
+  if ((await used(env, 'step')) > DAILY_CAP) return json(FALLBACK)
+  const res = await fetch(URL_AI, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${env.LIQUID_AI_KEY}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(1500),
+  })
+  if (!res.ok) return json(FALLBACK)
+  const a = ((await res.json()) as any).answers
+  const ai = validate(keys(w), a?.ai)
+  const out = {
+    ai: { pick: Number(ai.choice.slice(1)), p: round05(ai.probabilities[ai.choice]!) },
+    hit: round05(validate(['hit', 'miss'], a.if_hit).probabilities.hit!),
+    miss: round05(validate(['hit', 'miss'], a.if_miss).probabilities.hit!),
   }
+  ctx.waitUntil(
+    env.ASK_DB.prepare('INSERT OR IGNORE INTO game_cache (key, body, created) VALUES (?, ?, ?)').bind(key, JSON.stringify(out), Date.now()).run().catch(() => {}),
+  )
+  return json({ ...out, cached: false })
 }
 
 const result = async (b: Record<string, unknown>, env: GameEnv) => {
@@ -102,10 +104,29 @@ const result = async (b: Record<string, unknown>, env: GameEnv) => {
     const n = w.symbols.length - 1 // a[6] = -1: the client had no AI pick
     return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 20), int(a[9], 1), int(a[10], 1)]
   })
+  if ((await used(env, 'result')) > RESULT_CAP) return new Response(null, { status: 204 })
   await env.ASK_DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
     .bind(new Date().toISOString().slice(0, 10), d.id, b.level, standard ? 0 : 1, JSON.stringify(waves))
     .run()
   return new Response(null, { status: 204 })
+}
+
+// hard byte limit even without content-length; '' when empty or over
+const read = async (req: Request) => {
+  const r = req.body?.getReader()
+  const dec = new TextDecoder()
+  let text = ''
+  let n = 0
+  while (r) {
+    const { done, value } = await r.read()
+    if (done) break
+    if ((n += value.length) > MAX_BYTES) {
+      await r.cancel()
+      return ''
+    }
+    text += dec.decode(value, { stream: true })
+  }
+  return text
 }
 
 export const route = async (req: Request, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<Response> => {
@@ -115,8 +136,8 @@ export const route = async (req: Request, env: GameEnv, ctx: { waitUntil(p: Prom
   if (req.method !== 'POST') return new Response(null, { status: 405 })
   const handler = url.pathname === '/api/game/step' ? step : url.pathname === '/api/game/result' ? result : null
   if (!handler) return new Response(null, { status: 404 })
-  const text = Number(req.headers.get('content-length') ?? 0) > MAX_BYTES ? '' : await req.text()
-  if (!text || new TextEncoder().encode(text).byteLength > MAX_BYTES) return new Response(null, { status: 400 })
+  const text = await read(req)
+  if (!text) return new Response(null, { status: 400 })
   let body: unknown
   try {
     body = JSON.parse(text)
@@ -124,11 +145,11 @@ export const route = async (req: Request, env: GameEnv, ctx: { waitUntil(p: Prom
     return new Response(null, { status: 400 })
   }
   if (!body || typeof body !== 'object') return new Response(null, { status: 400 })
-  const rate = await env.RL_GAME.limit({ key: req.headers.get('cf-connecting-ip') ?? '' }).catch(() => null)
-  if (!rate?.success) return new Response(null, { status: 429 })
   try {
+    if (!(await env.RL_GAME.limit({ key: req.headers.get('cf-connecting-ip') ?? '' })).success) return new Response(null, { status: 429 })
     return await handler(body as Record<string, unknown>, env, ctx)
   } catch (e) {
-    return new Response(null, { status: e instanceof Bad ? 400 : 500 })
+    if (e instanceof Bad) return new Response(null, { status: 400 })
+    return handler === step ? json(FALLBACK) : new Response(null, { status: 503 })
   }
 }

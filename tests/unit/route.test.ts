@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { wave } from '../../src/game/engine.ts'
+import { decks } from '../../src/game/levels/index.ts'
 import { route } from '../../src/game/worker/route.ts'
 import type { GameEnv } from '../../src/game/worker/route.ts'
 
@@ -7,15 +9,16 @@ const ORIGIN = 'https://example.org'
 
 const fakeEnv = (over: Partial<GameEnv> = {}) => {
   const cache = new Map<string, { body: string; created: number }>()
+  const use = { step: 0, result: 0 }
   const results: unknown[][] = []
   const env: GameEnv = {
     ASK_DB: {
       prepare: (sql: string) => ({
         bind: (...v: unknown[]) => ({
           first: async () =>
-            (sql.startsWith('SELECT body')
-              ? cache.get(v[0] as string) ?? null
-              : { n: [...cache.values()].filter((r) => r.created >= (v[0] as number)).length }) as any,
+            (sql.includes('game_use')
+              ? { n: ++use[sql.includes('(day, step)') ? 'step' : 'result'] }
+              : cache.get(v[0] as string) ?? null) as any,
           run: async () => {
             if (sql.includes('game_cache')) cache.set(v[0] as string, { body: v[1] as string, created: v[2] as number })
             else results.push(v)
@@ -27,7 +30,7 @@ const fakeEnv = (over: Partial<GameEnv> = {}) => {
     LIQUID_AI_KEY: 'k',
     ...over,
   }
-  return { env, cache, results }
+  return { env, cache, results, use }
 }
 
 const send = async (path: string, body: unknown, env: GameEnv, headers: Record<string, string> = {}) => {
@@ -57,6 +60,7 @@ const stubFetch = (impl?: (...a: any[]) => any) => {
 }
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -67,6 +71,13 @@ describe('route checks', () => {
     expect((await send('/api/game/step', stepReq, env, { 'sec-fetch-site': 'cross-site' })).status).toBe(403)
     const get = await route(new Request(ORIGIN + '/api/game/step', { headers: { origin: ORIGIN } }), env, { waitUntil() {} })
     expect(get.status).toBe(405)
+  })
+
+  it('rejects a streamed body over 2048 bytes without content-length', async () => {
+    const { env } = fakeEnv()
+    const stream = new ReadableStream({ start: (c) => (c.enqueue(new TextEncoder().encode(' '.repeat(2049))), c.close()) })
+    const req = new Request(ORIGIN + '/api/game/step', { method: 'POST', body: stream, headers: { origin: ORIGIN }, duplex: 'half' } as any)
+    expect((await route(req, env, { waitUntil() {} })).status).toBe(400)
   })
 
   it('rejects a 2049-byte body', async () => {
@@ -104,19 +115,67 @@ describe('step', () => {
   })
 
   it('falls back when the daily cap is spent, without calling the model', async () => {
-    const { env, cache } = fakeEnv()
-    for (let i = 0; i < 1000; i++) cache.set('k' + i, { body: '{}', created: Date.now() })
+    const { env, use } = fakeEnv()
+    use.step = 1000
     const f = stubFetch()
     expect(await (await send('/api/game/step', stepReq, env)).json()).toEqual({ fallback: true })
     expect(f).not.toHaveBeenCalled()
   })
 
   it('falls back on a hung fetch', async () => {
-    stubFetch((_u: string, init: RequestInit) => new Promise((_, rej) => init.signal!.addEventListener('abort', () => rej(new Error('t')))))
+    vi.useFakeTimers()
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+      const c = new AbortController()
+      setTimeout(() => c.abort(), ms)
+      return c.signal
+    })
+    const f = stubFetch((_u: string, init: RequestInit) => new Promise((_, rej) => init.signal!.addEventListener('abort', () => rej(new Error('t')))))
     const { env } = fakeEnv()
+    const pending = send('/api/game/step', stepReq, env)
+    await vi.waitFor(() => expect(f).toHaveBeenCalled())
+    await vi.advanceTimersByTimeAsync(1500)
+    const res = await pending
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ fallback: true })
+  })
+
+  it('falls back when D1 throws', async () => {
+    const boom = async () => {
+      throw new Error('d1')
+    }
+    const { env } = fakeEnv({ ASK_DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom }) }) } })
     const res = await send('/api/game/step', stepReq, env)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ fallback: true })
+  })
+
+  it.each([
+    ['throws', { limit: async () => { throw new Error('rl') } }],
+    ['is missing', undefined],
+  ])('falls back when the limiter %s', async (_, RL_GAME) => {
+    const { env } = fakeEnv({ RL_GAME: RL_GAME as any })
+    const res = await send('/api/game/step', stepReq, env)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ fallback: true })
+  })
+
+  it('falls back on a malformed model answer', async () => {
+    stubFetch(async () => new Response(JSON.stringify({ answers: { ai: { choice: 'r9', probabilities: {} } } })))
+    const { env, cache } = fakeEnv()
+    expect(await (await send('/api/game/step', stepReq, env)).json()).toEqual({ fallback: true })
+    expect(cache.size).toBe(0)
+  })
+
+  it('counts failed calls but not cache hits', async () => {
+    const { env, use } = fakeEnv()
+    stubFetch(async () => new Response('no', { status: 500 }))
+    await send('/api/game/step', stepReq, env)
+    expect(use.step).toBe(1)
+    stubFetch()
+    await send('/api/game/step', stepReq, env)
+    expect(use.step).toBe(2)
+    await send('/api/game/step', stepReq, env)
+    expect(use.step).toBe(2)
   })
 
   it('rounds floats, caches, and sends no client strings to Liquid', async () => {
@@ -142,17 +201,27 @@ describe('result', () => {
 
   it('stores one row with the day only and rejects a lying hit', async () => {
     const { env, results } = fakeEnv()
-    // pick 0 is right or wrong depending on the seeded rock: learn the truth from the 400
-    const truth = (await send('/api/game/result', body([row(1)]), env)).status === 204 ? 1 : 0
-    if (!truth) expect((await send('/api/game/result', body([row(0)]), env)).status).toBe(204)
+    const d = decks.fixture
+    const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
+    const ok = await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 12, 0, 0]]), env)
+    expect(ok.status).toBe(204)
     expect(results).toHaveLength(1)
     expect(results[0]).toHaveLength(5)
     const [day, version, level, mode, waves] = results[0]
     expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect([version, level, mode]).toEqual(['fixture', 1, 0])
     expect(JSON.parse(waves as string)).toHaveLength(1)
-    const lie = await send('/api/game/result', body([row(1 - truth)]), env)
+    const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 12, 0, 0]]), env)
     expect(lie.status).toBe(400)
     expect(results).toHaveLength(1)
+  })
+
+  it('204 without inserting past the daily result cap', async () => {
+    const { env, results, use } = fakeEnv()
+    use.result = 5000
+    const d = decks.fixture
+    const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
+    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 12, 0, 0]]), env)).status).toBe(204)
+    expect(results).toHaveLength(0)
   })
 })

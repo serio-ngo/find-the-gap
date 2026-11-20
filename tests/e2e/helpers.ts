@@ -39,10 +39,11 @@ type Options = {
   begun?: boolean
   inspect?: boolean
   start?: Game
+  live?: { hit: number; miss: number }
 }
 
 export async function play(page: Page, o: Options = {}) {
-  const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false, inspect = false } = o
+  const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false, inspect = false, live } = o
   const labels = strings.labels[lang]
   if (!begun) await playButton(page, lang).click()
   let g = o.start ?? begin(d, level, mode)
@@ -64,7 +65,7 @@ export async function play(page: Page, o: Options = {}) {
       for (let k = 0; k < slot; k++) await page.keyboard.press('ArrowRight')
       await page.keyboard.press(slot % 2 ? 'Enter' : 'Space')
     } else await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click') // targets are drawn on canvas; the twin buttons are invisible
-    g = shoot(d, g, i)
+    g = shoot(d, g, i, 0, live)
     await page.waitForFunction(
       (b) => document.querySelector('.ftg')!.getAttribute('data-phase') === 'end' || document.querySelector('.ftg-wave')!.textContent !== b,
       before,

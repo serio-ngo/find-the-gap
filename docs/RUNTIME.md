@@ -15,7 +15,7 @@ A small Astro project around one folder, `src/game/` ([modules and embedding](..
 
 Everything that needs a server: the route, the cache, the rate limit, the research upload and the live d1.1 game master, on `serio.org.pl`. The route ships in `src/game/worker/` and is off until the host sets `PUBLIC_GAME_API`; the game keeps playing without it. Host steps: [checklist](../src/game/README.md#host-checklist).
 
-- **Routes:** `POST /api/game/step` and `POST /api/game/result` on the host Worker, an `RL_GAME` rate limit, two D1 tables (`game_cache`, `game_results`) and a daily counter that caps d1.1 calls.
+- **Routes:** `POST /api/game/step` and `POST /api/game/result` on the host Worker, an `RL_GAME` rate limit, three D1 tables (`game_cache`, `game_results`, and the daily counter `game_use` that caps d1.1 calls and uploads).
 - **Checks:** same origin, strict schema, a 2 kB body. Model input is built only from the Worker's own copy of the level; a request with text or unknown indices gets 400. Worker logs keep no state and no IP.
 - **Speed:** with d1.1 slower than 1,500 ms or the network off, the next wave starts on time from the local estimate.
 
@@ -32,6 +32,7 @@ Liquid's decision model answers several choice questions in one request. For eac
 - **Before the shot:** the request leaves when the wave appears and covers both outcomes, so the answer is ready when the player shoots.
 - **Same view:** the model gets the rocks on screen, the last three waves with their revealed answers, the player's hits and tempo bands, and the rule and step. No question includes the current answer.
 - **Indices only:** the client sends version, rule, step, wave seed, picks, hits and tempo bands. The prompt size is fixed.
+- **Network timing:** with the live game master the next step can depend on network timing (live floats or the local estimate), so a path replays exactly only from its recorded floats.
 - **Same state, same floats:** answers are cached in D1 under a hash of the state; floats are rounded to 0.05 before the policy.
 
 ## Policy: floats in, steps out
