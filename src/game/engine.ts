@@ -30,6 +30,7 @@ export const rng = (seed: number) => () => {
 }
 
 export const MODEL = 'd1.1'
+export const URL_AI = 'https://api.liquid.ai/decisions/v1/systemone'
 export const HISTORY = 3
 
 export const round05 = (x: number) => Math.round(x * 20) / 20
@@ -56,7 +57,7 @@ export const upcoming = (d: Deck, g: Game): Spec | null => {
   if (g.mode === 'standard' || i >= waves) return sequence[i] ?? null
   const p = pool(d, g.rule, g.step)
   const j = Math.floor(rng(g.level * 100 + i)() * d.poolSize)
-  return p[p[j].seed === g.decisions.at(-1)?.spec.seed ? (j + 1) % d.poolSize : j]
+  return p[p[j]!.seed === g.decisions.at(-1)?.spec.seed ? (j + 1) % d.poolSize : j]!
 }
 
 export const estimate = (d: Deck, g: Game): number => {
@@ -76,14 +77,16 @@ export const advance = (d: Deck, s: { rule: string; step: number; streak: number
   return { rule: s.rule, step, streak, switched: false }
 }
 
-export const shoot = (d: Deck, g: Game, pick: number, secs = 0): Game => {
+export const band = (secs: number): 0 | 1 | 2 => (secs < 3 ? 0 : secs < 8 ? 1 : 2)
+
+export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: number; miss: number }): Game => {
   const spec = upcoming(d, g)
   if (!spec) return g
   const hit = spec.rule === 'research' ? null : wave(d, spec).answers.includes(pick)
   const anchor = d.levels.find((l) => l.id === g.level)!.anchors.includes(g.decisions.length)
   const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
   if (g.mode === 'standard' || hit === null) return next
-  const { rule, step, streak } = advance(d, g, estimate(d, next))
+  const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, next))
   return { ...next, rule, step, streak }
 }
 
@@ -94,7 +97,7 @@ export const score = (g: Game) =>
   g.decisions.reduce((t, x) => (x.anchor && x.hit ? t + 100 + Math.max(0, Math.round(100 - 10 * x.secs)) : t), 0)
 
 export const aiPick = (run: AiRun, g: Game, i: number): AiPick | undefined => {
-  const { spec } = g.decisions[i]
+  const { spec } = g.decisions[i]!
   if (g.mode === 'standard' || spec.rule === 'research') return run.standard[g.level]?.[i]
   return run.pool[`${spec.rule}:${spec.step}`]?.find((e) => e.seed === spec.seed)
 }
@@ -131,6 +134,34 @@ export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
     },
   },
 })
+
+const IF_HIT = 'If the player picks a correct rock on this wave, what is the probability that they are correct on the next wave?'
+const IF_MISS = 'If the player picks a wrong rock on this wave, what is the probability that they are correct on the next wave?'
+
+export type Past = { w: Wave; hit: boolean | null; tempo: 0 | 1 | 2 }
+
+export const stepBody = (d: Deck, w: Wave, past: Past[]): object => {
+  const body = aiBody(d, w, past.map((p) => p.w)) as { state: object; questions: object }
+  const answer = { type: 'choice', criteria: { hit: 'hit', miss: 'miss' } }
+  return {
+    ...body,
+    state: {
+      ...body.state,
+      history: past.slice(-HISTORY).map((p) => ({ rocks: p.w.symbols, answers: p.w.answers, hit: p.hit, tempo: p.tempo })),
+    },
+    questions: { ...body.questions, if_hit: { ...answer, instructions: IF_HIT }, if_miss: { ...answer, instructions: IF_MISS } },
+  }
+}
+
+export const validate = (ks: string[], answer: AiPick): AiPick => {
+  const p = answer?.probabilities
+  if (!ks.includes(answer?.choice)) throw new Error(`bad choice: ${String(answer?.choice)}`)
+  if (!p || typeof p !== 'object') throw new Error('missing probabilities')
+  const got = Object.keys(p)
+  if (got.length !== ks.length || !ks.every((k) => got.includes(k))) throw new Error('probability keys differ from criteria')
+  for (const k of ks) if (typeof p[k] !== 'number' || !(p[k] >= 0 && p[k] <= 1)) throw new Error(`probability out of range: ${k}`)
+  return { choice: answer.choice, probabilities: Object.fromEntries(ks.map((k) => [k, Math.round(p[k]! * 1000) / 1000])) }
+}
 
 export const content = (d: Deck): unknown => ({
   id: d.id,

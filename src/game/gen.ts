@@ -97,43 +97,43 @@ const scaled = (ps: Pt[], c: Pt, k: number): Pt[] => ps.map((p) => add(c, sub(p,
 
 // Point at fraction f of the closed polygon's perimeter, with the inward direction to c.
 function along(ps: Pt[], f: number): Pt {
-  const edges = ps.map((p, i) => len(sub(ps[(i + 1) % ps.length], p)))
+  const edges = ps.map((p, i) => len(sub(ps[(i + 1) % ps.length]!, p)))
   let d = f * edges.reduce((s, e) => s + e, 0)
   for (const [i, e] of edges.entries()) {
-    if (d <= e) return add(ps[i], sub(ps[(i + 1) % ps.length], ps[i]), d / e)
+    if (d <= e) return add(ps[i]!, sub(ps[(i + 1) % ps.length]!, ps[i]!), d / e)
     d -= e
   }
-  return ps[0]
+  return ps[0]!
 }
 
 function shellOf(family: Family, out: Pt[], c: Pt, r: () => number, parts: Part[]) {
   const tone = (i: number) => family + clampInt(i, 0, 4)
   const ring = (k: number, jitter: number) => out.map((p, i) => {
     const q = out[(i + 1) % out.length]
-    return add(add(c, sub(p, c), k + (r() - 0.5) * jitter), sub(q, p), (r() - 0.5) * 0.25)
+    return add(add(c, sub(p, c), k + (r() - 0.5) * jitter), sub(q!, p), (r() - 0.5) * 0.25)
   })
   const rings = [out, ring(0.78, 0.08), ring(0.45, 0.12)]
   const slope = [2.2, 1.5, 0.8]
   for (const [i, p] of out.entries()) {
     const j = (i + 1) % out.length
-    const edge = sub(out[j], p)
+    const edge = sub(out[j]!, p)
     let normal = unit([edge[1], -edge[0]])
-    if (dot(normal, sub(mean([p, out[j]]), c)) < 0) normal = [-normal[0], -normal[1]]
+    if (dot(normal, sub(mean([p, out[j]!]), c)) < 0) normal = [-normal[0], -normal[1]]
     const lit = dot(normal, LIGHT)
     for (const [k, a] of rings.entries()) {
       const b = rings[k + 1]
-      const face: Pt[] = b ? [a[i], a[j], b[j], b[i]] : [a[i], a[j], c]
-      const t = tone(2 + (k ? 0.5 : 0) + slope[k] * lit + (r() - 0.5) * 0.8)
+      const face: Pt[] = b ? [a[i]!, a[j]!, b[j]!, b[i]!] : [a[i]!, a[j]!, c]
+      const t = tone(2 + (k ? 0.5 : 0) + slope[k]! * lit + (r() - 0.5) * 0.8)
       parts.push(plate(face, t, t, 0.006))
     }
-    parts.push(wire([p, out[j]], lit > 0.25 ? tone(4) : lit < -0.35 ? tone(0) : tone(1), lit > 0.25 ? 0.016 : 0.022))
+    parts.push(wire([p, out[j]!], lit > 0.25 ? tone(4) : lit < -0.35 ? tone(0) : tone(1), lit > 0.25 ? 0.016 : 0.022))
   }
   const fissures = 1 + Math.floor(r() * 3)
   for (let f = 0; f < fissures; f++) {
-    let p = rings[1][Math.floor(r() * out.length)]
+    let p = rings[1]![Math.floor(r() * out.length)]!
     const line: Pt[] = [p]
     for (let s = 0; s < 4; s++) {
-      p = add(add(p, sub(c, p), 0.22 + r() * 0.15), [(r() - 0.5) * 0.12, (r() - 0.5) * 0.12])
+      p = add(add(p!, sub(c, p!), 0.22 + r() * 0.15), [(r() - 0.5) * 0.12, (r() - 0.5) * 0.12])
       line.push(p)
     }
     parts.push(wire(line.map((q) => add(q, LIGHT, -0.012)), tone(4), 0.008))
@@ -143,7 +143,7 @@ function shellOf(family: Family, out: Pt[], c: Pt, r: () => number, parts: Part[
 }
 
 const inside = (ps: Pt[], [x, y]: Pt) => ps.reduce((odd, [ax, ay], i) => {
-  const [bx, by] = ps[(i + 1) % ps.length]
+  const [bx, by] = ps[(i + 1) % ps.length]!
   return (ay > y) !== (by > y) && x < ax + ((y - ay) * (bx - ax)) / (by - ay) ? !odd : odd
 }, false)
 
@@ -180,7 +180,7 @@ function craters(family: Family, stages: Stage[], mid: Pt[], c: Pt, r: () => num
   const tone = (i: number) => family + i
   const count = stages.length || 2
   for (let i = 0; i < count; i++) {
-    const at = add(c, sub(mid[Math.floor(r() * mid.length)], c), 0.3 + r() * 1.2)
+    const at = add(c, sub(mid[Math.floor(r() * mid.length)]!, c), 0.3 + r() * 1.2)
     const steps = stages[i]?.steps.length ?? 6
     const size = 0.035 + Math.min(steps, 21) * 0.0035 + r() * 0.015
     const away = sub(at, c)
@@ -192,7 +192,7 @@ function craters(family: Family, stages: Stage[], mid: Pt[], c: Pt, r: () => num
   }
   const pocks = 7 + Math.floor(r() * 8)
   for (let i = 0; i < pocks; i++) {
-    const at = add(c, sub(mid[Math.floor(r() * mid.length)], c), 0.2 + r() * 1.6)
+    const at = add(c, sub(mid[Math.floor(r() * mid.length)]!, c), 0.2 + r() * 1.6)
     const size = 0.01 + r() * 0.014
     parts.push(plate(ellipse(at, size, size * (0.6 + r() * 0.4), r() * TAU, 6), tone(r() < 0.5 ? 1 : 4)))
   }
@@ -204,9 +204,9 @@ function druse(family: Family, record: Art, out: Pt[], c: Pt, r: () => number, p
   const ventIndex = Math.floor(r() * out.length)
   if (!steps.length) return ventIndex
   const vent = out[ventIndex]
-  const dir0 = unit(sub(vent, c))
+  const dir0 = unit(sub(vent!, c))
   const angle0 = Math.atan2(dir0[1], dir0[0])
-  const root = add(c, sub(vent, c), 0.7)
+  const root = add(c, sub(vent!, c), 0.7)
   const heart = steps.indexOf(record.context?.quote ?? '')
   const n = steps.length
   const spread = Math.min(2.1, 0.12 * n + 0.35)
@@ -289,9 +289,9 @@ function craft(record: Art, out: Pt[], c: Pt, vent: number, r: () => number, par
   const local: Part[] = []
   draw(r, local)
   const dock = out[(vent + Math.floor(out.length / 2) + Math.floor(r() * 3) - 1) % out.length]
-  const away = unit(sub(dock, c))
+  const away = unit(sub(dock!, c))
   const angle = Math.atan2(away[1], away[0]) + Math.PI / 2
-  const at = add(c, sub(dock, c), 0.92)
+  const at = add(c, sub(dock!, c), 0.92)
   const k = 0.27
   const move = ([x, y]: Pt): Pt => [at[0] + k * (x * Math.cos(angle) - y * Math.sin(angle)), at[1] + k * (x * Math.sin(angle) + y * Math.cos(angle))]
   for (const p of local) parts.push({ ...p, points: p.points.map(move), width: p.width * k * 2.2 })
@@ -323,22 +323,22 @@ function bars(text: string, cx: number, cy: number, span: number, parts: Part[],
 
 function core(record: Art, c: Pt, criterionOrder: boolean, parts: Part[]) {
   const { marks } = record
-  const figure = glyphs[marks[1]]
+  const figure = glyphs[marks[1]!]
   if (figure) {
-    const ordinal = criterionOrder ? Number(/^AC(\d+)$/.exec(marks[0])?.[1]) || 0 : 0
-    const sha = /^[a-f0-9]{4,}$/i.test(marks[0])
+    const ordinal = criterionOrder ? Number(/^AC(\d+)$/.exec(marks[0]!)?.[1]) || 0 : 0
+    const sha = /^[a-f0-9]{4,}$/i.test(marks[0]!)
     const g: Pt = [c[0] - (ordinal ? 0.09 : 0), c[1] - (sha ? 0.07 : 0)]
     const s = 0.13
     const hollow = marks[1] === '◇' || marks[1] === '◈'
     parts.push(plate(figure.map(([x, y]) => [g[0] + x * s, g[1] + y * s]), hollow ? 'void' : 'light', 'light', 0.022))
     if (marks[1] === '◈') parts.push(plate(rim(g[0], g[1], s * 0.45, s * 0.45, 4), 'light', 'light'))
     for (let i = 0; i < ordinal; i++) parts.push(wire([[c[0] + 0.07 + i * 0.05, c[1] - 0.07], [c[0] + 0.07 + i * 0.05, c[1] + 0.07]], 'signal', 0.024))
-    if (sha) bars(marks[0], c[0], c[1] + 0.2, 0.26, parts)
+    if (sha) bars(marks[0]!, c[0], c[1] + 0.2, 0.26, parts)
     return
   }
   if (marks.length >= 2) {
-    bars(marks[0], c[0] - 0.135, c[1] + 0.1, 0.25, parts, 0.018)
-    bars(marks[1], c[0] + 0.135, c[1] + 0.1, 0.25, parts, 0.018)
+    bars(marks[0]!, c[0] - 0.135, c[1] + 0.1, 0.25, parts, 0.018)
+    bars(marks[1]!, c[0] + 0.135, c[1] + 0.1, 0.25, parts, 0.018)
     parts.push(wire([[c[0] - 0.025, c[1] + 0.14], [c[0] + 0.025, c[1] + 0.14], [c[0] + 0.005, c[1] + 0.12]], 'copper', 0.016))
     return
   }
@@ -382,7 +382,7 @@ export function shape(record: Art, identity: string, family: Family, criterionOr
   const shell: Part[] = []
   const mid = shellOf(family, out, c, r, shell)
   veins(family, record.marks, out, c, shell)
-  craters(family, record.stages, mid, c, r, shell)
+  craters(family, record.stages, mid!, c, r, shell)
   const surface: Part[] = []
   const vent = druse(family, record, out, c, r, surface)
   craft(record, out, c, vent, r, surface)

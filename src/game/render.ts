@@ -93,12 +93,12 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       points.forEach(([x, y], i) => (i ? g.lineTo(x * R, y * R) : g.moveTo(x * R, y * R)))
       if (fill) {
         g.closePath()
-        g.fillStyle = colors[fill]
+        g.fillStyle = colors[fill]!
         g.fill()
       }
       if (stroke) {
         g.lineWidth = Math.max(0.85, width * R)
-        g.strokeStyle = colors[stroke]
+        g.strokeStyle = colors[stroke]!
         g.stroke()
       }
     }, split)
@@ -132,7 +132,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   const update = () => {
     const m = k() * (1 - 0.65 * open) // split rocks slow down so their cores can be compared
     tick++
-    if (!calm) off = off.map((o, i) => (o + LAYERS[i].v) % h)
+    if (!calm) off = off.map((o, i) => (o + LAYERS[i]!.v) % h)
     sx += (tx - sx) * 0.2 * m
     open = calm ? Number(inspected) : clamp(open + (inspected ? 0.08 : -0.12), 0, 1)
     for (const t of ts) t.n++
@@ -151,11 +151,11 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
         for (let j = i + 1; j < ts.length; j++) {
           const a = ts[i]
           const b = ts[j]
-          const dx = b.x - a.x
-          const dy = b.y - a.y
-          if (dx * dx + dy * dy < 4 * R * R && (b.vx - a.vx) * dx + (b.vy - a.vy) * dy < 0) {
-            ;[a.vx, b.vx] = [b.vx, a.vx]
-            ;[a.vy, b.vy] = [b.vy, a.vy]
+          const dx = b!.x - a!.x
+          const dy = b!.y - a!.y
+          if (dx * dx + dy * dy < 4 * R * R && (b!.vx - a!.vx) * dx + (b!.vy - a!.vy) * dy < 0) {
+            ;[a!.vx, b!.vx] = [b!.vx, a!.vx]
+            ;[a!.vy, b!.vy] = [b!.vy, a!.vy]
           }
         }
     }
@@ -191,7 +191,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
           shards = Array.from({ length: 18 }, (_, i) => {
             const a = r() * 6.283
             const v = 1 + 2 * r()
-            return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 30, c: i % 3 ? colors[t.shape.family + (2 + (i % 3))] : colors.signal }
+            return { x: t!.x, y: t!.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 30, c: i % 3 ? colors[t!.shape.family + (2 + (i % 3))]! : colors.signal! }
           })
         }
       }
@@ -206,7 +206,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     ctx.fillRect(0, 0, w, h)
     LAYERS.forEach((L, i) => {
       ctx.fillStyle = col[L.c as 'ink2']
-      for (const [x, y] of stars[i]) ctx.fillRect(x * w, (y * h + off[i]) % h, L.size, L.size)
+      for (const [x, y] of stars[i]!) ctx.fillRect(x! * w, (y! * h + off[i]!) % h, L.size, L.size)
     })
     const p = shot && shot.phase === 2 ? shot.t / effect() : 0
     const shake = shot && shot.outcome === false && shot.phase === 2 && !calm ? Math.sin(shot.t * 1.8) * 4 * (1 - p) : 0
@@ -244,11 +244,11 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       put(t, q.x, q.y, q.angle, 1, 1, shot?.phase === 2 && shot.outcome === false && answers.includes(i) ? 1 : 0)
       if (open > 0.5) {
         const y = q.y + R * 1.12
-        ctx.fillStyle = colors.void
+        ctx.fillStyle = colors.void!
         ctx.beginPath()
         ctx.arc(q.x, y, 7, 0, 2 * Math.PI)
         ctx.fill()
-        ctx.fillStyle = colors.light
+        ctx.fillStyle = colors.light!
         ctx.font = 'bold 10px system-ui, sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
@@ -267,7 +267,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     }
     if (shot && shot.phase === 2 && shot.outcome !== null) {
       const t = ts[shot.to]
-      const q = pos(t)
+      const q = pos(t!)
       ctx.lineCap = 'round'
       ctx.lineWidth = 3
       if (shot.outcome) {
@@ -299,7 +299,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
         ctx.lineWidth = 2
         ctx.setLineDash([6, 6])
         for (const a of answers) {
-          const z = pos(ts[a])
+          const z = pos(ts[a]!)
           ctx.beginPath()
           ctx.arc(z.x, z.y, R + 6, 0, 7)
           ctx.stroke()
@@ -316,7 +316,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     ctx.globalAlpha = 1
     const y = sy()
     if (shot && shot.phase === 1) {
-      const q = pos(ts[shot.to])
+      const q = pos(ts[shot.to]!)
       const f = shot.t / (calm ? 6 : 15)
       const at = (u: number): Pt => [sx + (q.x - sx) * u, y - 18 * PS + (q.y - y + 18 * PS) * u]
       const [x0, y0] = at(Math.max(0, f - 0.25))
@@ -389,8 +389,8 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   return {
     show(wave: Wave, objects: TargetObject[], names: string[]) {
       if (shot && shot.phase === 2) {
-        const q = pos(ts[shot.to])
-        ghost = { t: ts[shot.to], x: q.x, y: q.y, angle: q.angle, life: 0 }
+        const q = pos(ts[shot.to]!)
+        ghost = { t: ts[shot.to]!, x: q.x, y: q.y, angle: q.angle, life: 0 }
       }
       finish()
       if (canvas.clientWidth !== w || canvas.clientHeight !== h) fit()
@@ -399,7 +399,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       open = 0
       sprites = new Map()
       focused = -1
-      const rand = rng(hash(objects[0].id))
+      const rand = rng(hash(objects[0]!.id))
       const R = rad()
       const speed = 0.9 + 0.3 * wave.step
       const count = objects.length
@@ -408,7 +408,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       const rows = Math.ceil(count / columns)
       const slots = objects.map((_, i) => ({ i, rank: rand() })).sort((a, b) => a.rank - b.rank)
       ts = objects.map(({ id, shape }, i) => {
-        const slot = slots[i].i
+        const slot = slots[i]!.i
         const row = Math.floor(slot / columns)
         const rowLength = Math.min(columns, count - row * columns)
         const a = rand() * 2 * Math.PI
@@ -442,7 +442,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     shoot(index: number, outcome: boolean | null, answerIndices: readonly number[] = []) {
       finish()
       answers = answerIndices
-      tx = ts[index].x
+      tx = ts[index]!.x
       shot = { to: index, outcome, phase: 0, t: 0 }
       return new Promise<void>((resolve) => {
         done = resolve

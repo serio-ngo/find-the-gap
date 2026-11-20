@@ -19,7 +19,7 @@ export const bindInput = (
     const list = twins()
     if (!dir || !list.length) return
     const at = list.indexOf(document.activeElement as HTMLButtonElement)
-    list[(at + dir + list.length) % list.length].focus()
+    list[(at + dir + list.length) % list.length]!.focus()
     e.preventDefault()
   }
 

@@ -9,7 +9,7 @@ export function objectsFor(d: Deck, w: Wave, occurrence = '') {
   const order = families.map((family) => ({ family, rank: r() })).sort((a, b) => a.rank - b.rank)
   return choiceRecords(d, w).map((record, i) => {
     const id = JSON.stringify([key, record.clue, i])
-    return { ...record, id, shape: shape(record, id, order[i % order.length].family, w.rule === 'missing') }
+    return { ...record, id, shape: shape(record, id, order[i % order.length]!.family, w.rule === 'missing') }
   })
 }
 

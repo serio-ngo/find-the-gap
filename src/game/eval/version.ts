@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { HISTORY, MODEL, aiBody, canonical, content, keys, pool, wave } from '../engine.ts'
-import type { AiPick, AiRun, Deck, Wave } from '../engine.ts'
+import { HISTORY, MODEL, aiBody, canonical, content, keys, pool, validate, wave } from '../engine.ts'
+import type { AiRun, Deck, Wave } from '../engine.ts'
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex')
 
@@ -34,15 +34,7 @@ export const hashEdition = (d: Deck, files: Record<string, string>): string => {
   return digest(canonical({ content: content(d), anchors: d.levels.map((l) => l.anchors), source }))
 }
 
-export const validate = (ks: string[], answer: AiPick): AiPick => {
-  const p = answer?.probabilities
-  if (!ks.includes(answer?.choice)) throw new Error(`bad choice: ${String(answer?.choice)}`)
-  if (!p || typeof p !== 'object') throw new Error('missing probabilities')
-  const got = Object.keys(p)
-  if (got.length !== ks.length || !ks.every((k) => got.includes(k))) throw new Error('probability keys differ from criteria')
-  for (const k of ks) if (typeof p[k] !== 'number' || !(p[k] >= 0 && p[k] <= 1)) throw new Error(`probability out of range: ${k}`)
-  return { choice: answer.choice, probabilities: Object.fromEntries(ks.map((k) => [k, Math.round(p[k] * 1000) / 1000])) }
-}
+export { validate }
 
 export const loadRun = (path: string): RecordedRun | undefined => {
   try {
@@ -70,7 +62,7 @@ export const checkRun = (run: RecordedRun | undefined, hash: string, d: Deck): s
   for (const { w, slot } of jobs) {
     const label = 'level' in slot ? `standard level ${slot.level}, wave ${slot.index + 1}` : `pool ${slot.pool}, seed ${slot.seed}`
     const pick = 'level' in slot
-      ? run.standard[slot.level][slot.index]
+      ? run.standard[slot.level]![slot.index]
       : run.pool[slot.pool]?.find((e) => e?.seed === slot.seed)
     if (!pick) return `ai run incomplete: ${label}`
     try {

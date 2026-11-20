@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  advance, aiBody, begin, canonical, deviation, estimate, pool, replay, rng, score, shoot, upcoming, wave,
+  advance, aiBody, band, begin, canonical, deviation, estimate, pool, replay, rng, score, shoot, stepBody, upcoming, wave,
 } from '../../src/game/engine.ts'
 import type { AiPick, AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
 
@@ -71,6 +71,35 @@ describe('engine', () => {
     expect(end.decisions[10].hit).toBeNull()
     expect(end.decisions.map((x) => x.anchor)).toEqual(picks.map((_, i) => i === 3 || i === 4))
     expect(score(end)).toBe(400)
+  })
+
+  it('shoot with live moves the step by the float; without it the result is the estimate', () => {
+    const g = { ...begin(deck, 1, 'adaptive'), step: 2 }
+    for (const pick of [0, 1]) {
+      const up = shoot(deck, g, pick, 0, { hit: 0.9, miss: 0.9 })
+      const down = shoot(deck, g, pick, 0, { hit: 0.1, miss: 0.1 })
+      const split = shoot(deck, g, pick, 0, { hit: 0.9, miss: 0.1 })
+      expect([up.step, down.step]).toEqual([3, 1])
+      expect(split.step).toBe(split.decisions[0].hit ? 3 : 1)
+      const next = { ...g, decisions: split.decisions }
+      expect(shoot(deck, g, pick).step).toBe(advance(deck, g, estimate(deck, next)).step)
+    }
+  })
+
+  it('band edges', () => {
+    expect([2.99, 3, 7.99, 8].map(band)).toEqual([0, 1, 1, 2])
+  })
+
+  it('stepBody adds if_hit and if_miss and never the current answer', () => {
+    const w = wave(deck, sequence[5])
+    const past = Array.from({ length: 4 }, (_, i) => ({ w: wave(deck, sequence[i]), hit: i % 2 === 0, tempo: band(i * 3) }))
+    const body = stepBody(deck, w, past) as any
+    expect(Object.keys(body.questions)).toEqual(['ai', 'if_hit', 'if_miss'])
+    expect(body.questions.ai).toEqual((aiBody(deck, w, []) as any).questions.ai)
+    expect(Object.keys(body.questions.if_hit.criteria)).toEqual(['hit', 'miss'])
+    expect(body.state.history).toHaveLength(3)
+    expect(body.state.history[2]).toMatchObject({ hit: false, tempo: 2 })
+    expect(body.state).not.toHaveProperty('answers')
   })
 
   it('score counts only anchor hits: 100 plus up to 100 for speed', () => {
