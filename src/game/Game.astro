@@ -11,6 +11,7 @@ const l = strings.labels[lang]
 const files = import.meta.glob<string>(['./*.ts', './Game.astro', './game.css', './strings.json', './levels/**/*.{ts,json}'], { query: '?raw', import: 'default', eager: true })
 const editions = Object.fromEntries(Object.values(decks).map((deck) => [deck.id, hashEdition(deck, files)]))
 const path = `${lang === 'en' ? '/en' : ''}/find-the-gap`
+const total = decks.observations.levels.find((x) => x.id === level)?.anchors.length ?? 0
 const paths = {
   play: 'M7 4l13 8-13 8z', pause: 'M8 5v14M16 5v14', calm: 'M3 12c3-4 6-4 9 0s6 4 9 0', adaptive: 'M4 18l5-6 4 3 7-10',
   inspect: 'M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M7 12h10', details: 'M12 11v6m0-10v1M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0z',
@@ -24,7 +25,7 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
 <section class="ftg" data-phase="start" data-level={level} data-lang={lang} data-api={api} data-editions={JSON.stringify(editions)} data-url={new URL(`${path}/${level}`, Astro.site).href} data-next={`${path}/${level + 1}`} data-strings={JSON.stringify({ v, l })}>
   <div class="ftg-hud">
     <span class="ftg-stat"><span role="group" aria-label={v.score}><output class="ftg-hits">0</output></span>
-    <span class="ftg-wave" role="group" aria-label={l.wave}>1/10</span>
+    <span class="ftg-wave" role="group" aria-label={l.wave}>1/{total}</span>
     <span class="ftg-switch" role="img" aria-label={l.switch} hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.switch} /></svg></span></span>
     <span class="ftg-btns">
     <button class="ftg-pausebtn" aria-label={l.pause}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.pause} /></svg></button>
