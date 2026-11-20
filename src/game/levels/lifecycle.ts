@@ -88,10 +88,8 @@ const regressionJob = `${regression.url}/job/${regressionJobId}`
 const reportStages = workflowStages(22)
 const regressionStages = workflowStages(20)
 const failedStages = regressionStages.slice(0, 4)
-const contextsFor = (stages: StageRecord[]) => stages.flatMap(({ url, steps }) =>
-  steps.filter((s) => /^\d+\. (Publish the spec review|Push the run's commits|Brief|Trace|Test lock|Acceptance report|Gates|Unit tests)\b/.test(s))
-    .map((quote) => ({ url, quote })),
-)
+// Every recorded step output can be a choice's own context; a wave never repeats one (at most 7 choices, 40+ outputs).
+const contextsFor = (stages: StageRecord[]) => stages.flatMap(({ url, steps }) => steps.map((quote) => ({ url, quote })))
 
 export const lifecycleDeck = (f: Facts): Deck => {
   const tests = [...new Set(f.criteria.map((c) => c[1]))]

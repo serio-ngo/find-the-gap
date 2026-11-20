@@ -20,6 +20,9 @@ it('draws unique geometry for every choice across fixed standard and adaptive pr
       expect(objectsFor(deck, wave(deck, spec), occurrence)).toEqual(objects)
       const otherAnswers = objects.flatMap((_, index) => w.answers.includes(index) ? [] : [index])
       expect(objectsFor(deck, { ...w, answers: otherAnswers }, occurrence)).toEqual(objects)
+      // No two choices in a wave share their data or their closed look, even when the AI token repeats (odd, changed).
+      if (deck.choiceRecords) expect(new Set(objects.map(({ clue, context, sources, stages }) => JSON.stringify({ clue, context, sources, stages }))).size).toBe(objects.length)
+      expect(new Set(objects.map(({ shape }) => JSON.stringify([shape.shell, shape.surface]))).size).toBe(objects.length)
       for (const [index, { shape: { spin, lum, ...drawn } }] of objects.entries()) {
         const choice = `${deck.id}:${occurrence}:${index + 1}`
         const key = JSON.stringify(drawn)

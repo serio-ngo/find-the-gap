@@ -1,24 +1,44 @@
 import { rng } from './engine.ts'
 
+// Each target is one asteroid drawn from one choice record:
+// identity -> silhouette, facets, crater and vent placement (unique per choice)
+// family -> mineral palette (shuffled per wave, never tied to the answer)
+// own step output (record.context) -> crystal druse: one crystal per step of that job, the own step is the heart crystal
+// pipeline stages -> one crater per stage outside, one band per stage inside, one tick per step output on its band
+// context stage -> the docked craft; marks (the clue) -> the core, visible only when the scan splits the rock
+
 export type Pt = [number, number]
-export type Tone = 'void' | 'shadow' | 'frame' | 'armor' | 'light' | 'glass' | 'signal' | 'copper'
+export type Tone = string
 export type Part = { points: Pt[]; fill?: Tone; stroke?: Tone; width: number }
-type Stage = { stage: string; steps: string[]; url?: string }
+type Stage = { stage: string; conclusion?: string; steps: string[]; url?: string }
 type Art = { marks: string[]; stages: Stage[]; context?: { quote: string; url?: string } }
 
-export const colors: Record<Tone, string> = {
-  void: '#17232c', shadow: '#283541', frame: '#576776', armor: '#aeb9bc',
-  light: '#eff0dc', glass: '#366a75', signal: '#a6e1dd', copper: '#dcab74',
+const base = {
+  void: '#141c23', shadow: '#283541', frame: '#576776', armor: '#aeb9bc', light: '#f3f1de',
+  glass: '#3f7f8a', signal: '#a6e8e1', copper: '#e0ac70', ember: '#9b4f2f', dull: '#4a5157', dusk: '#2d3338',
+}
+const minerals = {
+  basalt: ['#1a2127', '#28323a', '#3f4c55', '#5f6e77', '#8b9a9f'],
+  iron: ['#261a15', '#3f2c24', '#5f4334', '#876345', '#b38c62'],
+  ice: ['#1b2c37', '#2c4757', '#4a7080', '#7aa2ad', '#bcd6da'],
+  carbon: ['#15120e', '#221e18', '#363027', '#50483c', '#716756'],
+  olivine: ['#192217', '#293725', '#425539', '#637a51', '#91a676'],
+  chondrite: ['#29221a', '#41362a', '#615241', '#87745e', '#b3a083'],
+  obsidian: ['#15121b', '#231e2d', '#372f46', '#534764', '#7a6c8b'],
+} as const
+export type Family = keyof typeof minerals
+export const families = Object.keys(minerals) as Family[]
+export const colors: Record<string, string> = {
+  ...base,
+  ...Object.fromEntries(families.flatMap((f) => minerals[f].map((c, i) => [f + i, c]))),
 }
 
-export const families = ['salvage tug', 'split-keel courier', 'ring observatory', 'crystal cluster', 'orbital probe', 'freight cutter', 'deep-water skiff'] as const
-export type Family = typeof families[number]
 export type Shape = {
   family: Family
-  outline: Pt[][]
-  details: Part[]
-  systems: Part[]
-  motif: Part[]
+  outline: Pt[]
+  shell: Part[]
+  surface: Part[]
+  inner: Part[]
   spin: { rate: number; phase: number }
   lum: number
 }
@@ -29,281 +49,252 @@ export const hash = (s: string) => {
   return n >>> 0
 }
 
-const plate = (points: Pt[], fill: Tone, stroke: Tone = 'armor'): Part => ({ points, fill, stroke, width: 0.025 })
-const wire = (points: Pt[], stroke: Tone = 'light', width = 0.027): Part => ({ points, stroke, width })
+const TAU = 2 * Math.PI
+const LIGHT: Pt = [-0.6, -0.8]
+const STEP = /^(\d+)\. (.+) · (\w+)$/
+const parse = (s: string, j: number) => {
+  const [, number, name, result] = STEP.exec(s) ?? ['', String(j + 1), s, 'unknown']
+  return { number: Number(number), name, result }
+}
+const add = (a: Pt, b: Pt, k = 1): Pt => [a[0] + b[0] * k, a[1] + b[1] * k]
+const sub = (a: Pt, b: Pt): Pt => [a[0] - b[0], a[1] - b[1]]
+const len = (a: Pt) => Math.hypot(a[0], a[1])
+const unit = (a: Pt): Pt => {
+  const l = len(a) || 1
+  return [a[0] / l, a[1] / l]
+}
+const dot = (a: Pt, b: Pt) => a[0] * b[0] + a[1] * b[1]
+const mean = (ps: Pt[]): Pt => [ps.reduce((s, p) => s + p[0], 0) / ps.length, ps.reduce((s, p) => s + p[1], 0) / ps.length]
+const clampInt = (x: number, a: number, b: number) => Math.min(b, Math.max(a, Math.round(x)))
+const plate = (points: Pt[], fill: Tone, stroke?: Tone, width = 0.008): Part => ({ points, fill, stroke, width })
+const wire = (points: Pt[], stroke: Tone, width = 0.02): Part => ({ points, stroke, width })
 const box = (x: number, y: number, w: number, h: number): Pt[] => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
-const rim = (x: number, y: number, rx: number, ry: number, n: number, phase = 0): Pt[] =>
+const ellipse = (c: Pt, a: number, b: number, angle: number, n = 12): Pt[] =>
   Array.from({ length: n }, (_, i) => {
-    const a = i * 2 * Math.PI / n + phase
-    return [x + rx * Math.cos(a), y + ry * Math.sin(a)]
+    const t = (i * TAU) / n
+    const x = a * Math.cos(t)
+    const y = b * Math.sin(t)
+    return [c[0] + x * Math.cos(angle) - y * Math.sin(angle), c[1] + x * Math.sin(angle) + y * Math.cos(angle)]
   })
+const rim = (x: number, y: number, rx: number, ry: number, n: number, phase = 0): Pt[] => ellipse([x, y], rx, ry, phase, n)
 
-function hull(family: Family, r: () => number, outline: Pt[][], details: Part[]) {
-  const raise = 0.23 + r() * 0.32
-  const fork = 0.62 + r() * 0.26
-  const sweep = r() < 0.5 ? -1 : 1
-  const pods = 2 + Math.floor(r() * 3)
-  const body = (points: Pt[], fill: Tone = 'frame') => {
-    outline.push(points)
-    details.push(plate(points, fill))
-    const cx = points.reduce((sum, [x]) => sum + x, 0) / points.length
-    const cy = points.reduce((sum, [, y]) => sum + y, 0) / points.length
-    const inner = points.map(([x, y]): Pt => [x + (cx - x) * 0.21, y + (cy - y) * 0.17])
-    for (const [i, p] of points.entries()) {
-      const j = (i + 1) % points.length
-      const q = points[j]
-      const lit = p[0] + q[0] - 2 * cx + 1.4 * (p[1] + q[1] - 2 * cy) < -0.06
-      const bevel: Tone = lit ? (fill === 'armor' ? 'light' : 'armor') : (fill === 'armor' ? 'frame' : 'shadow')
-      details.push({ points: [p, q, inner[j], inner[i]], fill: bevel, width: 0 })
-    }
-    details.push(wire([...points, points[0]], fill === 'shadow' ? 'frame' : 'armor', 0.016))
+// Lumpy silhouette: a few low harmonics plus vertex noise, squashed and tilted.
+function silhouette(r: () => number): Pt[] {
+  const n = 14 + Math.floor(r() * 8)
+  const waves = [1, 2, 3, 5].map((k) => ({ k, a: (0.035 + r() * 0.07) / Math.sqrt(k), p: r() * TAU }))
+  const squash = 0.8 + r() * 0.17
+  const tilt = r() * TAU
+  return Array.from({ length: n }, (_, i): Pt => {
+    const a = ((i + (r() - 0.5) * 0.6) / n) * TAU
+    const radius = Math.min(0.8, 0.64 + waves.reduce((s, w) => s + w.a * Math.sin(w.k * a + w.p), 0) + (r() - 0.5) * 0.05)
+    const x = Math.cos(a) * radius
+    const y = Math.sin(a) * radius * squash
+    return [x * Math.cos(tilt) - y * Math.sin(tilt), x * Math.sin(tilt) + y * Math.cos(tilt)]
+  })
+}
+
+const scaled = (ps: Pt[], c: Pt, k: number): Pt[] => ps.map((p) => add(c, sub(p, c), k))
+
+// Point at fraction f of the closed polygon's perimeter, with the inward direction to c.
+function along(ps: Pt[], f: number): Pt {
+  const edges = ps.map((p, i) => len(sub(ps[(i + 1) % ps.length], p)))
+  let d = f * edges.reduce((s, e) => s + e, 0)
+  for (const [i, e] of edges.entries()) {
+    if (d <= e) return add(ps[i], sub(ps[(i + 1) % ps.length], ps[i]), d / e)
+    d -= e
   }
-  const mirror = (side: number, points: Pt[]): Pt[] => points.map(([x, y]) => [x * side, y])
+  return ps[0]
+}
 
-  switch (family) {
-    case 'salvage tug':
-      for (const side of [-1, 1]) {
-        const head = side === sweep ? raise + 0.24 : raise
-        const tip = side === sweep ? fork : fork - 0.12
-        body(mirror(side, [[0.15, 0.06], [0.38, -0.06], [0.53, -head], [tip, -head - 0.08], [tip + 0.09, -head + 0.04], [tip - 0.02, -head + 0.18], [0.6, -head + 0.22], [0.5, 0.23], [0.18, 0.48]]))
-        details.push(wire(mirror(side, [[0.22, 0.15], [0.45, 0.02], [0.57, -head + 0.07], [tip, -head + 0.03]]), 'copper', 0.055))
-        details.push(plate(mirror(side, box(0.29, 0.2, 0.19, 0.32)), 'void', 'frame'))
-      }
-      body([[-0.3, 0.43], [-0.34, -0.26], [-0.19, -0.55], [0.08, -0.61], [0.31, -0.41], [0.34, 0.43], [0.18, 0.59], [-0.19, 0.59]], 'armor')
-      details.push(plate([[-0.27, -0.08], [-0.17, 0.04], [-0.12, 0.41], [-0.26, 0.35]], 'shadow', 'frame'))
-      details.push(plate([[0.19, -0.05], [0.28, -0.16], [0.27, 0.36], [0.15, 0.43]], 'frame', 'light'))
-      details.push(plate([[-0.15, 0.36], [0.15, 0.36], [0.18, 0.55], [-0.17, 0.55]], 'void', 'frame'))
-      details.push(wire([[-0.1, 0.46], [0.11, 0.46]], 'copper', 0.04))
-      for (const x of [-0.22, 0.23]) {
-        details.push(wire([[x, 0.13], [x * 0.82, 0.24], [x, 0.32]], 'signal', 0.03))
-        details.push(wire([[x * 1.5, 0.43], [x * 1.5, 0.54]], 'copper', 0.036))
-      }
-      details.push(plate([[-0.2, -0.29], [-0.13, -0.48], [0.08, -0.52], [0.21, -0.35], [0.13, -0.17], [-0.13, -0.14]], 'glass', 'light'))
-      break
-    case 'split-keel courier':
-      body([[-0.27, -0.27], [0.3, -0.37], [0.45, 0.31], [0.1, 0.26], [-0.36, 0.37]], 'shadow')
-      for (const side of [-1, 1]) {
-        const tip = side === sweep ? -0.87 : -0.57 - raise / 3
-        body(mirror(side, [[0.08, -0.28], [0.18, tip], [0.32, tip + 0.04], [0.49, -0.28], [fork, 0.37], [0.77, 0.54], [0.49, 0.36], [0.3, 0.58], [0.19, 0.45], [0.19, 0.01]]), 'armor')
-        details.push(plate(mirror(side, [[0.22, tip + 0.12], [0.3, tip + 0.16], [0.41, -0.24], [0.26, -0.14]]), 'glass', 'light'))
-        details.push(plate(mirror(side, [[0.31, -0.22], [0.39, -0.13], [0.46, 0.14], [0.3, 0.33], [0.23, 0.04]]), 'frame', 'light'))
-        details.push(plate(mirror(side, [[0.35, 0.15], [0.43, 0.13], [0.35, 0.51], [0.3, 0.51]]), 'void', 'frame'))
-        details.push(wire(mirror(side, [[0.29, 0.11], [0.36, 0.21], [0.53, 0.19]]), 'copper', 0.033))
-        details.push(wire(mirror(side, [[0.48, -0.16], [0.7, 0.37], [0.52, 0.26], [0.37, 0.4]]), 'void', 0.05))
-      }
-      break
-    case 'ring observatory': {
-      const rx = fork
-      const ry = 0.52 + raise / 3
-      body(rim(0, 0, rx, ry, 12, 0.26), 'armor')
-      details.push(plate(rim(0, 0, rx - 0.18, ry - 0.16, 12, 0.26), 'void', 'light'))
-      for (let i = 0; i < pods; i++) {
-        const a = (i + (sweep < 0 ? 0.25 : 0.55)) * 2 * Math.PI / pods
-        const x = rx * Math.cos(a)
-        const y = ry * Math.sin(a)
-        const tangent = [Math.sin(a) * 0.12, -Math.cos(a) * 0.12]
-        details.push(wire([[x + tangent[0], y + tangent[1]], [-tangent[0] * 0.58, -tangent[1] * 0.58], [x - tangent[0], y - tangent[1]], [0, 0]], 'frame', 0.061))
-        details.push(wire([[x + tangent[0], y + tangent[1]], [x * 0.55, y * 0.55], [x - tangent[0], y - tangent[1]]], 'copper', 0.03))
-        body(rim(x, y, 0.14, 0.095, 6), 'glass')
-      }
-      details.push(wire(rim(0, 0, rx - 0.075, ry - 0.067, 12, 0.26).slice(3, 10), 'frame', 0.036))
-      details.push(wire(rim(0, 0, rx - 0.065, ry - 0.052, 12, 0.26).slice(0, 6), 'light', 0.023))
-      body([[-0.25, -0.23], [-0.16, -0.58], [0.02, -0.76], [0.2, -0.64], [0.31, -0.22], [0.23, 0.27], [-0.2, 0.31]])
-      details.push(plate(rim(0.02, -0.43, 0.16, 0.17, 8), 'signal', 'light'))
-      details.push(plate(rim(0.02, -0.43, 0.075, 0.09, 8), 'void', 'glass'))
-      details.push(plate([[-0.15, -0.17], [0.17, -0.17], [0.21, 0.08], [0.12, 0.21], [-0.13, 0.21], [-0.17, 0.08]], 'shadow', 'armor'))
-      details.push(wire([[-0.12, 0.01], [0.08, 0.01], [0.14, -0.09]], 'signal', 0.034))
-      details.push(wire([[-0.09, 0.1], [0.11, 0.1]], 'copper', 0.044))
-      break
+function shellOf(family: Family, out: Pt[], c: Pt, r: () => number, parts: Part[]) {
+  const tone = (i: number) => family + clampInt(i, 0, 4)
+  const ring = (k: number, jitter: number) => out.map((p, i) => {
+    const q = out[(i + 1) % out.length]
+    return add(add(c, sub(p, c), k + (r() - 0.5) * jitter), sub(q, p), (r() - 0.5) * 0.25)
+  })
+  const rings = [out, ring(0.78, 0.08), ring(0.45, 0.12)]
+  const slope = [2.2, 1.5, 0.8]
+  for (const [i, p] of out.entries()) {
+    const j = (i + 1) % out.length
+    const edge = sub(out[j], p)
+    let normal = unit([edge[1], -edge[0]])
+    if (dot(normal, sub(mean([p, out[j]]), c)) < 0) normal = [-normal[0], -normal[1]]
+    const lit = dot(normal, LIGHT)
+    for (const [k, a] of rings.entries()) {
+      const b = rings[k + 1]
+      const face: Pt[] = b ? [a[i], a[j], b[j], b[i]] : [a[i], a[j], c]
+      const t = tone(2 + (k ? 0.5 : 0) + slope[k] * lit + (r() - 0.5) * 0.8)
+      parts.push(plate(face, t, t, 0.006))
     }
-    case 'crystal cluster': {
-      const base: Pt[] = [[-fork, 0.03], [-0.56, -raise], [-0.14, -0.53], [0.32, -0.57], [0.72, -0.26], [fork * 0.85, 0.25], [0.36, 0.61], [-0.22, 0.54], [-0.65, 0.37]]
-      body(base, 'shadow')
-      details.push(plate([base[0], base[1], base[2], [0.14, -0.21], [-0.35, 0.22]], 'frame'))
-      details.push(plate([[0.14, -0.21], base[3], base[4], base[5], [0.32, 0.32]], 'glass', 'frame'))
-      for (let i = 0; i < pods; i++) {
-        const x = (2 * i / (pods - 1) - 1) * 0.51
-        const y = -0.43 - r() * 0.37
-        const blade = x + sweep * (0.03 + r() * 0.11)
-        body([[x - 0.13, -0.18], [blade - 0.1, y + 0.14], [blade, y], [blade + 0.09, y + 0.12], [x + 0.13, 0.06]], 'glass')
-        details.push(plate([[blade, y], [blade + 0.09, y + 0.12], [x + 0.13, 0.06], [x + 0.018, -0.12]], 'signal'))
-        details.push(plate([[x - 0.18, 0.05], [x - 0.12, -0.04], [x + 0.04, 0.01], [x + 0.11, 0.16], [x - 0.03, 0.24]], 'shadow', 'glass'))
-        details.push(wire([[x - 0.16, 0.04], [x - 0.03, 0.055], [x + 0.02, 0.13]], 'signal', 0.036))
-        details.push(wire([[x - 0.2, 0.095], [x + 0.1, 0.24], [x + 0.17, 0.42]], 'copper', 0.04))
-      }
-      break
+    parts.push(wire([p, out[j]], lit > 0.25 ? tone(4) : lit < -0.35 ? tone(0) : tone(1), lit > 0.25 ? 0.016 : 0.022))
+  }
+  const fissures = 1 + Math.floor(r() * 3)
+  for (let f = 0; f < fissures; f++) {
+    let p = rings[1][Math.floor(r() * out.length)]
+    const line: Pt[] = [p]
+    for (let s = 0; s < 4; s++) {
+      p = add(add(p, sub(c, p), 0.22 + r() * 0.15), [(r() - 0.5) * 0.12, (r() - 0.5) * 0.12])
+      line.push(p)
     }
-    case 'orbital probe':
-      for (const side of [-1, 1]) {
-        const y = side === sweep ? -raise : raise / 3
-        body(mirror(side, [[0.14, -0.06], [0.43, y], [fork + 0.02, y - 0.07], [fork + 0.02, y + 0.07], [0.46, y + 0.13], [0.16, 0.19]]), 'copper')
-        for (let i = 0; i < pods; i++) {
-          const x = 0.47 + i * (fork - 0.4) / pods
-          const span = 0.16 + r() * 0.14
-          details.push(plate(mirror(side, [[x, y - span], [x + 0.087, y - span - 0.06], [x + 0.087, y + span], [x, y + span + 0.04]]), 'glass', 'signal'))
-          details.push(wire(mirror(side, [[x, y], [x + 0.087, y]]), 'void'))
-        }
+    parts.push(wire(line.map((q) => add(q, LIGHT, -0.012)), tone(4), 0.008))
+    parts.push(wire(line, tone(0), 0.016))
+  }
+  return rings[2]
+}
+
+const inside = (ps: Pt[], [x, y]: Pt) => ps.reduce((odd, [ax, ay], i) => {
+  const [bx, by] = ps[(i + 1) % ps.length]
+  return (ay > y) !== (by > y) && x < ax + ((y - ay) * (bx - ax)) / (by - ay) ? !odd : odd
+}, false)
+
+// Faint veins seeded only by the clue's value (test name, SHA, reading), never by the criterion id or the answer:
+// equal values share a pattern below conscious notice; the readable clue appears only in the split core.
+function veins(family: Family, marks: string[], out: Pt[], c: Pt, parts: Part[]) {
+  const key = marks.filter((m) => !/^AC\d+$/.test(m)).join('|')
+  if (!key) return
+  const v = rng(hash(key))
+  const angle = v() * Math.PI
+  const d: Pt = [Math.cos(angle), Math.sin(angle)]
+  const n: Pt = [-d[1], d[0]]
+  const count = 2 + Math.floor(v() * 2)
+  for (let i = 0; i < count; i++) {
+    const offset = (i - (count - 1) / 2) * (0.13 + v() * 0.06)
+    const amp = 0.02 + v() * 0.04
+    const freq = 2 + v() * 3
+    const phase = v() * TAU
+    let run: Pt[] = []
+    for (let k = 0; k <= 12; k++) {
+      const t = -0.7 + (k * 1.4) / 12
+      const p = add(add(c, d, t), n, offset + amp * Math.sin(freq * t * Math.PI + phase))
+      if (inside(out, add(c, sub(p, c), 1.12))) run.push(p)
+      else if (run.length) {
+        if (run.length > 1) parts.push(wire(run, family + 3, 0.011))
+        run = []
       }
-      body([[-0.08, -0.23], [0.01, -0.89], [0.07, -0.89], [0.13, -0.76], [0.13, -0.31]], 'shadow')
-      details.push(plate(rim(0.065, -0.89, 0.065, 0.047, 6), 'copper', 'light'))
-      body([[-0.21, 0.39], [-0.32, -0.17], [-0.21, -0.49], [0.18, -0.53], [0.35, -0.2], [0.21, 0.43], [0.08, 0.59], [-0.1, 0.58]], 'armor')
-      for (const x of [-0.16, 0.08]) {
-        details.push(plate(box(x, 0.08, 0.092, 0.36), 'shadow', 'light'))
-        details.push(wire([[x + 0.04, 0.16], [x + 0.04, 0.34]], 'copper', 0.034))
-      }
-      details.push(plate([[-0.23, -0.46], [-0.32, -0.72], [-0.05, -0.8], [0.25, -0.72], [0.19, -0.53], [0.02, -0.37]], 'glass', 'light'))
-      details.push(wire([[-0.26, -0.56], [0.02, -0.63], [0.2, -0.58]], 'signal', 0.04))
-      break
-    case 'freight cutter':
-      body([[-fork, -0.19], [-0.57, -raise], [-0.2, -0.35], [0.03, -0.63], [0.4, -0.57], [fork, -0.35], [0.86, 0.11], [0.63, 0.36], [0.38, 0.34], [0.29, 0.61], [-0.58, 0.61], [-0.77, 0.37]], 'armor')
-      details.push(plate([[-fork, -0.19], [-0.51, -0.14], [-0.47, 0.13], [-0.63, 0.34], [-0.77, 0.37]], 'shadow'))
-      details.push(plate([[0.63, -0.18], [0.8, -0.045], [0.83, 0.11], [0.6, 0.31], [0.38, 0.28], [0.46, 0.03]], 'frame', 'light'))
-      details.push(plate([[-0.44, -0.02], [-0.26, -0.19], [0.19, -0.15], [0.43, 0.06], [0.34, 0.34], [-0.42, 0.37]], 'shadow', 'frame'))
-      for (let i = 0; i < 4; i++) {
-        const x = -0.34 + i * 0.15
-        details.push(plate([[x, 0.06], [x + 0.09, 0.01], [x + 0.14, 0.22], [x + 0.01, 0.25]], i % 2 ? 'frame' : 'glass', 'armor'))
-      }
-      details.push(wire([[0.54, 0.03], [0.67, -0.04], [0.73, 0.1], [0.56, 0.22]], 'copper', 0.037))
-      details.push(wire([[0.51, 0.11], [0.58, 0.15], [0.66, 0.12]], 'signal', 0.031))
-      details.push(plate([[0.03, -0.56], [0.39, -0.51], [0.68, -0.32], [0.54, -0.22], [0.13, -0.29], [-0.1, -0.36]], 'glass', 'light'))
-      for (let i = 0; i < pods; i++) {
-        const x = -0.49 + i * 0.195
-        details.push(plate(box(x, 0.4, 0.105, 0.25), 'void', 'copper'))
-        details.push(wire([[x + 0.05, 0.47], [x + 0.05, 0.61]], 'signal', 0.035))
-      }
-      break
-    case 'deep-water skiff':
-      body([[-fork, -0.22], [-0.45, -0.65], [-0.06, -0.81], [0.43, -0.64], [fork, -0.27], [0.78, 0.04], [0.43, 0.54], [0.09, 0.42], [-0.25, 0.57], [-0.65, 0.34]], 'shadow')
-      for (const side of [-1, 1]) {
-        const y = side === sweep ? 0.29 : 0.38
-        body(mirror(side, [[0.12, -0.24], [0.39, -0.39 - raise / 4], [fork + 0.06, -0.25], [fork - 0.01, y], [0.66, y + 0.14], [0.46, y], [0.48, -0.09], [0.25, 0.16]]), 'armor')
-        details.push(plate(mirror(side, [[0.53, -0.21], [fork - 0.03, -0.16], [0.65, y + 0.08], [0.52, y - 0.06]]), 'shadow', 'frame'))
-        details.push(wire(mirror(side, [[0.53, 0.01], [0.65, 0.04], [0.56, 0.14], [0.68, 0.18]]), 'copper', 0.039))
-        details.push(wire(mirror(side, [[0.29, -0.26], [0.53, -0.29], [fork - 0.02, -0.19], [0.65, y]]), 'glass', 0.062))
-      }
-      details.push(plate([[-0.31, -0.04], [0.29, -0.05], [0.36, 0.29], [0.1, 0.44], [-0.25, 0.38]], 'frame', 'armor'))
-      details.push(wire([[-0.25, 0.11], [-0.15, 0.26], [0.24, 0.25], [0.28, 0.1]], 'copper', 0.05))
-      details.push(plate([[-0.22, -0.45], [-0.05, -0.68], [0.16, -0.6], [0.32, -0.38], [0.17, -0.14], [-0.14, -0.1]], 'glass', 'light'))
-      break
+    }
+    if (run.length > 1) parts.push(wire(run, family + 3, 0.011))
   }
 }
 
-const sockets: Record<Family, Pt> = {
-  'salvage tug': [0.41, 0.38],
-  'split-keel courier': [0.28, 0.42],
-  'ring observatory': [0.21, 0.42],
-  'crystal cluster': [0.4, 0.35],
-  'orbital probe': [0.17, 0.42],
-  'freight cutter': [0.42, 0.32],
-  'deep-water skiff': [0.37, 0.37],
+function craters(family: Family, stages: Stage[], mid: Pt[], c: Pt, r: () => number, parts: Part[]) {
+  const tone = (i: number) => family + i
+  const count = stages.length || 2
+  for (let i = 0; i < count; i++) {
+    const at = add(c, sub(mid[Math.floor(r() * mid.length)], c), 0.3 + r() * 1.2)
+    const steps = stages[i]?.steps.length ?? 6
+    const size = 0.035 + Math.min(steps, 21) * 0.0035 + r() * 0.015
+    const away = sub(at, c)
+    const angle = Math.atan2(away[1], away[0])
+    const flat = 1 - Math.min(0.55, len(away) * 0.7)
+    parts.push(plate(ellipse(at, size * flat, size, angle), tone(stages[i]?.conclusion === 'failure' ? 0 : 1)))
+    parts.push(plate(ellipse(add(at, LIGHT, -size * 0.28), size * flat * 0.72, size * 0.72, angle), tone(3)))
+    parts.push(plate(ellipse(add(at, LIGHT, -size * 0.12), size * flat * 0.62, size * 0.62, angle), tone(2)))
+  }
+  const pocks = 7 + Math.floor(r() * 8)
+  for (let i = 0; i < pocks; i++) {
+    const at = add(c, sub(mid[Math.floor(r() * mid.length)], c), 0.2 + r() * 1.6)
+    const size = 0.01 + r() * 0.014
+    parts.push(plate(ellipse(at, size, size * (0.6 + r() * 0.4), r() * TAU, 6), tone(r() < 0.5 ? 1 : 4)))
+  }
 }
 
-function attach(record: Art, sourceStep: string, family: Family, r: () => number, outline: Pt[][], details: Part[]) {
-  if (!sourceStep) return
+function druse(family: Family, record: Art, out: Pt[], c: Pt, r: () => number, parts: Part[]) {
+  const job = record.stages.find((s) => s.url === record.context?.url) ?? record.stages[0]
+  const steps = job?.steps ?? []
+  const ventIndex = Math.floor(r() * out.length)
+  if (!steps.length) return ventIndex
+  const vent = out[ventIndex]
+  const dir0 = unit(sub(vent, c))
+  const angle0 = Math.atan2(dir0[1], dir0[0])
+  const root = add(c, sub(vent, c), 0.7)
+  const heart = steps.indexOf(record.context?.quote ?? '')
+  const n = steps.length
+  const spread = Math.min(2.1, 0.12 * n + 0.35)
+  parts.push(plate(ellipse(root, 0.1, 0.075, angle0 + Math.PI / 2, 9), family + 0, family + 1, 0.01))
+  const crystals = steps.map((s, j) => {
+    const { number, name, result } = parse(s, j)
+    const f = n > 1 ? j / (n - 1) - 0.5 : 0
+    const dir: Pt = [Math.cos(angle0 + f * spread), Math.sin(angle0 + f * spread)]
+    const perp: Pt = [-dir[1], dir[0]]
+    const start = add(root, [-dir0[1], dir0[0]], f * 0.14)
+    const own = j === heart
+    let length = (0.17 + (hash(name) % 6) * 0.028) * (own ? 1.5 : 1) * (result === 'skipped' ? 0.5 : 1)
+    const reach = len(add(start, dir, length))
+    if (reach > 0.97) length -= reach - 0.97
+    const w = (0.028 + (number % 3) * 0.007) * (own ? 1.45 : 1)
+    return { dir, perp, start, length, w, result, own }
+  })
+  crystals.sort((a, b) => Number(a.own) - Number(b.own) || a.length - b.length)
+  for (const { dir, perp, start, length, w, result, own } of crystals) {
+    const p0 = add(start, perp, w)
+    const p3 = add(start, perp, -w)
+    const shaft = add(start, dir, length * 0.78)
+    const bend = result === 'failure' ? w * 0.9 : 0
+    const tip = add(add(start, dir, length), perp, bend)
+    const p1 = add(shaft, perp, w)
+    const p2 = add(shaft, perp, -w)
+    const [left, right, edge] = result === 'success' ? ['signal', 'glass', own ? 'light' : 'signal']
+      : result === 'failure' ? ['copper', 'ember', 'copper'] : ['dull', 'dusk', undefined]
+    parts.push(plate([p0, p1, tip, start], left, edge, 0.007))
+    parts.push(plate([start, tip, p2, p3], right, edge, 0.007))
+    if (result === 'failure') parts.push(wire([add(shaft, perp, w), add(add(start, dir, length * 0.55), perp, -w * 0.6)], 'void', 0.012))
+    if (own) parts.push(wire([add(start, perp, w * 0.45), add(shaft, perp, w * 0.45)], 'light', 0.014))
+  }
+  return ventIndex
+}
+
+const vessels: Record<string, (r: () => number, d: Part[]) => void> = {
+  'spec-review': (r, d) => {
+    const rx = 0.5 + r() * 0.15
+    d.push(plate(rim(0, 0, rx, 0.42, 12, 0.26), 'armor', 'light'))
+    d.push(plate(rim(0, 0, rx - 0.15, 0.3, 12, 0.26), 'void', 'frame'))
+    d.push(plate(rim(0, -0.1, 0.17, 0.17, 8), 'signal', 'light'))
+    d.push(plate(rim(0, -0.1, 0.08, 0.08, 8), 'void', 'glass'))
+    d.push(wire([[-rx, 0], [-rx - 0.22, -0.2]], 'copper', 0.06))
+  },
+  'write-tests': (r, d) => {
+    for (const x of [-0.22, 0.22]) {
+      d.push(plate(box(x - 0.1, -0.45, 0.2, 0.8 + r() * 0.1), 'glass', 'signal', 0.03))
+      d.push(plate(box(x - 0.1, 0.05, 0.2, 0.3), 'signal', 'light', 0.03))
+    }
+    d.push(plate(box(-0.36, -0.55, 0.72, 0.12), 'armor', 'light', 0.03))
+  },
+  deliver: (r, d) => {
+    const w = 0.7 + r() * 0.2
+    d.push(plate([[-w, -0.25], [w * 0.7, -0.35], [w, 0], [w * 0.7, 0.35], [-w, 0.25]], 'armor', 'light', 0.03))
+    d.push(plate([[-w * 0.6, -0.15], [w * 0.4, -0.2], [w * 0.4, 0.2], [-w * 0.6, 0.15]], 'copper', 'ember', 0.03))
+    d.push(plate([[w * 0.55, -0.2], [w * 0.9, 0], [w * 0.55, 0.2]], 'glass', 'light', 0.03))
+    d.push(wire([[-w, -0.15], [-w - 0.2, -0.1]], 'signal', 0.05))
+    d.push(wire([[-w, 0.15], [-w - 0.2, 0.1]], 'signal', 0.05))
+  },
+  gate: (r, d) => {
+    const s = 0.42 + r() * 0.1
+    d.push(plate(rim(0, 0, s, s, 8, Math.PI / 8), 'armor', 'light', 0.03))
+    d.push(plate(rim(0, 0, s * 0.55, s * 0.55, 8, Math.PI / 8), 'void', 'frame', 0.03))
+    d.push(plate(box(-0.09, -s * 0.4, 0.18, s * 0.8), 'copper', 'light', 0.03))
+    d.push(wire([[-s, 0], [-s - 0.25, 0]], 'frame', 0.08))
+  },
+  'pr-loop': (r, d) => {
+    const s = 0.45 + r() * 0.1
+    d.push(wire(rim(0, 0, s, s * 0.7, 14).slice(0, 12), 'copper', 0.1))
+    d.push(wire(rim(0, 0, s * 0.62, s * 0.42, 14).slice(2, 14), 'signal', 0.07))
+    d.push(plate([[-0.18, -0.12], [0.2, -0.16], [0.24, 0.12], [-0.2, 0.14]], 'armor', 'light', 0.03))
+  },
+}
+
+function craft(record: Art, out: Pt[], c: Pt, vent: number, r: () => number, parts: Part[]) {
   const stage = record.stages.find((s) => s.url === record.context?.url)?.stage
-  const count = Number(/^\d+/.exec(sourceStep)?.[0]) || 1
-  const [sx, sy] = sockets[family]
-  const side = r() < 0.5 ? -1 : 1
-  const length = 0.20 + (count % 5) * 0.041
-  const local = (points: Pt[]): Pt[] => points.map(([x, y]) => [side * (sx + x), sy + y])
-  const bolt = (points: Pt[], fill: Tone) => {
-    const p = local(points)
-    outline.push(p)
-    details.push(plate(p, fill, 'armor'))
-  }
-  bolt([[-0.16, -0.09], [-0.035, -0.13], [0.088, -0.018], [0.082, 0.11], [-0.12, 0.10]], 'shadow')
-
-  if (/push|publish/i.test(sourceStep) && stage === 'deliver') {
-    bolt([[-0.075, 0], [0.045, 0.045], [0.15, length], [0.113, length + 0.08], [-0.038, length - 0.04]], 'frame')
-    details.push(wire(local([[-0.047, 0.051], [0.064, length * 0.69], [0.125, length]]), 'copper', 0.05))
-    details.push(plate(local(rim(0.098, length + 0.029, 0.082, 0.05, 6)), 'shadow', 'light'))
-  } else if (stage === 'gate') {
-    const base = length * 0.65
-    bolt([[-0.085, 0.03], [0.09, 0.05], [0.13, base], [0.035, base + 0.06], [0.016, base - 0.038], [-0.037, base - 0.04], [-0.06, base + 0.034], [-0.13, base - 0.01]], 'armor')
-    details.push(wire(local([[-0.064, 0.09], [0.067, 0.094]]), 'glass', 0.052))
-  } else if (stage === 'write-tests' || stage === 'pr-loop') {
-    for (const offset of [-0.068, 0.068]) {
-      bolt([[offset - 0.05, 0.045], [offset + 0.051, 0.053], [offset + 0.09, length - 0.03], [offset + 0.024, length + 0.049], [offset - 0.034, length + 0.018]], 'glass')
-      details.push(wire(local([[offset + 0.013, 0.083], [offset + 0.049, length - 0.033]]), 'signal', 0.027))
-    }
-  } else {
-    const dish = length * 0.7
-    bolt([[-0.056, 0.02], [0.061, 0.014], [0.122, dish + 0.008], [0.042, dish + 0.036]], 'frame')
-    bolt([[-0.055, dish - 0.007], [0.058, dish + 0.03], [0.19, dish - 0.005], [0.098, dish + 0.121], [0.008, dish + 0.112]], 'copper')
-    details.push(wire(local([[-0.03, dish + 0.024], [0.086, dish + 0.067], [0.172, dish + 0.018]]), 'light', 0.024))
-  }
-}
-
-const banks: Record<Family, (x: number, i: number) => number> = {
-  'salvage tug': (x) => -Math.abs(x) * 0.13,
-  'split-keel courier': (x) => Math.abs(x) * 0.19,
-  'ring observatory': (x) => 0.09 - x ** 2 * 0.23,
-  'crystal cluster': (x, i) => x * 0.07 + (i % 2) * 0.073,
-  'orbital probe': (x) => 0.04 - Math.abs(x) * 0.19,
-  'freight cutter': (x) => x * 0.08,
-  'deep-water skiff': (x) => 0.06 - Math.abs(x) * 0.12,
-}
-
-function systemsFor(stages: Stage[], family: Family): Part[] {
-  if (!stages.length) return []
-  const systems: Part[] = []
-  const span = 1.5 / stages.length
-  const mounts: Pt[] = stages.map((_, i) => {
-    const x = -0.75 + (i + 0.5) * span
-    return [x, 0.50 + banks[family](x, i)]
-  })
-  if (mounts.length > 1) systems.push(wire(mounts, 'frame', 0.085))
-  for (const [i, { stage, steps }] of stages.entries()) {
-    const [mid, bottom] = mounts[i]
-    const x = mid - span / 2
-    const top = bottom - 0.34
-    systems.push(plate([[x + 0.015, bottom], [x + 0.015, top + 0.05], [mid, top], [x + span - 0.015, top + 0.05], [x + span - 0.015, bottom]], 'void', 'frame'))
-    const dx = span * 0.26
-    switch (stage) {
-      case 'write-tests':
-        systems.push(plate(rim(mid, top + 0.112, dx, 0.06, 6), 'glass', 'signal'))
-        break
-      case 'deliver':
-        systems.push(plate(box(mid - dx, top + 0.07, dx * 2, 0.095), 'copper', 'copper'))
-        break
-      case 'gate':
-        systems.push(wire([[mid - dx, top + 0.15], [mid - dx, top + 0.075], [mid + dx, top + 0.075], [mid + dx, top + 0.15]], 'armor', 0.036))
-        break
-      case 'pr-loop':
-        systems.push(wire(rim(mid, top + 0.11, dx, 0.05, 6).slice(1), 'copper', 0.031))
-        break
-      default:
-        systems.push(wire([[mid - dx, top + 0.14], [mid, top + 0.05], [mid + dx, top + 0.14]], 'armor', 0.036))
-    }
-    const columns = Math.ceil(Math.sqrt(steps.length))
-    const rows = Math.ceil(steps.length / columns)
-    for (const [j, step] of steps.entries()) {
-      const [, number, name, result] = /^(\d+)\. (.+) · (\w+)$/.exec(step) ?? ['', String(j + 1), step, 'unknown']
-      const col = j % columns
-      const row = Math.floor(j / columns)
-      const xx = x + 0.028 + col * (span - 0.05) / columns
-      const yy = top + 0.165 + row * 0.15 / rows
-      const unit = (span - 0.07) / columns
-      const reach = unit * (0.42 + (hash(name) % 13) * 0.024)
-      const ascent = 0.012 + (Number(number) % 7) * 0.0017
-      const end = xx + reach
-      const beam: Pt[] = /test|lock|gate|accept/i.test(name)
-        ? [[xx, yy + ascent], [xx + reach * 0.35, yy - ascent], [end, yy]]
-        : [[xx, yy], [xx + reach * 0.62, yy], [end, yy - ascent]]
-      systems.push(wire(beam, 'armor', 0.012))
-      switch (result) {
-        case 'success':
-          systems.push(wire([[end, yy - ascent], [end, yy + ascent]], 'signal', 0.013))
-          break
-        case 'failure':
-          systems.push(wire([[end - unit * 0.2, yy - ascent], [end, yy + ascent], [end + unit * 0.2, yy - ascent]], 'light', 0.013))
-          break
-        default:
-          systems.push(wire([[xx, yy + ascent], [xx + reach * 0.38, yy + ascent]], 'frame', 0.012))
-      }
-    }
-  }
-  return systems
+  const draw = stage && vessels[stage]
+  if (!draw) return
+  const local: Part[] = []
+  draw(r, local)
+  const dock = out[(vent + Math.floor(out.length / 2) + Math.floor(r() * 3) - 1) % out.length]
+  const away = unit(sub(dock, c))
+  const angle = Math.atan2(away[1], away[0]) + Math.PI / 2
+  const at = add(c, sub(dock, c), 0.92)
+  const k = 0.27
+  const move = ([x, y]: Pt): Pt => [at[0] + k * (x * Math.cos(angle) - y * Math.sin(angle)), at[1] + k * (x * Math.sin(angle) + y * Math.cos(angle))]
+  for (const p of local) parts.push({ ...p, points: p.points.map(move), width: p.width * k * 2.2 })
 }
 
 const glyphs: Record<string, Pt[]> = {
@@ -314,61 +305,95 @@ const glyphs: Record<string, Pt[]> = {
   '▼': [[-1, -0.8], [1, -0.8], [0, 1]],
   '■': box(-0.78, -0.78, 1.56, 1.56),
   '✚': [[-0.3, -1], [0.3, -1], [0.3, -0.3], [1, -0.3], [1, 0.3], [0.3, 0.3], [0.3, 1], [-0.3, 1], [-0.3, 0.3], [-1, 0.3], [-1, -0.3], [-0.3, -0.3]],
-  '★': rim(0, 0, 1, 1, 10, -Math.PI / 2).map(([x, y], i) => i % 2 ? [x * 0.42, y * 0.42] : [x, y]),
+  '★': rim(0, 0, 1, 1, 10, -Math.PI / 2).map(([x, y], i) => (i % 2 ? [x * 0.42, y * 0.42] : [x, y])),
 }
 
-function motifFor({ marks }: Art, criterionOrder: boolean): Part[] {
-  const motif = [plate([[-0.74, -0.34], [0.74, -0.34], [0.8, -0.23], [0.8, 0.23], [0.74, 0.34], [-0.74, 0.34], [-0.8, 0.23], [-0.8, -0.23]], 'void', 'signal')]
-  const glyph = marks[1]
-  const figure = glyphs[glyph]
-  const ordinal = criterionOrder ? Number(/^AC(\d+)$/.exec(marks[0])?.[1]) || 0 : 0
-  const offset = ordinal ? -0.28 : 0
+// Digits as crystal bars: hex value -> height, so a prefix, a full SHA and 5.00 vs 5.000 all read by length and rhythm.
+function bars(text: string, cx: number, cy: number, span: number, parts: Part[], unitHeight = 0.012) {
+  const digits = [...(/^[a-f0-9]+$/i.test(text) ? text.slice(0, 7) : text.replace('.', '')).slice(0, 7)]
+  const step = span / 7
+  const x0 = cx - (digits.length * step) / 2
+  for (const [i, ch] of digits.entries()) {
+    const v = parseInt(ch, 16)
+    const h = 0.03 + (Number.isNaN(v) ? 2 + (hash(ch) % 6) : v + 1) * unitHeight
+    const x = x0 + i * step + step * 0.15
+    parts.push(plate([[x, cy], [x, cy - h], [x + step * 0.35, cy - h - step * 0.35], [x + step * 0.7, cy - h], [x + step * 0.7, cy]], 'signal', 'light', 0.006))
+  }
+}
+
+function core(record: Art, c: Pt, criterionOrder: boolean, parts: Part[]) {
+  const { marks } = record
+  const figure = glyphs[marks[1]]
   if (figure) {
-    motif.push(plate(figure.map(([x, y]) => [offset + x * 0.23, y * 0.23]), glyph === '◇' || glyph === '◈' ? 'void' : 'light', 'light'))
-    if (glyph === '◈') motif.push(plate(rim(offset, 0, 0.11, 0.11, 4), 'light', 'light'))
-    for (let i = 0; i < ordinal; i++) {
-      const x = 0.05 + i * 0.14
-      motif.push(wire([[x, -0.095], [x, 0.095]], 'signal', 0.046))
-    }
-    return motif
+    const ordinal = criterionOrder ? Number(/^AC(\d+)$/.exec(marks[0])?.[1]) || 0 : 0
+    const sha = /^[a-f0-9]{4,}$/i.test(marks[0])
+    const g: Pt = [c[0] - (ordinal ? 0.09 : 0), c[1] - (sha ? 0.07 : 0)]
+    const s = 0.13
+    const hollow = marks[1] === '◇' || marks[1] === '◈'
+    parts.push(plate(figure.map(([x, y]) => [g[0] + x * s, g[1] + y * s]), hollow ? 'void' : 'light', 'light', 0.022))
+    if (marks[1] === '◈') parts.push(plate(rim(g[0], g[1], s * 0.45, s * 0.45, 4), 'light', 'light'))
+    for (let i = 0; i < ordinal; i++) parts.push(wire([[c[0] + 0.07 + i * 0.05, c[1] - 0.07], [c[0] + 0.07 + i * 0.05, c[1] + 0.07]], 'signal', 0.024))
+    if (sha) bars(marks[0], c[0], c[1] + 0.2, 0.26, parts)
+    return
   }
-  if (marks.length === 2) motif.push(wire([[-0.06, 0], [0.07, 0], [0.017, -0.057]], 'signal', 0.035))
-  for (const [j, mark] of marks.slice(0, 2).entries()) {
-    const digits = (/^[a-f0-9]+$/i.test(mark) ? mark.slice(0, 7) : mark.replace('.', '')).slice(0, 7)
-    const half = marks.length > 1 ? 0.61 : 1.28
-    const center = marks.length > 1 ? (j === 0 ? -0.42 : 0.42) : 0
-    for (const [i, ch] of [...digits].entries()) {
-      const value = parseInt(ch, 16)
-      const high = Number.isNaN(value) ? 2 + hash(ch) % 6 : value + 1
-      const x = center - half / 2 + i * half / 7
-      motif.push(plate(box(x, 0.2 - high * 0.025, half / 12, high * 0.025), 'light', 'light'))
+  if (marks.length >= 2) {
+    bars(marks[0], c[0] - 0.135, c[1] + 0.1, 0.25, parts, 0.018)
+    bars(marks[1], c[0] + 0.135, c[1] + 0.1, 0.25, parts, 0.018)
+    parts.push(wire([[c[0] - 0.025, c[1] + 0.14], [c[0] + 0.025, c[1] + 0.14], [c[0] + 0.005, c[1] + 0.12]], 'copper', 0.016))
+    return
+  }
+  bars(marks[0] ?? '', c[0], c[1] + 0.1, 0.34, parts)
+}
+
+function interior(family: Family, record: Art, out: Pt[], c: Pt, r: () => number, criterionOrder: boolean, parts: Part[]) {
+  const tone = (i: number) => family + i
+  parts.push(plate(scaled(out, c, 0.9), tone(0), tone(1), 0.012))
+  const stages = record.stages.length ? record.stages : [{ stage: '', steps: [] }]
+  const outer = 0.82
+  const inner = 0.52
+  for (const [i, { conclusion, steps }] of stages.entries()) {
+    const k = outer - (i * (outer - inner)) / stages.length
+    const ring = scaled(out, c, k)
+    parts.push(plate(ring, conclusion === 'failure' ? 'ember' : tone(i % 2 ? 3 : 2), tone(1), 0.01))
+    const depth = (0.7 * (outer - inner)) / stages.length
+    for (const [j, s] of steps.entries()) {
+      const { result } = parse(s, j)
+      const p = along(ring, (j + 0.5) / steps.length)
+      const q = add(p, unit(sub(c, p)), depth * (result === 'failure' ? 1 : result === 'skipped' ? 0.4 : 0.7) * 0.6)
+      parts.push(wire([p, q], result === 'success' ? 'light' : result === 'failure' ? 'copper' : tone(1), 0.011))
     }
   }
-  return motif
+  const cavity = scaled(out, c, inner * 0.92)
+  parts.push(plate(cavity, 'void', 'glass', 0.014))
+  const teeth = 10 + Math.floor(r() * 7)
+  for (let i = 0; i < teeth; i++) {
+    const a = along(cavity, i / teeth)
+    const b = along(cavity, (i + 0.6) / teeth)
+    const tip = add(mean([a, b]), unit(sub(c, mean([a, b]))), 0.025 + r() * 0.02)
+    parts.push(plate([a, b, tip], i % 2 ? 'glass' : 'shadow', 'signal', 0.005))
+  }
+  core(record, c, criterionOrder, parts)
 }
 
 export function shape(record: Art, identity: string, family: Family, criterionOrder = false): Shape {
-  const sourceStep = record.context?.quote.split(' · ')[0] ?? ''
-  const r = rng(hash(JSON.stringify([identity, sourceStep])))
-  const outline: Pt[][] = []
-  const details: Part[] = []
-  hull(family, r, outline, details)
-  attach(record, sourceStep, family, r, outline, details)
-  return {
-    family,
-    outline,
-    details,
-    systems: systemsFor(record.stages, family),
-    motif: motifFor(record, criterionOrder).map((part) => ({ ...part, points: part.points.map(([x, y]) => [x, y * 0.8 - 0.18]) })),
-    spin: { rate: 0.018 + 0.012 * r(), phase: r() * 2 * Math.PI },
-    lum: r() - 0.5,
-  }
+  const r = rng(hash(JSON.stringify([identity, record.context?.quote ?? ''])))
+  const out = silhouette(r)
+  const c: Pt = add(mean(out), [(r() - 0.5) * 0.08, (r() - 0.5) * 0.08])
+  const shell: Part[] = []
+  const mid = shellOf(family, out, c, r, shell)
+  veins(family, record.marks, out, c, shell)
+  craters(family, record.stages, mid, c, r, shell)
+  const surface: Part[] = []
+  const vent = druse(family, record, out, c, r, surface)
+  craft(record, out, c, vent, r, surface)
+  const inner: Part[] = []
+  interior(family, record, out, c, r, criterionOrder, inner)
+  return { family, outline: out, shell, surface, inner, spin: { rate: 0.012 + 0.012 * r(), phase: r() * TAU }, lum: r() - 0.5 }
 }
 
+// Closed: shell and surface. Inspected: the scan splits the rock and shows the cross-section with the core.
 export function paintObject(s: Shape, draw: (part: Part) => void, inspected = false) {
-  s.details.forEach(draw)
-  if (inspected) {
-    s.systems.forEach(draw)
-    s.motif.forEach(draw)
-  }
+  s.shell.forEach(draw)
+  if (inspected) s.inner.forEach(draw)
+  s.surface.forEach(draw)
 }

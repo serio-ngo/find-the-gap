@@ -12,7 +12,7 @@ Self-contained: it imports nothing from outside this folder.
 
 - `engine.ts`: waves, anchor scoring, deviation from the AI, adaptive policy, content, AI request body.
 - `levels/` holds the lifecycle and fixture decks. `records.ts` pins the ordered steps of the source jobs. Each lifecycle choice carries its own evidence and comparison operands.
-- `objects.ts` binds a public observation to a reproducible hull for a particular wave and appearance. `gen.ts` draws the outer equipment, internal workflow assemblies and comparison marks.
+- `objects.ts` binds a public observation to a reproducible asteroid for a particular wave and appearance. `gen.ts` draws the rock shell, the crystal druse of its own job, the docked stage craft, the stage bands and the clue core.
 - `render.ts` handles cached canvas sprites, the scan, motion, collisions and shots. Answer indices enter the field when a shot resolves.
 - `input.ts`: keyboard, pointer, aim, focus and pause handling.
 - `stats.ts` stores edition-specific results, the latest decision path and the local top five.

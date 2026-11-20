@@ -31,6 +31,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   let dpr = 1
   let ts: Target[] = []
   let inspected = false
+  let open = 0
   let answers: readonly number[] = []
   let shot: Shot | null = null
   let done: (() => void) | null = null
@@ -62,7 +63,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     }
   }
 
-  const rad = () => Math.max(22, Math.min(w, h) * 0.09)
+  const rad = () => Math.max(28, Math.min(w, h) * 0.14)
   const sy = () => h - BAND / 2
   const k = () => (calm ? 0.35 : 1)
   // Drawn position: fly-in offset plus sub-step extrapolation so high-refresh screens stay smooth.
@@ -71,11 +72,11 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     const e = t.n <= 0 ? 0 : 1 - (1 - Math.min(1, (t.n * k()) / 30)) ** 3
     const y = t.y + t.vy * a
     const o = t.angle + t.rate * a
-    return { x: t.x + t.vx * a, y: y - (1 - e) * (y + 2 * rad()) + 0.04 * rad() * Math.cos(o), angle: inspected ? 0 : 0.1745 * Math.sin(o) }
+    return { x: t.x + t.vx * a, y: y - (1 - e) * (y + 2 * rad()) + 0.04 * rad() * Math.cos(o), angle: (1 - open) * 0.35 * Math.sin(o) }
   }
 
-  const sprite = (t: Target) => {
-    const key = t.key + Number(inspected)
+  const sprite = (t: Target, split = false) => {
+    const key = t.key + Number(split)
     const cached = sprites.get(key)
     if (cached) return cached
     const R = rad()
@@ -99,7 +100,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
         g.strokeStyle = colors[stroke]
         g.stroke()
       }
-    }, inspected)
+    }, split)
     sprites.set(key, c)
     return c
   }
@@ -128,10 +129,11 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   }
 
   const update = () => {
-    const m = k()
+    const m = k() * (1 - 0.65 * open) // split rocks slow down so their cores can be compared
     tick++
     if (!calm) off = off.map((o, i) => (o + LAYERS[i].v) % h)
     sx += (tx - sx) * 0.2 * m
+    open = calm ? Number(inspected) : clamp(open + (inspected ? 0.08 : -0.12), 0, 1)
     for (const t of ts) t.n++
     if (!shot) {
       const R = rad()
@@ -181,7 +183,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
           shards = Array.from({ length: 18 }, (_, i) => {
             const a = r() * 6.283
             const v = 1 + 2 * r()
-            return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 30, c: i % 2 ? col.paper3 : col.brick }
+            return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 30, c: i % 3 ? colors[t.shape.family + (2 + (i % 3))] : colors.signal }
           })
         }
       }
@@ -207,6 +209,11 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       ctx.globalAlpha = alpha
       ctx.setTransform(c, s, -s, c, (x + shake) * dpr, y * dpr)
       ctx.drawImage(sprite(t), -R, -R, 2 * R, 2 * R)
+      if (open > 0) {
+        const z = 1 + 0.35 * open
+        ctx.globalAlpha = alpha * open
+        ctx.drawImage(sprite(t, true), -R * z, -R * z, 2 * R * z, 2 * R * z)
+      }
       ctx.globalAlpha = 1
       ctx.setTransform(dpr, 0, 0, dpr, shake * dpr, 0)
     }
@@ -220,8 +227,8 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
         return
       }
       put(t, q.x, q.y, q.angle)
-      if (inspected) {
-        const y = q.y + R * 0.68
+      if (open > 0.5) {
+        const y = q.y + R * 1.12
         ctx.fillStyle = colors.void
         ctx.beginPath()
         ctx.arc(q.x, y, 7, 0, 2 * Math.PI)
@@ -366,6 +373,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       if (canvas.clientWidth !== w || canvas.clientHeight !== h) fit()
       answers = []
       inspected = false
+      open = 0
       sprites = new Map()
       shards = []
       focused = -1
@@ -394,7 +402,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
           shape,
         }
       })
-      ts.forEach(sprite)
+      ts.forEach((t) => sprite(t))
       canvas.setAttribute('aria-label', names.join(', '))
       draw()
     },
@@ -406,6 +414,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     },
     inspect(enabled: boolean) {
       inspected = enabled
+      if (calm || !enabled) open = Number(enabled && calm)
       draw()
     },
     shoot(index: number, outcome: boolean | null, answerIndices: readonly number[] = []) {

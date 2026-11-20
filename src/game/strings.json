@@ -7,9 +7,8 @@
     "pl": {
       "pause": "Pauza", "resume": "Wznów", "calm": "Tryb spokojny", "adaptive": "Tryb adaptacyjny",
       "rock": "Obiekt {n}: {s}", "wave": "Fala", "research": "Fala badawcza, bez dobrej odpowiedzi",
-      "object": "obiekt", "salvage tug": "holownik ratowniczy", "split-keel courier": "kuter kurierski z dzielonym kilem",
-      "ring observatory": "obserwatorium pierścieniowe", "crystal cluster": "skupisko kryształów", "orbital probe": "sonda orbitalna",
-      "freight cutter": "kuter transportowy", "deep-water skiff": "łódź głębinowa", "blue": "niebieski", "red": "czerwony",
+      "object": "obiekt", "basalt": "skała bazaltowa", "iron": "skała żelazowo-niklowa", "ice": "skała lodowa", "carbon": "skała węglowa",
+      "olivine": "skała oliwinowa", "chondrite": "chondryt", "obsidian": "obsydian", "blue": "niebieski", "red": "czerwony",
       "inspect": "Zbadaj obiekty", "readout": "Odczyty z obiektów", "details": "Przebieg gry i źródła", "sources": "Źródła i etapy",
       "confidence": "Pewność AI", "control": "Próba porównawcza",
       "hit": "Trafienie", "miss": "Pudło", "current": "Twój bieżący wynik", "top": "Twoje najlepsze wyniki",
@@ -20,9 +19,8 @@
     "en": {
       "pause": "Pause", "resume": "Resume", "calm": "Calm mode", "adaptive": "Adaptive mode",
       "rock": "Object {n}: {s}", "wave": "Wave", "research": "Research wave, no right answer",
-      "object": "object", "salvage tug": "salvage tug", "split-keel courier": "split-keel courier",
-      "ring observatory": "ring observatory", "crystal cluster": "crystal cluster", "orbital probe": "orbital probe",
-      "freight cutter": "freight cutter", "deep-water skiff": "deep-water skiff", "blue": "blue", "red": "red",
+      "object": "object", "basalt": "basalt rock", "iron": "iron-nickel rock", "ice": "ice rock", "carbon": "carbon rock",
+      "olivine": "olivine rock", "chondrite": "chondrite rock", "obsidian": "obsidian rock", "blue": "blue", "red": "red",
       "inspect": "Scan objects", "readout": "Object readings", "details": "Decisions and sources", "sources": "Sources and stages",
       "confidence": "AI confidence", "control": "Comparison control",
       "hit": "Hit", "miss": "Miss", "current": "Your current score", "top": "Your best scores",

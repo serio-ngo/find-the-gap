@@ -1,6 +1,6 @@
 # From a lifecycle record to a playable level
 
-Find the Gap has four public levels. The first one starts with four criteria and three test names. AC1 and AC2 both point to `Add with an empty field shows the empty-field message in the result`. Those two ships must look like different machines. The part that represents their shared test must be recognizable on both. [Original acceptance report](https://github.com/serio-ngo/lifecycle-sandbox/pull/22#issuecomment-6991893620)
+Find the Gap has four public levels. The first one starts with four criteria and three test names. AC1 and AC2 both point to `Add with an empty field shows the empty-field message in the result`. Those two asteroids must look like different rocks. The core that represents their shared test must be recognizable in both. [Original acceptance report](https://github.com/serio-ngo/lifecycle-sandbox/pull/22#issuecomment-6991893620)
 
 ## What is actually stored
 
@@ -21,7 +21,7 @@ The public split is **106 gates, 19 spec reviews, 18 test-writing runs, 15 deliv
 
 | Level | What the player compares | What determines the answer |
 |---|---|---|
-| 1 · Pair | Criterion and test on each craft | Two different criteria name the same test. Either member of that pair counts. [Four report rows](https://github.com/serio-ngo/lifecycle-sandbox/pull/22#issuecomment-6991893620) |
+| 1 · Pair | Criterion and test in each rock's core | Two different criteria name the same test. Either member of that pair counts. [Four report rows](https://github.com/serio-ngo/lifecycle-sandbox/pull/22#issuecomment-6991893620) |
 | 2 · Odd revision | Revision marks in the same formation | The report names `26dd775` and checkout tested `237c08c`, a merge of the reported head into `236fd0a`. Difficulty progressively shortens the comparison. [CI checkout](https://github.com/serio-ngo/lifecycle-sandbox/actions/runs/44411666642/job/135181131850) |
 | 3 · Changed output | Two readings on each object | The regression records `5.00` and `5.000`. Those are strings, so the extra zero matters. The unchanged comparison reuses the expectation on both sides as a constructed control. [Regression](https://github.com/serio-ngo/lifecycle-sandbox/actions/runs/44288017206) · [Subsequent repair](https://github.com/serio-ngo/lifecycle-sandbox/actions/runs/44288595622) |
 | 4 · Missing independent link | Each criterion’s test and its order in the report | AC2 points back to the test already used by AC1. All four rows say `passed`. A genuinely absent test result would be a different case. [Four report rows](https://github.com/serio-ngo/lifecycle-sandbox/pull/22#issuecomment-6991893620) |
@@ -29,11 +29,32 @@ The public split is **106 gates, 19 spec reviews, 18 test-writing runs, 15 deliv
 
 **Choice limits are 4 and 7.** Four fits the real opening case and leaves two other objects to compare against the pair. Seven is the existing ceiling for a moving formation. The four fixed routes each have 10 decisions and one research wave. Their 44 waves contain 209 choice positions and reach 6 objects. The adaptive pool has 80 predefined waves and 416 positions. Twelve of those waves reach 7. The missing-link rule keeps the four actual criterion rows at every step. The 625 positions across the two collections reuse the public evidence. [Level sequences and generators](src/game/levels/lifecycle.ts)
 
-## How a record becomes a ship
+## How a record becomes an asteroid
 
-The game contains **ten pinned GitHub jobs with 134 ordered step outputs**, including setup, skipped work, failed tests and cleanup. Four jobs contribute 50 outputs for sandbox PR #22. Six contribute 84 for PR #20. They cover spec review, writing tests, delivery, the gate and the review/fix loop. Each output supplies its actual step number, name and conclusion. The regression level stops at the failed gate. The later PR-loop and repaired gate appear in the retrospective research wave. [Public job projections](src/game/levels/records.ts) · [Source verification](scripts/check-sources.ts)
+The game contains **ten pinned GitHub jobs with 134 ordered step outputs**, including setup, skipped work, failed tests and cleanup. Four jobs contribute 50 outputs for sandbox PR #22. Six contribute 84 for PR #20. They cover spec review, writing tests, delivery, the gate and the review/fix loop. Each output supplies its actual step number, name and conclusion. The regression level stops at the failed gate (55 outputs in four jobs). The later PR-loop and repaired gate appear in the retrospective research wave. [Public job projections](src/game/levels/records.ts) · [Source verification](scripts/check-sources.ts)
 
-In the opening formation AC1 and AC2 have distinct hulls and share a test mark. A scan exposes that relationship across the formation. In the revision level the comparison uses the prefix actually offered in that wave. In the output level it compares two readings. In the fourth level the criterion's ordinal makes it possible to distinguish the later use of a test. The shape, named control and scan reading describe the same choice. A repeat of the exact presentation reconstructs the hull so a lecturer can demonstrate it again. [Choice projection](src/game/levels/lifecycle.ts) · [Object generator](src/game/objects.ts)
+Every choice is one asteroid. One deterministic function turns one choice record into one rock; the same wave, appearance and record always draw the same rock. [Object generator](src/game/gen.ts) · [Choice projection](src/game/levels/lifecycle.ts)
+
+| Record data | Drawn as | Visible |
+|---|---|---|
+| Choice identity: deck, rule, step, seed, appearance, clue and slot | Silhouette, three rings of lit facets, fissures, crater and vent placement | Always. No two choices share it |
+| Mineral family, shuffled per wave | One of seven palettes: basalt, iron-nickel, ice, carbon, olivine, chondrite, obsidian | Always. Never derived from the answer |
+| The clue's value without the criterion id: test name, revision or reading | Two or three faint veins seeded by that value | Always. Equal values share a vein pattern; nothing marks right or wrong |
+| The choice's own step output, unique within the wave | A crystal druse: one crystal per step of that job, in step order. The own step is the long heart crystal. Success is a clear prism, failure a bent amber crystal, skipped a short dull stub | Always |
+| The stage that produced the own step | A docked craft: dish for spec review, twin vials for writing tests, cargo pod for delivery, lock ring for the gate, coil for the PR loop | Always |
+| Every stage of the case, in order | One crater per stage outside. Inside, one band per stage; a failed stage is a rust band | Craters always, bands after the scan |
+| Every step output of those stages | One tick on its stage band: light for success, copper for failure, short and dim for skipped | After the scan |
+| The clue | The split core: the test glyph, ordinal notches in the missing-link level, revision digits as crystal bars sized by hex value, readings as two bar groups (`5.00` three bars, `5.000` four) | After the scan |
+
+The scan splits every rock into a cross-section and enlarges it by 35%; the rocks slow down while open. Calm mode opens them without motion. The written readout of the clues is for screen readers only; on screen the cores carry it. After the game each decision lists the rocks with the same drawing and their source links.
+
+### Choice limits and uniqueness
+
+**A wave offers at least 4 and at most 7 choices** (steps 1 to 5: 4, 5, 6, 6, 7). Four is the real report: four criteria, one shared test. Seven is the most rocks a phone field keeps readable. Each wave's choices draw distinct own step outputs, and every timeline has at least 50 outputs, so seven choices never need to repeat one.
+
+**No two choices in a wave are the same.** A unit test checks every fixed wave and every adaptive pool wave: the full records (clue, own step output, sources, stages) differ, and so do the closed rocks. In the revision and output levels the stored model input still repeats a token, for example `26dd775` on every rock but one. The rocks differ by their own step output. Making the model input itself unique needs a new d1.1 run (`npm run ai` with `LIQUID_AI_KEY`); without it the build rejects the level.
+
+**No choice shows whether it is right before the shot.** The answer key is not an input to the generator: the test swaps the answers and gets identical rocks. The readable clue appears only in the split core, and the outcome mark appears only after the shot.
 
 The build checks all 124 model requests against the original d1.1 input and validates the choice and probability keys for each wave. The frozen run's second pass differed on 10 choices, with a maximum probability difference of `0.524`. A replay uses the stored first pass. The visual edition has a separate identifier, so a player can identify which objects and rules produced a saved result. [Model recording](src/game/eval/ai-run.json) · [Version checks](src/game/eval/version.ts)
 

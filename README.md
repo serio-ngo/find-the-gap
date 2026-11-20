@@ -10,7 +10,7 @@ A pattern game built from real software delivery evidence.
 
 Open `/find-the-gap/1` in Polish or `/en/find-the-gap/1` in English. Inspect a formation to compare the marks on its targets, then select one by mouse, touch or keyboard. A shot records one choice. Two waves per level award points. The final research wave accepts any pick.
 
-The four levels draw from public workflow evidence. A target has its own hull, ordered stage outputs and source references. Replaying the same presentation recreates it. After the game, the decision history shows the selected evidence and the stored d1.1 comparison. [Level data, visual design and history](LEVELS.md)
+The four levels draw from public workflow evidence. Every choice is an asteroid drawn from its own record: crystals for the step outputs of its job, craters and inner bands for the stages, and a core with the clue that the scan splits open. Replaying the same presentation recreates it. After the game, the decision history shows the selected evidence and the stored d1.1 comparison. [Level data, visual design and history](LEVELS.md)
 
 ## Run
 

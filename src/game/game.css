@@ -44,7 +44,8 @@
 .ftg-top { font-family: var(--mono); margin: 0; padding-left: 1.5rem; }
 .ftg-top li { padding-left: 0.5rem; }
 .ftg-top [aria-current], .ftg-top li[aria-current] { border-left: 3px solid var(--ftg-brick); font-weight: 700; }
-.ftg-readout { margin: 0; padding: 0.5rem 0.5rem 0.5rem 2.25rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: 0.25rem 1.5rem; background: var(--ftg-paper2); font-family: var(--mono); }
+/* The split rocks carry the readings on the field; the list stays for screen readers only. */
+.ftg-readout { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
 .ftg[data-phase="paused"] .ftg-readout { display: none; }
 .ftg-duel { display: grid; gap: 0.25rem; font-family: var(--mono); }
 .ftg-duel > div { display: flex; gap: 1rem; align-items: baseline; }
