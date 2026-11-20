@@ -31,4 +31,4 @@ it('draws unique geometry for every choice across fixed standard and adaptive pr
       }
     }
   }
-})
+}, 20_000) // exhaustive over all 625 choice positions

@@ -36,6 +36,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   let shot: Shot | null = null
   let done: (() => void) | null = null
   let shards: Shard[] = []
+  let ghost: { t: Target; x: number; y: number; angle: number; life: number } | null = null
   let focused = -1
   let paused = false
   let hidden = document.hidden
@@ -165,6 +166,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       s.life--
     }
     shards = shards.filter((s) => s.life > 0)
+    if (ghost && ++ghost.life > (calm ? 8 : 30)) ghost = null
     if (!shot) return
     shot.t++
     if (shot.phase === 0) {
@@ -177,6 +179,12 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
       if (shot.t >= (calm ? 6 : 15)) {
         shot.phase = 2
         shot.t = 0
+        // An unscored pick bursts while the next wave flies in; scored waves keep their full hit or miss feedback.
+        if (shot.outcome === null) {
+          const f = done
+          done = null
+          f?.()
+        }
         if (shot.outcome && !calm) {
           const t = ts[shot.to]
           const r = rng(shot.to + 7)
@@ -203,15 +211,20 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     const p = shot && shot.phase === 2 ? shot.t / effect() : 0
     const shake = shot && shot.outcome === false && shot.phase === 2 && !calm ? Math.sin(shot.t * 1.8) * 4 * (1 - p) : 0
     const R = rad()
-    const put = (t: Target, x: number, y: number, angle: number, scale = 1, alpha = 1) => {
+    const put = (t: Target, x: number, y: number, angle: number, scale = 1, alpha = 1, split = 0) => {
       const c = Math.cos(angle) * scale * dpr
       const s = Math.sin(angle) * scale * dpr
       ctx.globalAlpha = alpha
       ctx.setTransform(c, s, -s, c, (x + shake) * dpr, y * dpr)
       ctx.drawImage(sprite(t), -R, -R, 2 * R, 2 * R)
-      if (open > 0) {
-        const z = 1 + 0.35 * open
-        ctx.globalAlpha = alpha * open
+      const o = Math.max(open, split)
+      if (o > 0) {
+        // Split cores turn upright so a tilted ◆ never reads as ■.
+        const z = 1 + 0.35 * o
+        const c2 = Math.cos(angle * (1 - o)) * scale * dpr
+        const s2 = Math.sin(angle * (1 - o)) * scale * dpr
+        ctx.setTransform(c2, s2, -s2, c2, (x + shake) * dpr, y * dpr)
+        ctx.globalAlpha = alpha * o
         ctx.drawImage(sprite(t, true), -R * z, -R * z, 2 * R * z, 2 * R * z)
       }
       ctx.globalAlpha = 1
@@ -222,11 +235,13 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     ts.forEach((t, i) => {
       const q = pos(t)
       if (shot && shot.to === i && shot.phase === 2) {
-        if (shot.outcome === null) put(t, q.x, q.y, q.angle, 1 + 0.6 * p, 1 - p)
-        else if (!shot.outcome) put(t, q.x, q.y, q.angle)
+        // The shot cracks the chosen rock: a miss stays open on its core, a hit or an open pick bursts.
+        if (shot.outcome === false) put(t, q.x, q.y, q.angle, 1, 1, 1)
+        else put(t, q.x, q.y, q.angle, 1 + 0.4 * p, 1 - p, 1)
         return
       }
-      put(t, q.x, q.y, q.angle)
+      // After a scored miss the right rocks split as well, so their cores show why they were right.
+      put(t, q.x, q.y, q.angle, 1, 1, shot?.phase === 2 && shot.outcome === false && answers.includes(i) ? 1 : 0)
       if (open > 0.5) {
         const y = q.y + R * 1.12
         ctx.fillStyle = colors.void
@@ -246,6 +261,10 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
         ctx.stroke()
       }
     })
+    if (ghost) {
+      const g = ghost.life / (calm ? 8 : 30)
+      put(ghost.t, ghost.x, ghost.y, ghost.angle, 1 + 0.4 * g, 1 - g, 1)
+    }
     if (shot && shot.phase === 2 && shot.outcome !== null) {
       const t = ts[shot.to]
       const q = pos(t)
@@ -369,13 +388,16 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
 
   return {
     show(wave: Wave, objects: TargetObject[], names: string[]) {
+      if (shot && shot.phase === 2) {
+        const q = pos(ts[shot.to])
+        ghost = { t: ts[shot.to], x: q.x, y: q.y, angle: q.angle, life: 0 }
+      }
       finish()
       if (canvas.clientWidth !== w || canvas.clientHeight !== h) fit()
       answers = []
       inspected = false
       open = 0
       sprites = new Map()
-      shards = []
       focused = -1
       const rand = rng(hash(objects[0].id))
       const R = rad()

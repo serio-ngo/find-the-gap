@@ -38,13 +38,14 @@ type Options = {
   limit?: number
   begun?: boolean
   inspect?: boolean
+  start?: Game
 }
 
 export async function play(page: Page, o: Options = {}) {
   const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false, inspect = false } = o
   const labels = strings.labels[lang]
   if (!begun) await playButton(page, lang).click()
-  let g = begin(d, level, mode)
+  let g = o.start ?? begin(d, level, mode)
   for (let spec = upcoming(d, g); spec && g.decisions.length < limit; spec = upcoming(d, g)) {
     const i = pick(g)
     const w = wave(d, spec)

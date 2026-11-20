@@ -15,7 +15,7 @@ const paths = {
   play: 'M7 4l13 8-13 8z', pause: 'M8 5v14M16 5v14', calm: 'M3 12c3-4 6-4 9 0s6 4 9 0', adaptive: 'M4 18l5-6 4 3 7-10',
   inspect: 'M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M7 12h10', details: 'M12 11v6m0-10v1M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0z',
   again: 'M4 12a8 8 0 1 0 3-6M4 4v5h5', next: 'M5 12h14M13 6l6 6-6 6', share: 'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6',
-  copy: 'M9 9h11v11H9zM5 15V4h11', download: 'M12 3v12M7 10l5 5 5-5M5 20h14', delete: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+  copy: 'M9 9h11v11H9zM5 15V4h11', switch: 'M3 7h4l10 10h4M3 17h4l3-3m4-4l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3', download: 'M12 3v12M7 10l5 5 5-5M5 20h14', delete: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
   x: 'M5 5l14 14M19 5L5 19', bluesky: 'M12 11C10 7 6 5 4 5c0 4 1 7 4 8-3 1-3 4 0 5 3 0 4-3 4-5 0 2 1 5 4 5 3-1 3-4 0-5 3-1 4-4 4-8-2 0-6 2-8 6z',
   linkedin: 'M5 10v9M5 5v1M10 19v-9M10 14c0-3 7-5 7 0v5', facebook: 'M14 21v-8h3l.5-3H14V8c0-1.5 1-2 2-2h1.5V3H15c-3 0-4 2-4 4.5V10H8v3h3v8',
 }
@@ -24,7 +24,8 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
 <section class="ftg" data-phase="start" data-level={level} data-lang={lang} data-editions={JSON.stringify(editions)} data-url={new URL(`${path}/${level}`, Astro.site).href} data-next={`${path}/${level + 1}`} data-strings={JSON.stringify({ v, l })}>
   <div class="ftg-hud">
     <span class="ftg-stat"><span role="group" aria-label={v.score}><output class="ftg-hits">0</output></span>
-    <span class="ftg-wave" role="group" aria-label={l.wave}>1/10</span></span>
+    <span class="ftg-wave" role="group" aria-label={l.wave}>1/10</span>
+    <span class="ftg-switch" role="img" aria-label={l.switch} hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.switch} /></svg></span></span>
     <span class="ftg-btns">
     <button class="ftg-pausebtn" aria-label={l.pause}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.pause} /></svg></button>
     <button class="ftg-mode" aria-pressed="false" aria-label={l.adaptive}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.adaptive} /></svg></button>
@@ -183,9 +184,13 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
     if (busy || root.dataset.phase !== 'play') return
     busy = true
     const objects = rounds[g.decisions.length]
+    const rule = g.rule
     g = shoot(deck, g, objects[i].sourceIndex, (performance.now() - t0) / 1000)
     const d = g.decisions.at(-1)!
-    live.textContent = d.anchor && d.hit !== null ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`
+    // Adaptive mode marks a rule switch for the next wave without naming the new rule.
+    const switched = g.mode === 'adaptive' && g.rule !== rule
+    $('.ftg-switch').hidden = !switched
+    live.textContent = [d.anchor && d.hit !== null ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
     const answers = d.anchor ? objects.flatMap((o, index) => w.answers.includes(o.sourceIndex) ? [index] : []) : undefined
     await field.shoot(i, d.anchor ? d.hit : null, answers)
     nextWave()
@@ -194,6 +199,7 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
   const start = () => {
     g = begin(deck, level, mode)
     rounds = []
+    $('.ftg-switch').hidden = true
     endEl.hidden = true
     $<HTMLDetailsElement>('.ftg-replay').open = false
     fieldEl.hidden = false

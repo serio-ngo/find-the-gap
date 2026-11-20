@@ -46,7 +46,7 @@ Every choice is one asteroid. One deterministic function turns one choice record
 | Every step output of those stages | One tick on its stage band: light for success, copper for failure, short and dim for skipped | After the scan |
 | The clue | The split core: the test glyph, ordinal notches in the missing-link level, revision digits as crystal bars sized by hex value, readings as two bar groups (`5.00` three bars, `5.000` four) | After the scan |
 
-The scan splits every rock into a cross-section and enlarges it by 35%; the rocks slow down while open. Calm mode opens them without motion. The written readout of the clues is for screen readers only; on screen the cores carry it. After the game each decision lists the rocks with the same drawing and their source links.
+The scan splits every rock into a cross-section and enlarges it by 35%; the rocks slow down while open. Calm mode opens them without motion. A shot cracks the chosen rock. On the two scored waves a miss stays open on its core and the right rocks are ringed; on unscored waves the rock bursts while the next wave already flies in. In adaptive mode a shuffle icon marks the wave after a rule switch and never names the new rule. The written readout of the clues is for screen readers only; on screen the cores carry it. After the game each decision lists the rocks with the same drawing and their source links.
 
 ### Choice limits and uniqueness
 

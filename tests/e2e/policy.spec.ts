@@ -37,3 +37,17 @@ test('replaying the same picks twice shows the same waves', async ({ page }) => 
   await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
   expect(second.decisions.map((d) => d.spec)).toEqual(first.decisions.map((d) => d.spec))
 })
+
+test('the rule-switch cue shows only on the wave after the adaptive rule changes and names no rule', async ({ page }) => {
+  await open(page, 'en', 1, '?mode=adaptive')
+  const g = await play(page, { mode: 'adaptive', limit: 7 })
+  const cue = page.locator('.ftg-switch')
+  await expect(cue).toBeHidden()
+  const next = await play(page, { mode: 'adaptive', begun: true, start: g, limit: 8 })
+  expect(next.decisions[7].spec.rule).toBe('pair')
+  await expect(cue).toBeVisible()
+  await expect(cue).toHaveAccessibleName(strings.labels.en.switch)
+  await expect(cue).not.toContainText(/pair|odd/)
+  await play(page, { mode: 'adaptive', begun: true, start: next, limit: 9 })
+  await expect(cue).toBeHidden()
+})

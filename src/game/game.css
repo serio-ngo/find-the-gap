@@ -72,3 +72,4 @@
 .ftg-start, .ftg-pause { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(22, 19, 15, 0.86); color: var(--ftg-paper); font-size: 1.5rem; }
 .ftg-start button:not(.ftg-play), .ftg-pause button:not(.ftg-play) { color: var(--ftg-paper); border-color: var(--ftg-paper); }
 .ftg-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.ftg-switch { align-self: center; color: var(--ftg-brick); }
