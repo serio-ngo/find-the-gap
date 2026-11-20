@@ -9,11 +9,11 @@ import type { GameEnv } from '../../src/game/worker/route.ts'
 
 const ORIGIN = 'https://example.org'
 const env: GameEnv = {
-  ASK_DB: {
+  DB: {
     prepare: (sql: string) => ({ bind: () => ({ first: async <T,>() => (sql.includes('game_use') ? { n: 1 } : null) as T | null, run: async () => {} }) }),
   },
-  RL_GAME: { limit: async () => ({ success: true }) },
-  LIQUID_AI_KEY: 'k',
+  LIMIT: { limit: async () => ({ success: true }) },
+  KEY: 'k',
 }
 // a valid Liquid answer for however many rocks the posted state has
 vi.stubGlobal('fetch', async (_u: string, init: RequestInit) => {
@@ -30,10 +30,10 @@ const send = (path: string, body: unknown) =>
   route(new Request(ORIGIN + path, { method: 'POST', body: JSON.stringify(body), headers: { origin: ORIGIN } }), env, { waitUntil() {} })
 
 // plays one whole game the way Game.astro does, posting every body it would build
-const play = async (name: 'lifecycle' | 'fixture', mode: Mode) => {
-  const d = decks[name]
+const play = async (name: 'observations' | 'fixture', mode: Mode) => {
+  const d = decks[name]!
   const v = Object.values(decks).indexOf(d)
-  const ai = d.question ? (run as unknown as AiRun) : undefined
+  const ai = d.question ? (run as AiRun) : undefined
   let g = begin(d, 1, mode)
   const waves: number[][] = []
   for (let spec = upcoming(d, g); spec; spec = upcoming(d, g)) {
@@ -42,21 +42,20 @@ const play = async (name: 'lifecycle' | 'fixture', mode: Mode) => {
       const res = await send('/api/game/step', stepRequest(d, v, 1, spec, g.decisions))
       expect(res.status).toBe(200)
       live = await res.json()
-      expect(live).toMatchObject({ ai: { pick: expect.any(Number) }, hit: 0.8, miss: 0.4 })
+      expect(live).toMatchObject({ ai: 0, hit: 0.8, miss: 0.4 })
     }
     const rule = g.rule
     g = shoot(d, g, g.decisions.length % 2, 2, live ? { hit: live.hit, miss: live.miss } : undefined)
     const x = g.decisions.at(-1)!
-    const sa = ai && aiPick(ai, g, g.decisions.length - 1)
-    const ap = live?.ai ?? (sa && { pick: Number(sa.choice.slice(1)), p: sa.probabilities[sa.choice] })
+    x.ai = live ? live.ai : ai && aiPick(ai, g, g.decisions.length - 1)
     const p = mode === 'adaptive' && x.hit !== null ? (live ? live[x.hit ? 'hit' : 'miss'] : estimate(d, { ...g, rule })) : 0
-    waves.push(resultRow(d, x, ap, p, live))
+    waves.push(resultRow(d, x, p, live))
   }
   return { body: resultRequest(v, 1, mode, waves), waves, g }
 }
 
 describe('client bodies are accepted by the route', () => {
-  it.each([['lifecycle', 'standard'], ['lifecycle', 'adaptive'], ['fixture', 'standard']] as const)('%s %s game', async (name, mode) => {
+  it.each([['observations', 'standard'], ['observations', 'adaptive'], ['fixture', 'standard']] as const)('%s %s game', async (name, mode) => {
     const { body, waves, g } = await play(name, mode)
     expect(waves).toHaveLength(g.decisions.length)
     expect(JSON.stringify(body)).toMatch(/^[\d,.[\]{}":a-z-]*$/)

@@ -2,13 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copy, links, resultText, share } from '../../src/game/share.ts'
 
 const url = 'https://serio.org.pl/find-the-gap/3'
-const base = { deck: 'Find the Gap', level: 3, score: 7, agree: 80, atypical: 2, names: { score: 'Score', agreement: 'Agreement', atypical: 'Atypical' }, url }
+const base = { deck: 'Find the Gap', level: 3, score: 7, agree: 80, names: { score: 'Score', agreement: 'Agreement' }, url }
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('share', () => {
   it('formats the result block with passed-in labels', () => {
-    expect(resultText(base)).toBe(`Find the Gap #3\nScore 7\nAgreement 80%\nAtypical 2\n${url}`)
+    expect(resultText(base)).toBe(`Find the Gap #3\nScore 7\nAgreement 80%\n${url}`)
   })
   it('builds network links', () => {
     const l = links('a b', url), t = encodeURIComponent('a b'), u = encodeURIComponent(url)

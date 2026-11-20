@@ -1,108 +1,78 @@
 import { describe, expect, it } from 'vitest'
-import { pool, replay, score, wave } from '../../src/game/engine.ts'
+import { pool, score, wave } from '../../src/game/engine.ts'
+import { replay } from '../replay.ts'
 import { decks } from '../../src/game/levels/index.ts'
-import { facts, lifecycleDeck } from '../../src/game/levels/lifecycle.ts'
-import { choiceRecords } from '../../src/game/levels/records.ts'
+import { cells, clue, gapOf } from '../../src/game/levels/observations.ts'
+import { rows } from '../../src/game/levels/rows.ts'
+import { toRows } from '../../scripts/make-deck.ts'
 
-const { lifecycle, fixture } = decks
-const counts = [4, 5, 6, 6, 7]
-const steps = [1, 2, 3, 4, 5]
-const seeds = Array.from({ length: 100 }, (_, i) => i)
-const testOf = (x: string) => facts.criteria.find((c) => c[0] === x.split(' ')[0])?.[1]
-const criteria = (s: string[]) => s.flatMap((x, i) => (testOf(x) ? [i] : []))
-const definitions: Record<string, (s: string[]) => number[]> = {
-  pair: (s) => criteria(s).filter((i) => criteria(s).filter((j) => testOf(s[j]) === testOf(s[i])).length > 1),
-  odd: (s) => s.flatMap((x, i) => (s.filter((y) => y === x).length === 1 ? [i] : [])),
-  changed: (s) => s.flatMap((x, i) => (x.split('→')[0] !== x.split('→')[1] ? [i] : [])),
-  missing: (s) => criteria(s).filter((i) => facts.criteria.slice(0, facts.criteria.findIndex((c) => c[0] === s[i].split(" ")[0])).some((c) => c[1] === testOf(s[i]))),
+const { observations, fixture } = decks
+const looksBroken: Record<string, (c: string[]) => boolean> = {
+  odd_revision: (c) => c[0] !== c[1],
+  missing_link: (c) => c.includes('void'),
+  pair: (c) => new Set(c).size < c.length,
 }
+const specs = [
+  ...observations.levels.flatMap((l) => l.sequence),
+  ...observations.rules.flatMap((r) => [1, 2, 3, 4, 5].flatMap((step) => pool(observations, r.id, step))),
+]
 
-describe('lifecycle rules', () => {
-  for (const [rule, answers] of Object.entries(definitions)) {
-    it(`${rule}: answers follow the facts`, () => {
-      for (const step of steps)
-        for (const seed of seeds) {
-          const w = wave(lifecycle, { rule, step, seed })
-          expect(w.symbols).toHaveLength(rule === 'missing' ? 4 : counts[step - 1])
-          expect(w.answers).toEqual(answers(w.symbols))
-        }
+describe('observation deck', () => {
+  it('reads only public deck rows whose visible structure matches their gap flag', () => {
+    const line = (o: object) => JSON.stringify({
+      id: 'x', relation: 'odd_revision', items: [{ role: 'reported', value: 'a' }, { role: 'tested', value: 'b' }], gap: true,
+      links: { run: 'r' }, flags: { visibility: 'public', split: 'deck', labelled: true }, ...o,
     })
-  }
-
-  it('changing a fact changes the answers', () => {
-    const t = (c: [string, string][]) => lifecycleDeck({ ...facts, criteria: c })
-    const moved = t([['AC1', 'a'], ['AC2', 'b'], ['AC3', 'b'], ['AC4', 'c']])
-    const w = (d: typeof lifecycle, rule: string) => wave(d, { rule, step: 1, seed: 1 })
-    expect(wave(moved, { rule: 'pair', step: 1, seed: 0 }).answers).toEqual([1, 2])
-    expect(w(moved, 'missing').symbols[w(moved, 'missing').answers[0]]).toMatch(/^AC3 /)
-    const sha = lifecycleDeck({ ...facts, testedSha: '999c08c' })
-    expect(w(sha, 'odd').symbols).not.toEqual(w(lifecycle, 'odd').symbols)
-    expect(w(lifecycleDeck({ ...facts, received: '5.0' }), 'changed').symbols).toContain('5.00→5.0')
+    const text = [
+      line({}),
+      line({ id: 'p', flags: { visibility: 'private', split: 'deck', labelled: true } }),
+      line({ id: 'h', flags: { visibility: 'public', split: 'holdout', labelled: true } }),
+      line({ id: 'm', gap: false }),
+    ].join('\n')
+    expect(toRows(text).map((r) => r.id)).toEqual(['x'])
   })
 
-  it('uses no token outside the facts', () => {
-    const tokens = [
-      ...facts.criteria.map((c) => c[0]), facts.reportSha, facts.testedSha, facts.baseSha, facts.expected, facts.received,
-    ]
-    const glyphs = new Set(['◆', '▲', '■', '◇', '◈', '★', '✚', '▼', '→'])
-    const specs = [
-      ...lifecycle.levels.flatMap((l) => l.sequence),
-      ...lifecycle.rules.flatMap((r) => steps.flatMap((step) => pool(lifecycle, r.id, step))),
-    ]
-    for (const s of specs)
-      for (const x of wave(lifecycle, s).symbols)
-        for (const part of x.split(/[ →]/)) {
-          const known = tokens.some((t) => t.startsWith(part)) || glyphs.has(part)
-          expect(known, x).toBe(true)
-        }
-  })
-
-  it('is deterministic', () => {
-    for (const rule of Object.keys(definitions)) {
-      const s = { rule, step: 4, seed: 7 }
-      expect(wave(lifecycle, s)).toEqual(wave(lifecycle, s))
+  it('draws every rock from a public run and shows its gap in the core', () => {
+    for (const r of rows) {
+      expect(r.run).toMatch(/^https:\/\/github\.com\/serio-ngo\/(lifecycle-sandbox|serio-focus)\/actions\/runs\/\d+$/)
+      expect(gapOf[r.rule]!(r.values)).toBe(r.gap)
+      expect(looksBroken[r.rule]!(cells(r))).toBe(r.gap)
     }
   })
 
-  it('every wave evidence resolves', () => {
-    const ids = new Set(lifecycle.evidence.map((e) => e.id))
-    const specs = [
-      ...lifecycle.levels.flatMap((l) => l.sequence),
-      ...lifecycle.rules.map((r) => ({ rule: r.id, step: 1, seed: 0 })),
-    ]
-    for (const s of specs) expect(ids.has(wave(lifecycle, s).evidence)).toBe(true)
-    expect(wave(lifecycle, { rule: 'odd', step: 1, seed: 0 }).evidence).toBe('checkout')
-    expect(wave(lifecycle, { rule: 'changed', step: 1, seed: 0 }).evidence).toBe('regression')
+  it('gives every scored wave one broken rock among distinct rocks, and research waves none', () => {
+    for (const s of specs) {
+      const w = wave(observations, s)
+      const picked = w.ids!.map((id) => rows.find((r) => r.id === id)!)
+      expect(w.symbols).toEqual(picked.map(clue))
+      expect(new Set(w.symbols).size).toBe(w.symbols.length)
+      expect(w.symbols.length).toBeGreaterThanOrEqual(4)
+      expect(w.symbols.length).toBeLessThanOrEqual(7)
+      if (s.rule === 'research') {
+        expect(w.answers).toEqual([])
+        expect(picked.every((r) => r.research)).toBe(true)
+      } else {
+        expect(w.answers).toHaveLength(1)
+        expect(w.answers).toEqual(picked.flatMap((r, i) => (r.gap ? [i] : [])))
+        expect(picked.every((r) => !r.research && r.rule === s.rule)).toBe(true)
+      }
+    }
   })
 
-  it('projects all lifecycle choices from their own operands and public records', () => {
-    const specs = [
-      ...lifecycle.levels.flatMap((l) => l.sequence),
-      ...lifecycle.rules.flatMap((r) => steps.flatMap((step) => pool(lifecycle, r.id, step))),
-    ]
-    for (const spec of specs) {
-      const w = wave(lifecycle, spec)
-      const records = choiceRecords(lifecycle, w)
-      expect(records.map((record) => record.clue)).toEqual(w.symbols)
-      expect(choiceRecords(lifecycle, { ...w, answers: [] })).toEqual(records)
-      expect(new Set(records.map(({ context }) => JSON.stringify(context))).size).toBe(records.length)
-      for (const { context, sources, stages } of records) {
-        expect(stages.some(({ url, steps }) => url === context?.url && steps.includes(context.quote))).toBe(true)
-        expect(sources.length).toBeGreaterThan(0)
-        expect(stages.map(({ run }) => run)).toEqual(stages.map(({ run }) => run).sort((a, b) => a - b))
-      }
+  it('has three levels of 20 scored waves and a research wave', () => {
+    expect(observations.levels).toHaveLength(3)
+    for (const l of observations.levels) {
+      expect(l.anchors).toHaveLength(20)
+      expect(l.sequence).toHaveLength(21)
+      expect(l.sequence.at(-1)!.rule).toBe('research')
     }
   })
 })
 
 describe('fixture deck', () => {
   it('runs to the end through replay', () => {
-    const level = fixture.levels[0]
-    expect(level.sequence).toHaveLength(5)
-    expect(fixture.rules.map((r) => r.id)).toEqual(['colour', 'count'])
-    const picks = level.sequence.map((s) => wave(fixture, s).answers[0])
-    const g = replay(fixture, 1, 'standard', picks)
+    const level = fixture.levels[0]!
+    const g = replay(fixture, 1, 'standard', level.sequence.map((s) => wave(fixture, s).answers[0]!))
     expect(score(g)).toBe(200)
-    expect(level.anchors).toEqual([1])
   })
 })

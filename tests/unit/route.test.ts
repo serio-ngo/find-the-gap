@@ -12,7 +12,7 @@ const fakeEnv = (over: Partial<GameEnv> = {}) => {
   const use = { step: 0, result: 0 }
   const results: unknown[][] = []
   const env: GameEnv = {
-    ASK_DB: {
+    DB: {
       prepare: (sql: string) => ({
         bind: (...v: unknown[]) => ({
           first: async () =>
@@ -26,8 +26,8 @@ const fakeEnv = (over: Partial<GameEnv> = {}) => {
         }),
       }),
     },
-    RL_GAME: { limit: async () => ({ success: true }) },
-    LIQUID_AI_KEY: 'k',
+    LIMIT: { limit: async () => ({ success: true }) },
+    KEY: 'k',
     ...over,
   }
   return { env, cache, results, use }
@@ -103,14 +103,14 @@ describe('route checks', () => {
   })
 
   it('429 when the rate limit fails', async () => {
-    const { env } = fakeEnv({ RL_GAME: { limit: async () => ({ success: false }) } })
+    const { env } = fakeEnv({ LIMIT: { limit: async () => ({ success: false }) } })
     expect((await send('/api/game/step', stepReq, env)).status).toBe(429)
   })
 })
 
 describe('step', () => {
   it('falls back without key', async () => {
-    const { env } = fakeEnv({ LIQUID_AI_KEY: undefined })
+    const { env } = fakeEnv({ KEY: undefined })
     expect(await (await send('/api/game/step', stepReq, env)).json()).toEqual({ fallback: true })
   })
 
@@ -143,7 +143,7 @@ describe('step', () => {
     const boom = async () => {
       throw new Error('d1')
     }
-    const { env } = fakeEnv({ ASK_DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom }) }) } })
+    const { env } = fakeEnv({ DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom }) }) } })
     const res = await send('/api/game/step', stepReq, env)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ fallback: true })
@@ -152,8 +152,8 @@ describe('step', () => {
   it.each([
     ['throws', { limit: async () => { throw new Error('rl') } }],
     ['is missing', undefined],
-  ])('falls back when the limiter %s', async (_, RL_GAME) => {
-    const { env } = fakeEnv({ RL_GAME: RL_GAME as any })
+  ])('falls back when the limiter %s', async (_, LIMIT) => {
+    const { env } = fakeEnv({ LIMIT: LIMIT as any })
     const res = await send('/api/game/step', stepReq, env)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ fallback: true })
@@ -178,15 +178,27 @@ describe('step', () => {
     expect(use.step).toBe(2)
   })
 
+  it('gives no AI pick when the two model passes disagree', async () => {
+    let n = 0
+    const answer = (choice: string) => ({ answers: {
+      ai: { choice, probabilities: { r0: 0.5, r1: 0.5, r2: 0, r3: 0, r4: 0 } },
+      if_hit: { choice: 'hit', probabilities: { hit: 0.8, miss: 0.2 } },
+      if_miss: { choice: 'miss', probabilities: { hit: 0.4, miss: 0.6 } },
+    } })
+    stubFetch(async () => new Response(JSON.stringify(answer(n++ ? 'r1' : 'r0'))))
+    const { env } = fakeEnv()
+    expect(await (await send('/api/game/step', stepReq, env)).json()).toMatchObject({ ai: null, hit: 0.8, miss: 0.4 })
+  })
+
   it('rounds floats, caches, and sends no client strings to Liquid', async () => {
     const { env, cache } = fakeEnv()
     const f = stubFetch()
     const first = await (await send('/api/game/step', stepReq, env)).json()
-    expect(first).toEqual({ ai: { pick: 1, p: 0.6 }, hit: 0.85, miss: 0.4, cached: false })
+    expect(first).toEqual({ ai: 1, hit: 0.85, miss: 0.4, cached: false })
     expect(cache.size).toBe(1)
     const second = await (await send('/api/game/step', stepReq, env)).json()
     expect(second).toEqual({ ...first, cached: true })
-    expect(f).toHaveBeenCalledTimes(1)
+    expect(f).toHaveBeenCalledTimes(2)
     expect(f.mock.calls[0][0]).toBe('https://api.liquid.ai/decisions/v1/systemone')
     expect(f.mock.calls[0][1].headers.authorization).toBe('Bearer k')
     const sent = JSON.parse(f.mock.calls[0][1].body)
@@ -196,14 +208,14 @@ describe('step', () => {
 })
 
 describe('result', () => {
-  const row = (hit: number) => [0, 1, 0, 0, hit, 1, 0, 12, 12, 0, 0]
+  const row = (hit: number) => [0, 1, 0, 0, hit, 1, 0, 12, 0, 0]
   const body = (waves: number[][]) => ({ v: FIXTURE, level: 1, mode: 0, waves })
 
   it('stores one row with the day only and rejects a lying hit', async () => {
     const { env, results } = fakeEnv()
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
-    const ok = await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 12, 0, 0]]), env)
+    const ok = await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)
     expect(ok.status).toBe(204)
     expect(results).toHaveLength(1)
     expect(results[0]).toHaveLength(5)
@@ -211,7 +223,7 @@ describe('result', () => {
     expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect([version, level, mode]).toEqual(['fixture', 1, 0])
     expect(JSON.parse(waves as string)).toHaveLength(1)
-    const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 12, 0, 0]]), env)
+    const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 0, 0]]), env)
     expect(lie.status).toBe(400)
     expect(results).toHaveLength(1)
   })
@@ -221,7 +233,7 @@ describe('result', () => {
     use.result = 5000
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
-    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 12, 0, 0]]), env)).status).toBe(204)
+    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)).status).toBe(204)
     expect(results).toHaveLength(0)
   })
 })

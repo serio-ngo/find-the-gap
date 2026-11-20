@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { askStep, sendResult } from '../../src/game/net.ts'
 
-const ok = { ai: { pick: 0, p: 0.8 }, hit: 0.6, miss: 0.4, cached: false }
+const ok = { ai: 0, hit: 0.6, miss: 0.4, cached: false }
 const reply = (b: unknown) => vi.fn(async () => new Response(JSON.stringify(b)))
 afterEach(() => vi.unstubAllGlobals())
 

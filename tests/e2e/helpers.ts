@@ -6,7 +6,7 @@ import { presentObjects } from '../../src/game/objects.ts'
 import { decks } from '../../src/game/levels/index.ts'
 
 export type Lang = 'pl' | 'en'
-export const deck = decks.lifecycle
+export const deck = decks.observations!
 export const run = JSON.parse(readFileSync('src/game/eval/ai-run.json', 'utf8')) as AiRun
 export const strings = JSON.parse(readFileSync('src/game/strings.json', 'utf8')) as {
   visible: Record<Lang, Record<string, string>>

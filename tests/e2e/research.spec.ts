@@ -69,12 +69,12 @@ for (const lang of ['pl', 'en'] as Lang[])
 test('adaptive mode uses /step answers when they arrive', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('ftg:study', '1'))
   const live = { hit: 0.9, miss: 0.1 }
-  const { results, steps } = await mock(page, (r) => r.fulfill({ json: { ai: { pick: 0, p: 0.5 }, ...live, cached: false } }))
+  const { results, steps } = await mock(page, (r) => r.fulfill({ json: { ai: 0, ...live, cached: false } }))
   await open(page, 'en', 1, '?mode=adaptive')
   await play(page, { mode: 'adaptive', live }) // play() fails if the page shows a wave the live answers would not produce
   await expect.poll(() => results.length).toBe(1)
   expect(steps.length).toBeGreaterThan(0)
-  expect(results[0].waves.some((w) => w[9] === 1)).toBe(true)
+  expect(results[0].waves.some((w) => w[8] === 1)).toBe(true)
 })
 
 for (const [name, answer] of [['hangs', () => new Promise(() => {})], ['answers fallback', (r: import('@playwright/test').Route) => r.fulfill({ json: { fallback: true } })]] as const)
@@ -85,5 +85,5 @@ for (const [name, answer] of [['hangs', () => new Promise(() => {})], ['answers 
     await play(page, { mode: 'adaptive' })
     await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
     await expect.poll(() => results.length).toBe(1)
-    expect(results[0].waves.every((w) => w[9] === 0)).toBe(true)
+    expect(results[0].waves.every((w) => w[8] === 0)).toBe(true)
   })

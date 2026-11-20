@@ -1,5 +1,4 @@
-import type { Deck } from '../engine.ts'
 import { fixture } from './fixture.ts'
-import { lifecycle } from './lifecycle.ts'
+import { observations } from './observations.ts'
 
-export const decks: Record<string, Deck> = { lifecycle, fixture }
+export const decks = { observations, fixture }

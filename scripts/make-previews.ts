@@ -5,7 +5,9 @@ import { rng, wave } from '../src/game/engine.ts'
 import { colors, paintObject } from '../src/game/gen.ts'
 import type { Part } from '../src/game/gen.ts'
 import { presentObjects } from '../src/game/objects.ts'
-import { lifecycle } from '../src/game/levels/lifecycle.ts'
+import { decks } from '../src/game/levels/index.ts'
+
+const deck = decks.observations!
 
 const W = 1200
 const H = 630
@@ -77,12 +79,12 @@ export function png(level: number): Buffer {
     }
   }
 
-  const spec = lifecycle.levels.find((l) => l.id === level)!.sequence[0]
-  const objects = presentObjects(lifecycle, wave(lifecycle, spec), `${lifecycle.id}:${level}:standard:0`)
+  const spec = deck.levels.find((l) => l.id === level)!.sequence[0]!
+  const objects = presentObjects(deck, wave(deck, spec), `${deck.id}:${level}:standard:0`)
   const radius = Math.min(130, W / (2.1 * objects.length))
   for (const [i, { shape }] of objects.entries()) {
     const x = W * (i + 0.5) / objects.length
-    paintObject(shape, (part) => raster(part, x * SS, H * SS / 2, radius * SS))
+    paintObject(shape, (part) => raster(part, x * SS, H * SS / 2, radius * SS), true)
   }
 
   const raw = Buffer.alloc((W * 3 + 1) * H)
@@ -103,5 +105,5 @@ export function png(level: number): Buffer {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  for (const { id } of lifecycle.levels) writeFileSync(new URL(`../src/game/levels/preview-${id}.png`, import.meta.url), png(id))
+  for (const { id } of deck.levels) writeFileSync(new URL(`../src/game/levels/preview-${id}.png`, import.meta.url), png(id))
 }

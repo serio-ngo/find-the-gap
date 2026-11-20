@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { replay } from '../../src/game/engine.ts'
+import { replay } from '../replay.ts'
 import type { Mode } from '../../src/game/engine.ts'
 import { deck, expectEnd, open, play } from './helpers.ts'
 
@@ -17,5 +17,5 @@ for (const mode of ['standard', 'adaptive'] as Mode[])
     const g = await play(page, { mode })
     const e = replay(deck, 1, mode, g.decisions.map((d) => d.pick))
     await expectEnd(page, e)
-    expect(urls.length).toBe(loaded)
+    expect(urls.slice(loaded).every((u) => new URL(u).pathname === '/api/game/step')).toBe(true)
   })
