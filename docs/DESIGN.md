@@ -57,7 +57,7 @@ Polish and English, at most 12 visible strings per language; icons carry the res
 ## Open
 
 - **Not measured:** 55 fps on a real mid-range phone; the first-contact trial with 12 new players ([targets](RESEARCH.md#evidence-still-owed)).
-- **Model input repeats a token** in the revision and output levels (for example `26dd775` on every rock but one). A unique input needs one new `npm run ai` with `LIQUID_AI_KEY`.
-- **Faint clue veins:** equal clue values share a vein pattern, so in level 1 the correct pair matches below conscious notice. Kept until decided otherwise.
+- **Model input repeats a token** in the revision and output levels (for example `26dd775` on every rock but one). A unique input needs one new `npm run ai` through the local audioblog Worker with the real d1.1 model; that Worker route does not exist yet.
+- **Faint clue veins:** equal clue values share a vein pattern, so in level 1 the correct pair matches below conscious notice. Needs a decision before the site launch.
 - **Decks are authored** in `src/game/levels/`; reading the archive's flagged observations is the next data step ([Data](DATA.md#from-lifecycle-evidence-to-a-level-version)).
 - **Dropped by decision:** lives, a field hint event, the picture guide and the duel line with ✓/✕ strips.

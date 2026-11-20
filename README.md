@@ -24,7 +24,7 @@ npx playwright test
 
 ## Offline AI run
 
-`npm run ai` needs `LIQUID_AI_KEY` and writes `src/game/eval/ai-run.json`.
+`npm run ai` writes `src/game/eval/ai-run.json` from the real d1.1 model through the local audioblog Worker (`wrangler dev`), which holds the key. This repository holds no model key. Today the script still calls Liquid directly with `LIQUID_AI_KEY`; moving it to the Worker is open.
 The build fails when that run is stale.
 
 ## Source check

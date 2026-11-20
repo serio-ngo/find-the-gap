@@ -54,7 +54,7 @@ The scan splits every rock into a cross-section and enlarges it by 35%; the rock
 
 **A wave offers at least 4 and at most 7 choices** (steps 1 to 5: 4, 5, 6, 6, 7). Four is the real report: four criteria, one shared test. Seven is the most rocks a phone field keeps readable. Each wave's choices draw distinct own step outputs, and every timeline has at least 50 outputs, so seven choices never need to repeat one.
 
-**No two choices in a wave are the same.** A unit test checks every fixed wave and every adaptive pool wave: the full records (clue, own step output, sources, stages) differ, and so do the closed rocks. In the revision and output levels the stored model input still repeats a token, for example `26dd775` on every rock but one. The rocks differ by their own step output. Making the model input itself unique needs a new d1.1 run (`npm run ai` with `LIQUID_AI_KEY`); without it the build rejects the level.
+**No two choices in a wave are the same.** A unit test checks every fixed wave and every adaptive pool wave: the full records (clue, own step output, sources, stages) differ, and so do the closed rocks. In the revision and output levels the stored model input still repeats a token, for example `26dd775` on every rock but one. The rocks differ by their own step output. Making the model input itself unique needs a new d1.1 run (`npm run ai` through the local audioblog Worker); without it the build rejects the level.
 
 **No choice shows whether it is right before the shot.** The answer key is not an input to the generator: the test swaps the answers and gets identical rocks. The readable clue appears only in the split core, and the outcome mark appears only after the shot.
 
