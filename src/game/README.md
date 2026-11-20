@@ -8,7 +8,10 @@ Self-contained: it imports nothing from outside this folder.
 2. Add the two pages, `find-the-gap/[level].astro` and `en/find-the-gap/[level].astro`.
 3. Provide the brand CSS variables: `--surface-page`, `--surface-card`, `--text-strong`, `--text-muted`, `--border-default`, `--font-ui`.
 
-### Host checklist (serio.org.pl, serio-ngo/audioblog#133)
+### Host checklist
+
+For serio.org.pl (serio-ngo/audioblog#133).
+
 
 - Copy the folder from a merged commit of this repository, not from a branch, and record that commit.
 - This repository builds and tests on Astro 7.4.13 and Node 22.23.4. A host on an older version (audioblog: Astro 7.3.2, Node 22.18) runs the game's tests on its own version first.
@@ -16,7 +19,7 @@ Self-contained: it imports nothing from outside this folder.
 - The host's product rules must allow this client JS on the two game pages and in an article block; record that exception first.
 - Reserve the `find-the-gap` slug in both languages so no article can take it.
 - Each level page sets `og:image` to `levels/preview-<level>.png`; copy those files with the folder.
-- Phase 2 adds `POST /api/game/step` and `POST /api/game/result` on the host Worker; the game still plays when they are absent.
+- Phase 2 adds the game routes on the host Worker ([Runtime](../../docs/RUNTIME.md#phase-2-the-site)); the game still plays when they are absent.
 
 ## Modules
 
