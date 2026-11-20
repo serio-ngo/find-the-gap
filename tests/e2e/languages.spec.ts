@@ -10,9 +10,7 @@ const visibleTexts = (page: Page) =>
       if (n.nodeType === 3) {
         const el = n.parentElement!
         const t = n.textContent!.trim()
-        const cell = el.closest('td')
-        const symbolCell = cell && ['3', '4'].includes(String(cell.cellIndex + 1))
-        if (t && !el.closest('.ftg-rocks, .ftg-sr, .ftg-net, details:not([open])') && !symbolCell && el.checkVisibility()) out.push(t)
+        if (t && !el.closest('.ftg-rocks, .ftg-sr') && el.checkVisibility()) out.push(t)
       }
       n.childNodes.forEach(walk)
     }
@@ -30,18 +28,25 @@ const names = async (page: Page) => {
   return out
 }
 
+const unnamed = (page: Page) =>
+  page.locator('.ftg').evaluate((root) => {
+    const letters = (s: string) => s.replace(/[^\p{L}\s]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase()
+    return [...root.querySelectorAll<HTMLElement>('button:not([data-rock]), a.ftg-next')]
+      .filter((e) => e.checkVisibility() && letters(e.textContent!))
+      .filter((e) => !letters(e.ariaLabel ?? e.textContent!).startsWith(letters(e.textContent!)))
+      .map((e) => e.textContent)
+  })
+
 for (const lang of ['pl', 'en'] as const)
   test(`every ${lang} button with visible text carries it in its accessible name`, async ({ page }) => {
     await open(page, lang)
-    await play(page, { lang })
-    const bad = await page.locator('.ftg').evaluate((root) => {
-      const letters = (s: string) => s.replace(/[^p{L}s]/gu, '').replace(/s+/g, ' ').trim().toLowerCase()
-      return [...root.querySelectorAll<HTMLElement>('button:not([data-rock]), a.ftg-next')]
-        .filter((e) => e.checkVisibility() && letters(e.textContent!))
-        .filter((e) => !letters(e.ariaLabel ?? e.textContent!).startsWith(letters(e.textContent!)))
-        .map((e) => e.textContent)
-    })
-    expect(bad).toEqual([])
+    expect(await unnamed(page)).toEqual([])
+    await playButton(page, lang).click()
+    await page.keyboard.press('p')
+    expect(await unnamed(page)).toEqual([])
+    await page.keyboard.press('p')
+    await play(page, { lang, begun: true })
+    expect(await unnamed(page)).toEqual([])
   })
 
 for (const [lang, url] of [['pl', '/find-the-gap/1/'], ['en', '/en/find-the-gap/1/']] as const)

@@ -1,53 +1,56 @@
 .ftg {
-  --bg: var(--surface-page, #f6f3ec);
-  --fg: var(--text-strong, #15171c);
-  --muted: var(--text-muted, #4a4f5a);
-  --line: var(--border-default, #8a8579);
-  --field: #121a33;
-  --field-fg: #f2f4f8;
-  --accent: #b8860b;
-  --accent-text: #7a5a06;
-  --ok: #1f8a5b;
-  --bad: #c0392b;
-  --focus: #2468e0;
+  --bg: var(--surface-page, #faf7f2);
+  --card: var(--surface-card, #fdfbf7);
+  --fg: var(--text-strong, #16130f);
+  --muted: var(--text-muted, #4a423a);
+  --line: var(--ink-3, #6b6258);
+  --font: var(--font-ui, "Libre Franklin", system-ui, sans-serif);
+  --mono: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
+  --display: var(--font-display, Newsreader, Georgia, serif);
+  --ftg-field: var(--ink-1, #16130f);
+  --ftg-paper: var(--paper-0, #fdfbf7);
+  --ftg-paper2: var(--paper-2, #f2ece3);
+  --ftg-paper3: var(--paper-3, #e8dfd2);
+  --ftg-ink2: var(--ink-2, #4a423a);
+  --ftg-ink3: var(--ink-3-on-dark, #8a7f72);
+  --ftg-brick: var(--brick, #a84b32);
   background: var(--bg);
   color: var(--fg);
-  font-family: var(--font-ui, system-ui, sans-serif);
+  font-family: var(--font);
   max-width: 960px;
   margin: 0 auto;
   padding: 0.5rem;
 }
-.ftg-field { position: relative; width: 100%; aspect-ratio: 16 / 10; background: var(--field); color: var(--field-fg); border-radius: 8px; overflow: hidden; }
+.ftg-field { position: relative; width: 100%; aspect-ratio: 16 / 10; background: var(--ftg-field); color: var(--ftg-paper); border-radius: 0; overflow: hidden; }
 .ftg-field canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
-.ftg-hud { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.25rem 0.5rem; font-size: 1.1rem; }
-.ftg button { font: inherit; color: var(--fg); background: var(--surface-card, #ffffff); border: 2px solid var(--line); border-radius: 6px; min-width: 44px; min-height: 44px; padding: 0.25rem 0.75rem; cursor: pointer; }
-.ftg button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.ftg-rocks { position: absolute; inset: 0; pointer-events: none; z-index: 1; display: flex; flex-wrap: wrap; align-content: flex-end; justify-content: center; gap: 0.5rem; padding: 1rem; }
-.ftg-rock { pointer-events: auto; background: var(--field); color: var(--field-fg); min-width: 56px; min-height: 56px; border-radius: 50%; border-style: dashed; transition: transform 0.2s ease; }
-.ftg-rock:hover { transform: scale(1.06); }
-.ftg-rock[data-state="hit"] { border: 4px solid var(--ok); }
-.ftg-rock[data-state="hit"]::after { content: "✓"; color: var(--ok); }
-.ftg-rock[data-state="miss"] { border: 4px double var(--bad); border-radius: 6px; }
-.ftg-rock[data-state="miss"]::after { content: "✕"; color: var(--bad); }
-.ftg-rock[data-state="right"] { border: 4px solid var(--accent); }
+.ftg-hud { display: flex; align-items: center; gap: 0.75rem; padding: 0.25rem 0.5rem; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+.ftg-hud > * { white-space: nowrap; }
+.ftg-stat { display: flex; align-items: baseline; gap: 0.75rem; }
+.ftg-hits { font-size: 1.75rem; font-weight: 700; }
+.ftg-btns { display: flex; gap: 8px; margin-left: auto; }
+.ftg-btns button { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; }
+.ftg button { font: inherit; color: var(--fg); background: transparent; border: 1.5px solid var(--line); border-radius: 0; min-width: 44px; min-height: 44px; padding: 0.25rem 0.75rem; cursor: pointer; }
+.ftg button[aria-pressed="true"] { background: var(--ftg-brick); color: var(--ftg-paper); border-color: var(--ftg-brick); }
+.ftg .ftg-play { background: var(--ftg-brick); color: var(--ftg-paper); border: 0; border-radius: 3px; box-shadow: 3px 3px 0 var(--fg); }
+.ftg .ftg-play:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--fg); }
+.ftg :focus-visible { outline: 2px solid var(--ftg-brick); outline-offset: 2px; }
+.ftg-rocks { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.ftg-rock { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 .ftg-end { display: grid; gap: 0.75rem; padding: 1rem; }
-.ftg-end table { width: 100%; border-collapse: collapse; }
-.ftg-end thead th { padding: 0; border: 0; }
-.ftg-end td, .ftg-end th { padding: 0.25rem 0.5rem; text-align: left; border-bottom: 1px solid var(--line); }
-.ftg-bar { display: inline-block; height: 0.75rem; background: var(--accent); border: 1px solid var(--fg); }
+.ftg-score { font-family: var(--display); font-size: clamp(48px, 9vw, 96px); font-weight: 600; line-height: 1; }
+.ftg-ind { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem 1rem; align-items: baseline; }
+.ftg-ind dt { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+.ftg-ind dd { margin: 0; font-family: var(--display); font-size: 40px; }
+.ftg-top { font-family: var(--mono); margin: 0; padding-left: 1.5rem; }
+.ftg-top li { padding-left: 0.5rem; }
+.ftg-top [aria-current], .ftg-top li[aria-current] { border-left: 3px solid var(--ftg-brick); font-weight: 700; }
 .ftg-share { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.ftg a { color: var(--accent-text); }
+.ftg a { color: var(--ftg-brick); }
 @media (prefers-reduced-motion: reduce) {
   .ftg *, .ftg *::before, .ftg *::after { animation: none !important; transition: none !important; }
 }
 [data-calm] *, [data-calm] *::before, [data-calm] *::after { animation: none !important; transition: none !important; }
-[data-calm] .ftg-rock:hover { transform: none; }
 .ftg [hidden] { display: none !important; }
-.ftg-start, .ftg-pause { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(18, 26, 51, 0.88); font-size: 1.5rem; }
+.ftg-start, .ftg-pause { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(22, 19, 15, 0.86); color: var(--ftg-paper); font-size: 1.5rem; }
+.ftg-start button:not(.ftg-play), .ftg-pause button:not(.ftg-play) { color: var(--ftg-paper); border-color: var(--ftg-paper); }
 .ftg-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.ftg-hud > * { white-space: nowrap; }
-.ftg dialog { color: var(--fg); background: var(--bg); border: 2px solid var(--line); border-radius: 8px; }
-.ftg-guide { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
-.ftg-guide figure { margin: 0; padding: 1rem; font-size: 2rem; border: 2px solid var(--line); border-radius: 8px; }
-.ftg-end td:has(.ftg-bar) { width: 25%; }
-.ftg-style { display: flex; gap: 1rem; font-size: 1.25rem; }

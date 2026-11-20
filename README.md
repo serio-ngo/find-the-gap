@@ -6,13 +6,13 @@ A pattern game built from real software delivery evidence.
 - Phase 2: site integration, tracked in serio-ngo/audioblog#133.
 - Design docs (private).
 
-## Status: failed, not for merge
+## Status: redesign
 
-Phase 1 runs offline and its checks pass, with the first review's findings fixed, but the owner rejected the design on 20 November 2026.
-Open before a new attempt (design: serio-ngo/ops#86):
-- Shootable objects (asteroids, alien ships or similar) from a deterministic algorithm that balances looks against how closely they map to the source data.
-- UI with almost no text.
-- Minimal end-screen stats, as in the vision.
+The owner rejected the first design on 20 November 2026. This build follows the redesign:
+- Targets come from a deterministic generator; the data shapes them only subtly, except in rare anchor waves, where the bad datum is plain.
+- Only anchor waves score. The end screen shows the score, agreement with the AI, atypicality and a local top 5.
+- No explanatory text; icons carry the UI.
+- The wave content is unchanged, so the committed AI run stays valid. A global leaderboard needs a backend (phase 2).
 
 ## Run
 

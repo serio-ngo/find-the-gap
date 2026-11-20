@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AiPick, AiRun, Deck, Spec } from '../../src/game/engine.ts'
+import { lifecycle } from '../../src/game/levels/lifecycle.ts'
 import { checkRun, hashContent, loadRun } from '../../src/game/eval/version.ts'
 import { spread, validate } from '../../src/game/eval/run-ai.ts'
 
@@ -23,7 +24,7 @@ const make = (sym = 'a', seed = 1, high = 0.8, question = 'q?'): Deck => {
     poolSize: 2,
     evidence: [],
     question,
-    levels: [{ id: 1, start: { rule: 'a', step: 1 }, sequence }],
+    levels: [{ id: 1, start: { rule: 'a', step: 1 }, anchors: [2, 7], sequence }],
   }
 }
 
@@ -49,6 +50,14 @@ describe('hashContent', () => {
     for (const d of [make('b'), make('a', 2), make('a', 1, 0.9), make('a', 1, 0.8, 'other?')]) {
       expect(hashContent(d)).not.toBe(base)
     }
+  })
+  it('ignores anchors', () => {
+    const d = make()
+    d.levels[0].anchors = [1]
+    expect(hashContent(d)).toBe(base)
+  })
+  it('keeps the committed run fresh for the lifecycle deck', () => {
+    expect(loadRun('src/game/eval/ai-run.json')?.hash).toBe(hashContent(lifecycle))
   })
 })
 

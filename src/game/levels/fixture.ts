@@ -21,6 +21,7 @@ export const fixture: Deck = {
     {
       id: 1,
       start: { rule: 'colour', step: 1 },
+      anchors: [1],
       sequence: [
         { rule: 'colour', step: 1, seed: 0 },
         { rule: 'colour', step: 2, seed: 1 },

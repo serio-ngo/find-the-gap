@@ -18,8 +18,19 @@ describe('stats', () => {
     expect(load('lifecycle', 1, s)).toBeNull()
     save('lifecycle', 1, 5, { mode: 'standard', picks: [1, 2] }, s)
     save('lifecycle', 1, 3, { mode: 'adaptive', picks: [0] }, s)
-    expect(JSON.parse(s.getItem('ftg:lifecycle:1')!)).toEqual({ plays: 2, best: 5, last: { mode: 'adaptive', picks: [0] } })
+    expect(JSON.parse(s.getItem('ftg:lifecycle:1')!)).toEqual({ plays: 2, best: 5, top: [5, 3], last: { mode: 'adaptive', picks: [0] } })
     expect(load('lifecycle', 1, s)?.best).toBe(5)
+  })
+  it('keeps the top 5 scores sorted descending', () => {
+    const s = fake()
+    for (const n of [2, 9, 4, 7, 1, 8, 6]) save('a', 1, n, { mode: 'standard', picks: [] }, s)
+    expect(load('a', 1, s)?.top).toEqual([9, 8, 7, 6, 4])
+  })
+  it('upgrades an old record without top', () => {
+    const s = fake({ 'ftg:a:1': '{"plays":1,"best":4,"last":{"mode":"standard","picks":[]}}' })
+    expect(load('a', 1, s)?.best).toBe(4)
+    save('a', 1, 6, { mode: 'standard', picks: [] }, s)
+    expect(load('a', 1, s)).toMatchObject({ plays: 2, best: 6, top: [6] })
   })
   it('exports and clears only ftg: keys', () => {
     const s = fake({ 'ftg:a:1': '{"plays":1}', other: 'x' })

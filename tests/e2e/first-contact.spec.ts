@@ -1,25 +1,24 @@
 import { expect, test, type Page } from '@playwright/test'
-import { score } from '../../src/game/engine.ts'
 import { open, play, playButton, strings } from './helpers.ts'
 
 const l = strings.labels.en
 
-test('a new player finishes the first wave by keyboard only', async ({ page }) => {
+test('a new player finishes the first wave by keyboard only (neutral wave text, no hit or miss)', async ({ page }) => {
   await open(page)
   const start = page.locator('.ftg-play')
   for (let i = 0; i < 12 && !(await start.evaluate((e) => e === document.activeElement)); i++) await page.keyboard.press('Tab')
   await expect(playButton(page)).toBeFocused()
   await page.keyboard.press('Enter')
-  const g = await play(page, { by: 'keys', limit: 1, begun: true })
-  await expect(page.locator('.ftg-hits')).toHaveText(String(score(g)))
-  await expect(page.getByRole('status').filter({ hasText: l.hit })).toHaveCount(1)
+  await play(page, { by: 'keys', limit: 1, begun: true })
+  await expect(page.locator('.ftg-hits')).toHaveText('0')
+  await expect(page.locator('.ftg-sr')).toHaveText(`${l.wave} 1`)
 })
 
 test('a new player finishes the first wave with the mouse on a rock', async ({ page }) => {
   await open(page)
-  const g = await play(page, { limit: 1 })
-  await expect(page.locator('.ftg-hits')).toHaveText(String(score(g)))
-  await expect(page.getByRole('status').filter({ hasText: l.hit })).toHaveCount(1)
+  await play(page, { limit: 1 })
+  await expect(page.locator('.ftg-hits')).toHaveText('0')
+  await expect(page.locator('.ftg-sr')).toHaveText(`${l.wave} 1`)
 })
 
 test('a mouse click on the canvas picks a rock', async ({ page }) => {
@@ -55,8 +54,8 @@ test('a mouse click on the canvas picks a rock', async ({ page }) => {
 test('a new player finishes the first wave by touch', async ({ page }, info) => {
   test.skip(info.project.name !== 'touch', 'tap needs the touch project')
   await open(page)
-  const g = await play(page, { by: 'tap', limit: 1 })
-  await expect(page.locator('.ftg-hits')).toHaveText(String(score(g)))
+  await play(page, { by: 'tap', limit: 1 })
+  await expect(page.locator('.ftg-hits')).toHaveText('0')
 })
 
 for (const [name, press] of [

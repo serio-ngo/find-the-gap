@@ -148,6 +148,11 @@ describe('fixture deck', () => {
     expect(fixture.rules.map((r) => r.id)).toEqual(['colour', 'count'])
     const picks = level.sequence.map((s) => wave(fixture, s).answers[0])
     const g = replay(fixture, 1, 'standard', picks)
-    expect(score(g)).toBe(5)
+    expect(score(g)).toBe(200)
+    expect(level.anchors).toEqual([1])
+  })
+
+  it('every lifecycle level scores waves 2 and 7', () => {
+    expect(lifecycle.levels.map((l) => l.anchors)).toEqual([[2, 7], [2, 7], [2, 7], [2, 7]])
   })
 })

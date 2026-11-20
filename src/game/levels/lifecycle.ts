@@ -131,6 +131,7 @@ export const lifecycleDeck = (f: Facts): Deck => {
     levels: rules.map((r, k) => ({
       id: k + 1,
       start: { rule: r.id, step: 1 },
+      anchors: [2, 7],
       sequence: [
         ...order.map((step, i) => ({ rule: r.id, step, seed: k * 11 + i })),
         { rule: 'research', step: 3, seed: k * 11 + 10 },

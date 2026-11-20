@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { aiPick, wave } from '../../src/game/engine.ts'
-import { deck, levelUrl, open, play, right, run, strings, wrong } from './helpers.ts'
+import { deviation } from '../../src/game/engine.ts'
+import { deck, expectEnd, levelUrl, open, play, right, run, strings, wrong } from './helpers.ts'
 import { resultText } from '../../src/game/share.ts'
 
 const l = strings.labels.en
@@ -12,20 +12,19 @@ test.beforeEach(async ({ page, context }) => {
 
 const finish = async (page: import('@playwright/test').Page) => {
   const g = await play(page, { pick: (s) => (s.decisions.length % 3 ? right(deck, s) : wrong(deck, s)) })
-  const played = g.decisions.filter((d) => d.hit !== null)
-  const text = resultText({
+  const dev = deviation(deck, run, g)!
+  return resultText({
     deck: strings.visible.en.title,
     level: 1,
-    mode: 'standard',
-    you: played.map((d) => d.hit as boolean),
-    ai: g.decisions.flatMap((d, i) => (d.hit === null ? [] : [wave(deck, d.spec).answers.includes(Number(aiPick(run, g, i)!.choice.slice(1)))])),
-    lang: 'en',
+    score: await expectEnd(page, g),
+    agree: dev.agree,
+    atypical: dev.atypical,
+    names: { score: strings.visible.en.score, agreement: strings.visible.en.agreement, atypical: strings.visible.en.atypical },
     url: levelUrl('en'),
   })
-  return text
 }
 
-test('X and Bluesky links carry the emoji result and the level URL', async ({ page }) => {
+test('X and Bluesky links carry the result text and the level URL', async ({ page }) => {
   const text = await finish(page)
   for (const [name, host] of [[l.x, 'x.com'], [l.bluesky, 'bsky.app']]) {
     const href = new URL((await page.getByRole('link', { name }).getAttribute('href'))!)

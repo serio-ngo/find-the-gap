@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { open, strings } from './helpers.ts'
 
-const calm = (page: import('@playwright/test').Page) => page.getByRole('button', { name: strings.visible.en.calm })
+const calm = (page: import('@playwright/test').Page) => page.getByRole('button', { name: strings.labels.en.calm })
 
 test('reduced motion makes the root calm and the toggle flips it', async ({ page }) => {
   await open(page)

@@ -1,4 +1,4 @@
-export type Save = { plays: number; best: number; last: { mode: string; picks: number[] } }
+export type Save = { plays: number; best: number; top: number[]; last: { mode: string; picks: number[] } }
 
 const P = 'ftg:'
 const ls = (): Storage | undefined => { try { return globalThis.localStorage } catch { return undefined } }
@@ -11,7 +11,7 @@ export const load = (deck: string, level: number, s = ls()): Save | null => {
 export const save = (deck: string, level: number, score: number, last: Save['last'], s = ls()) => {
   try {
     const old = load(deck, level, s)
-    s!.setItem(`${P}${deck}:${level}`, JSON.stringify({ plays: (old?.plays ?? 0) + 1, best: Math.max(old?.best ?? 0, score), last }))
+    s!.setItem(`${P}${deck}:${level}`, JSON.stringify({ plays: (old?.plays ?? 0) + 1, best: Math.max(old?.best ?? 0, score), top: [...(Array.isArray(old?.top) ? old.top : []), score].sort((a, b) => b - a).slice(0, 5), last }))
   } catch {}
 }
 
