@@ -1,16 +1,10 @@
 # Find the Gap
 
-A pattern game built from real software delivery evidence.
-
-- Phase 1: offline, standalone game (this repo).
-- Phase 2: site integration, tracked in serio-ngo/audioblog#133.
-- Docs: [Design](docs/DESIGN.md) · [Levels](docs/LEVELS.md) · [Runtime](docs/RUNTIME.md) · [Data and loops](docs/DATA.md) · [Research](docs/RESEARCH.md)
+A pattern game built from public software delivery evidence.
 
 ## Play
 
-Open `/find-the-gap/1` in Polish or `/en/find-the-gap/1` in English. Scan the field to split every rock and compare the cores, then select one by mouse, touch or keyboard. A shot records one choice and cracks that rock. Two waves per level award points; on the others the next wave flies in while the rock bursts. Adaptive mode shows a shuffle icon after a rule switch. The final research wave accepts any pick.
-
-The four levels draw from public workflow evidence. Every choice is an asteroid drawn from its own record: crystals for the step outputs of its job, craters and inner bands for the stages, and a core with the clue that the scan splits open. Replaying the same presentation recreates it. After the game, the decision history shows the selected evidence and the stored d1.1 comparison. [How a record becomes a level](docs/LEVELS.md)
+Open `/find-the-gap/1` (Polish) or `/en/find-the-gap/1` (English). Scan the rocks, compare their cores and pick one by mouse, touch or keyboard. Two waves per level score. Adaptive mode changes the rule as you play. The last wave of each level has no right answer.
 
 ## Run
 
@@ -21,15 +15,6 @@ npm test
 npm run build
 npx playwright test
 ```
-
-## Offline AI run
-
-`npm run ai` writes `src/game/eval/ai-run.json` from the real d1.1 model through the local audioblog Worker (`wrangler dev`), which holds the key. This repository holds no model key. Today the script still calls Liquid directly with `LIQUID_AI_KEY`; moving it to the Worker is open.
-The build fails when that run is stale.
-
-## Source check
-
-`GH_TOKEN=... npm run check-sources` verifies the evidence lines against GitHub.
 
 ## License
 

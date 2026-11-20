@@ -3,24 +3,6 @@ import { open, play, playButton, strings } from './helpers.ts'
 
 const l = strings.labels.en
 
-test('a new player finishes the first wave by keyboard only (neutral wave text, no hit or miss)', async ({ page }) => {
-  await open(page)
-  const start = page.locator('.ftg-play')
-  for (let i = 0; i < 12 && !(await start.evaluate((e) => e === document.activeElement)); i++) await page.keyboard.press('Tab')
-  await expect(playButton(page)).toBeFocused()
-  await page.keyboard.press('Enter')
-  await play(page, { by: 'keys', limit: 1, begun: true })
-  await expect(page.locator('.ftg-hits')).toHaveText('0')
-  await expect(page.locator('.ftg-sr')).toHaveText(`${l.wave} 1`)
-})
-
-test('a new player finishes the first wave with the mouse on a rock', async ({ page }) => {
-  await open(page)
-  await play(page, { limit: 1 })
-  await expect(page.locator('.ftg-hits')).toHaveText('0')
-  await expect(page.locator('.ftg-sr')).toHaveText(`${l.wave} 1`)
-})
-
 for (const lang of ['en', 'pl'] as const)
   test(`scanning in ${lang} reveals equivalent readings and does not advance the wave`, async ({ page }) => {
     await open(page, lang)

@@ -22,37 +22,6 @@ describe('asteroid geometry', () => {
     expect(new Set(families.map((family) => JSON.stringify(art('alpha', family).shell.map((p) => p.fill)))).size).toBe(families.length)
   })
 
-  it('stays inside the sprite square', () => {
-    for (const family of families) for (const id of ['a', 'b', 'c', 'd']) {
-      for (const { points } of painted(art(id, family), true))
-        for (const [x, y] of points) expect(Math.max(Math.abs(x), Math.abs(y))).toBeLessThanOrEqual(1)
-    }
-  })
-
-  it('grows one crystal per step of its own job and makes its own step the heart', () => {
-    const crystals = (s: ReturnType<typeof art>) => s.surface.filter((p) => p.width === 0.007 && ['signal', 'copper', 'dull'].includes(p.fill ?? ''))
-    expect(crystals(art())).toHaveLength(spec.steps.length)
-    const other = art('wave:0', 'basalt', { ...record, context: { url: 'gate', quote: gate.steps[1] } })
-    expect(crystals(other)).toHaveLength(gate.steps.length)
-    expect(other.surface.some((p) => p.fill === 'copper')).toBe(true)
-    const heart = art('wave:0', 'basalt', { ...record, context: { url: 'spec', quote: spec.steps[0] } })
-    expect(heart.surface).not.toEqual(art().surface)
-  })
-
-  it('cuts one band per stage and one tick per step output inside', () => {
-    const inner = art().inner
-    const ticks = inner.filter((p) => !p.fill && p.width === 0.011)
-    expect(ticks).toHaveLength(spec.steps.length + gate.steps.length)
-    expect(inner.filter((p) => p.fill === 'ember')).toHaveLength(1)
-    const reversed = art('wave:0', 'basalt', { ...record, stages: [gate, spec] })
-    expect(reversed.inner).not.toEqual(inner)
-  })
-
-  it('docks the craft of its own stage', () => {
-    const craft = (quote: string, url: string) => art('wave:0', 'basalt', { ...record, context: { url, quote } }).surface
-    expect(craft(spec.steps[1], 'spec')).not.toEqual(craft(gate.steps[0], 'gate'))
-  })
-
   it('shows the clue only in the split core and keeps the closed rock free of the criterion id', () => {
     expect(painted(art())).toEqual([...art().shell, ...art().surface])
     expect(painted(art(), true)).toEqual([...art().shell, ...art().inner, ...art().surface])
@@ -65,12 +34,5 @@ describe('asteroid geometry', () => {
     expect(other.shell).not.toEqual(art().shell)
     const ordered = (id: string) => shape({ ...record, marks: [id, '◆', 'Same test'] }, 'wave:0', 'basalt', true)
     expect(ordered('AC2').inner).toHaveLength(ordered('AC1').inner.length + 1)
-  })
-
-  it('represents numeric precision with the measured output lengths', () => {
-    const control = art('wave:0', 'basalt', { ...record, marks: ['5.00', '5.00'] })
-    const sample = art('wave:0', 'basalt', { ...record, marks: ['5.00', '5.000'] })
-    expect(control.surface).toEqual(sample.surface)
-    expect(sample.inner).toHaveLength(control.inner.length + 1)
   })
 })

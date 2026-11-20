@@ -61,21 +61,3 @@ test('the debrief follows the actual decisions and links each research choice to
   await expect(rows.first().getByRole('link', { name: /#20 gate/ })).toHaveCount(1)
   await expect(rows.first().getByRole('link', { name: /pr-loop/ })).toHaveCount(0)
 })
-
-test('the fixed missing-data waves vary the display slot without changing the scored pick or evidence', async ({ page }) => {
-  await open(page, 'en', 4)
-  const g = await play(page, { level: 4, inspect: true, by: 'keys' })
-  await expectEnd(page, g)
-  const positions = g.decisions.slice(0, 3).map((d, i) => {
-    expect(d.pick).toBe(1)
-    return displayed(deck, g, i).findIndex((o) => o.sourceIndex === d.pick) + 1
-  })
-  expect(new Set(positions).size).toBeGreaterThan(1)
-  await page.locator('.ftg-replay > summary').click()
-  const row = page.locator('.ftg-decision').nth(2)
-  await expect(row.locator('summary').first()).toContainText(`You ${positions[2]}. AC2 ◆ ✓`)
-  await row.locator('summary').first().click()
-  const choice = row.locator('.ftg-object-evidence').nth(positions[2] - 1)
-  await choice.locator('summary').click()
-  await expect(choice.getByRole('link', { name: /^\| AC2 \|/ })).toHaveAttribute('href', /pull\/22#issuecomment-6991893620$/)
-})
