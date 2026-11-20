@@ -10,7 +10,7 @@ import type { GameEnv } from '../../src/game/worker/route.ts'
 const ORIGIN = 'https://example.org'
 const env: GameEnv = {
   ASK_DB: {
-    prepare: () => ({ bind: () => ({ first: async () => null, run: async () => {} }) }),
+    prepare: (sql: string) => ({ bind: () => ({ first: async <T,>() => (sql.includes('game_use') ? { n: 1 } : null) as T | null, run: async () => {} }) }),
   },
   RL_GAME: { limit: async () => ({ success: true }) },
   LIQUID_AI_KEY: 'k',

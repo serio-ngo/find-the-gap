@@ -56,7 +56,7 @@ const used = (env: GameEnv, col: 'step' | 'result') =>
   env.ASK_DB.prepare(`INSERT INTO game_use (day, ${col}) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET ${col} = ${col} + 1 RETURNING ${col} AS n`)
     .bind(new Date().toISOString().slice(0, 10))
     .first<{ n: number }>()
-    .then((r) => r?.n ?? 0)
+    .then((r) => r?.n ?? Infinity)
 
 const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }) => {
   const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'wave', 'past']))
