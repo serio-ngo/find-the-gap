@@ -1,0 +1,277 @@
+---
+import './game.css'
+import strings from './strings.json'
+
+interface Props { level: number; lang: 'pl' | 'en' }
+const { level, lang } = Astro.props
+const v = strings.visible[lang]
+const l = strings.labels[lang]
+const path = `${lang === 'en' ? '/en' : ''}/find-the-gap`
+const frames = [['◆ ● ◆ ▲', l.frame1], ['◆ ◆ ✓ ▲', l.frame2], ['🧑 ✓ 🤖 ✕', l.frame3]]
+const networks = [['x', 'X'], ['bluesky', '🦋'], ['linkedin', 'in'], ['facebook', 'f']]
+---
+<section class="ftg" data-phase="start" data-level={level} data-lang={lang} data-url={new URL(`${path}/${level}`, Astro.site).href} data-next={`${path}/${level + 1}`} data-strings={JSON.stringify({ v, l })}>
+  <div class="ftg-hud">
+    <span role="group" aria-label={l.hits}>▲ <output class="ftg-hits">0</output></span>
+    <span class="ftg-step" role="img" aria-label={`${l.step} 1`}>◆◇◇◇◇</span>
+    <span class="ftg-wave" role="group" aria-label={l.wave}>1/10</span>
+    <span class="ftg-switch" role="status" aria-live="polite"></span>
+    <button class="ftg-pausebtn" aria-label={l.pause}>⏸</button>
+    <button class="ftg-info" aria-label={l.guide}>ⓘ</button>
+    <button class="ftg-mode" aria-pressed="false" aria-label={l.adaptive}>🛸</button>
+    <button class="ftg-calm" aria-pressed="false">{v.calm}</button>
+  </div>
+  <div class="ftg-field">
+    <canvas aria-hidden="true"></canvas>
+    <div class="ftg-rocks"></div>
+    <div class="ftg-start"><button class="ftg-play">▶ {v.play}</button></div>
+    <div class="ftg-pause" hidden><strong>{v.paused}</strong><button class="ftg-resume">{v.resume}</button></div>
+  </div>
+  <div class="ftg-sr" role="status" aria-live="polite"></div>
+  <dialog class="ftg-dialog" aria-label={l.guide}>
+    <div class="ftg-guide">
+      {frames.map(([glyphs, label]) => <figure role="img" aria-label={label}>{glyphs}</figure>)}
+    </div>
+    <form method="dialog"><button aria-label={l.close}>✕</button></form>
+  </dialog>
+  <section class="ftg-end" role="region" aria-label={`${v.title} ${v.level} ${level}`} hidden>
+    <h2 class="ftg-score"></h2>
+    <div class="ftg-rows"></div>
+    <div class="ftg-steps" role="img" hidden></div>
+    <table><tbody class="ftg-table"></tbody></table>
+    <div class="ftg-style">
+      <span class="ftg-tempo" role="img"></span>
+      <span class="ftg-flex" role="img"></span>
+      <span class="ftg-atypical" role="img" aria-label={`${l.styleAtypical}: —`}>🧭 —</span>
+      <details><summary aria-label={l.notDiagnosis}>ⓘ</summary>{l.notDiagnosis}</details>
+    </div>
+    <div class="ftg-share">
+      <button class="ftg-again" aria-label={l.replay}>↻ {v.again}</button>
+      <a class="ftg-next" href={`${path}/${level + 1}`} aria-label={l.next}>▶ {v.next}</a>
+      <button class="ftg-sheet" aria-label={l.shareSheet} hidden>{v.share}</button>
+      <button class="ftg-copy" aria-label={l.copy}>{v.copy}</button>
+      {networks.map(([id, icon]) => <a class="ftg-net" data-net={id} aria-label={l[id as keyof typeof l]} target="_blank" rel="noopener">{icon}</a>)}
+      <a class="ftg-download" download="find-the-gap.json" aria-label={l.download}>⬇</a>
+      <button class="ftg-delete" aria-label={l.delete}>🗑</button>
+    </div>
+  </section>
+</section>
+<script>
+  import { decks } from './levels/index.ts'
+  import { begin, upcoming, wave, shoot, score, aiPick, aiScore } from './engine.ts'
+  import type { AiRun, Game, Mode, Wave } from './engine.ts'
+  import { createField } from './render.ts'
+  import { bindInput } from './input.ts'
+  import { resultText, links, share, copy } from './share.ts'
+  import { save, exportSaves, clearSaves } from './stats.ts'
+
+  const root = document.querySelector<HTMLElement>('.ftg')!
+  const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!
+  const { v, l } = JSON.parse(root.dataset.strings!) as { v: Record<string, string>; l: Record<string, string> }
+  const query = new URLSearchParams(location.search)
+  const deck = decks[query.get('deck') === 'fixture' ? 'fixture' : 'lifecycle']
+  const level = deck.levels.find((x) => x.id === Number(root.dataset.level))?.id ?? 1
+  const total = deck.levels.find((x) => x.id === level)!.sequence.filter((s) => s.rule !== 'research').length
+  const run = Object.values(import.meta.glob<{ default: AiRun }>('./eval/ai-run.json', { eager: true }))[0]?.default
+  const ai = deck.question ? run : undefined
+  const icons: Record<string, string> = { pair: '👯', odd: '☝️', changed: '≠', missing: '🔗', research: '🔬', colour: '🎨', count: '#' }
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
+  const mark = (h: boolean | null) => (h === null ? '—' : h ? '✓' : '✕')
+
+  const fieldEl = $('.ftg-field')
+  const rocksEl = $('.ftg-rocks')
+  const endEl = $('.ftg-end')
+  const pauseEl = $('.ftg-pause')
+  const live = $('.ftg-sr')
+  const guide = $<HTMLDialogElement>('.ftg-dialog')
+  const modeBtn = $<HTMLButtonElement>('.ftg-mode')
+  const calmBtn = $('.ftg-calm')
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const field = createField($('canvas') as HTMLCanvasElement, { calm: reduce })
+
+  let mode: Mode = ai && query.get('mode') === 'adaptive' ? 'adaptive' : 'standard'
+  let g: Game
+  let busy = false
+  let t0 = 0
+  let pausedAt = 0
+  let times: number[] = []
+
+  const phase = (p: string) => {
+    root.dataset.phase = p
+    modeBtn.disabled = p === 'play' || p === 'paused'
+  }
+
+  const setCalm = (b: boolean) => {
+    calmBtn.setAttribute('aria-pressed', String(b))
+    if (b) root.dataset.calm = ''
+    else delete root.dataset.calm
+    field.setCalm(b)
+  }
+
+  const setMode = (m: Mode) => {
+    mode = m
+    modeBtn.setAttribute('aria-pressed', String(m === 'adaptive'))
+  }
+
+  const setPause = (p: boolean) => {
+    if (root.dataset.phase !== (p ? 'play' : 'paused')) return
+    if (p) pausedAt = performance.now()
+    else t0 += performance.now() - pausedAt
+    phase(p ? 'paused' : 'play')
+    pauseEl.hidden = !p
+    if (p) field.pause()
+    else field.resume()
+  }
+
+  const nextWave = () => {
+    const spec = upcoming(deck, g)
+    if (!spec) return end()
+    const w = wave(deck, spec)
+    const names = w.symbols.map((s, i) => l.rock.replace('{n}', String(i + 1)).replace('{s}', s))
+    rocksEl.replaceChildren(
+      ...w.symbols.map((s, i) => {
+        const b = document.createElement('button')
+        b.className = 'ftg-rock'
+        b.dataset.rock = String(i)
+        b.setAttribute('aria-label', names[i])
+        b.textContent = s
+        b.onclick = () => pick(i, w)
+        return b
+      }),
+    )
+    field.show(w, names)
+    const research = w.rule === 'research'
+    $('.ftg-hits').textContent = String(score(g))
+    $('.ftg-wave').textContent = research ? '🔬' : `${g.decisions.length + 1}/${total}`
+    $('.ftg-wave').setAttribute('aria-label', research ? l.research : l.wave)
+    $('.ftg-step').textContent = '◆'.repeat(w.step) + '◇'.repeat(deck.steps - w.step)
+    $('.ftg-step').setAttribute('aria-label', `${l.step} ${w.step}`)
+    t0 = performance.now()
+    busy = false
+    rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
+  }
+
+  const pick = async (i: number, w: Wave) => {
+    if (busy || root.dataset.phase !== 'play') return
+    busy = true
+    times.push(performance.now() - t0)
+    const before = g
+    g = shoot(deck, g, i)
+    const { hit } = g.decisions.at(-1)!
+    live.textContent = `${l.wave} ${g.decisions.length}: ${hit === null ? l.research : hit ? l.hit : l.miss}`
+    if (hit !== null) {
+      rocksEl.querySelectorAll<HTMLElement>('button').forEach((b, j) => {
+        if (j === i) b.dataset.state = hit ? 'hit' : 'miss'
+        else if (w.answers.includes(j)) b.dataset.state = 'right'
+      })
+      await field.shoot(i, hit, w.answers)
+    }
+    $('.ftg-switch').innerHTML = g.rule !== before.rule ? `<span aria-hidden="true">🔀</span><span class="ftg-sr">${l.rule}</span>` : ''
+    nextWave()
+  }
+
+  const start = () => {
+    g = begin(deck, level, mode)
+    times = []
+    endEl.hidden = true
+    fieldEl.hidden = false
+    $('.ftg-start').hidden = true
+    $('.ftg-switch').innerHTML = ''
+    phase('play')
+    field.resume()
+    nextWave()
+  }
+
+  const refreshDownload = () => {
+    $<HTMLAnchorElement>('.ftg-download').href = URL.createObjectURL(new Blob([exportSaves()], { type: 'application/json' }))
+  }
+
+  const end = () => {
+    phase('end')
+    field.pause()
+    fieldEl.hidden = true
+    endEl.hidden = false
+    save(deck.id, level, score(g), { mode: g.mode, picks: g.decisions.map((d) => d.pick) })
+    refreshDownload()
+    const rows = g.decisions.map((d, i) => {
+      const w = wave(deck, d.spec)
+      const a = ai && aiPick(ai, g, i)
+      const ap = a ? Number(a.choice.slice(1)) : -1
+      return { d, w, a, ap, ahit: a && d.hit !== null ? w.answers.includes(ap) : null }
+    })
+    const played = rows.filter((r) => r.d.hit !== null)
+    const you = played.map((r) => r.d.hit as boolean)
+    const bot = played.map((r) => !!r.ahit)
+    const line = (h: boolean[]) => h.map((x) => mark(x)).join(' ')
+    $('.ftg-score').textContent = ai ? `${v.you} ${score(g)} : ${aiScore(deck, ai, g)} 🤖` : `${v.you} ${score(g)}/${total}`
+    $('.ftg-rows').innerHTML = `<div>${v.you} ${line(you)}</div>${ai ? `<div>🤖 ${line(bot)}</div>` : ''}`
+    $('.ftg-table').innerHTML = rows
+      .map(({ d, w, a, ap, ahit }, i) => {
+        const pct = a ? Math.round(a.probabilities[a.choice] * 100) : 0
+        const src = deck.evidence.find((e) => e.id === w.evidence)?.url
+        return `<tr><td>${i + 1}</td><td>${icons[d.spec.rule] ?? ''}</td><td>${esc(w.symbols[d.pick])} ${mark(d.hit)}</td>${
+          ai ? `<td>${a ? `${esc(w.symbols[ap])} ${mark(ahit)}` : '—'}</td><td>${a ? `<span class="ftg-bar" role="img" style="width:${pct}%" aria-label="${pct}%"></span>` : ''}</td>` : ''
+        }<td>${src ? `<a href="${src}" target="_blank" rel="noopener">${v.source}</a>` : ''}</td></tr>`
+      })
+      .join('')
+    const rules = g.decisions.map((d) => d.spec.rule)
+    const switched = (i: number) => i > 0 && rules[i] !== 'research' && rules[i - 1] !== 'research' && rules[i] !== rules[i - 1]
+    const stepsEl = $('.ftg-steps')
+    stepsEl.hidden = g.mode !== 'adaptive'
+    if (!stepsEl.hidden) {
+      const steps = g.decisions.map((d) => d.spec.step)
+      stepsEl.dataset.steps = steps.join(',')
+      stepsEl.dataset.rules = rules.join(',')
+      stepsEl.setAttribute('aria-label', `${l.step}: ${steps.join(' ')}`)
+      stepsEl.textContent = steps.map((s, i) => (switched(i) ? '🔀' : '') + '▁▂▃▅▇'[s - 1]).join(' ')
+    }
+    const pct = Math.round((score(g) / total) * 100)
+    const secs = times.reduce((a, b) => a + b, 0) / times.length / 1000
+    $('.ftg-tempo').textContent = `${secs < 3 ? '🐇' : '🐢'} ${pct}%`
+    $('.ftg-tempo').setAttribute('aria-label', `${l.styleTempo}: ${secs.toFixed(1)} s, ${pct}%`)
+    const waits = g.decisions.flatMap((_, i) => {
+      const k = g.decisions.findIndex((d, j) => j >= i && d.hit)
+      return switched(i) && k >= 0 ? [k - i + 1] : []
+    })
+    const flex = waits.length ? String(Math.round(waits.reduce((a, b) => a + b, 0) / waits.length)) : '—'
+    $('.ftg-flex').textContent = `🔀 ${flex}`
+    $('.ftg-flex').setAttribute('aria-label', `${l.styleFlex}: ${flex}`)
+    root.querySelectorAll<HTMLElement>('.ftg-copy, .ftg-net').forEach((b) => (b.hidden = !ai))
+    const url = root.dataset.url!
+    const text = resultText({ deck: v.title, level, mode: g.mode, you, ai: bot, lang: root.dataset.lang as 'pl' | 'en', url })
+    const net = links(text, url)
+    root.querySelectorAll<HTMLAnchorElement>('.ftg-net').forEach((a) => (a.href = net[a.dataset.net as keyof typeof net]))
+    $('.ftg-copy').onclick = () => copy(text)
+    $('.ftg-sheet').onclick = () => share(text, url)
+    $('.ftg-sheet').hidden = !ai || !navigator.share
+    const nextEl = $<HTMLAnchorElement>('.ftg-next')
+    nextEl.hidden = !deck.levels.some((x) => x.id === level + 1)
+    nextEl.href = `${root.dataset.next}${location.search}`
+  }
+
+  setCalm(reduce)
+  setMode(mode)
+  modeBtn.hidden = !ai
+  phase('start')
+  bindInput(root, field, {
+    pick: (i) => rocksEl.querySelectorAll('button')[i]?.click(),
+    togglePause: () => {
+      if (!guide.open) setPause(root.dataset.phase === 'play')
+    },
+  })
+  $('.ftg-play').onclick = start
+  $('.ftg-again').onclick = start
+  $('.ftg-resume').onclick = () => setPause(false)
+  $('.ftg-pausebtn').onclick = () => setPause(root.dataset.phase === 'play')
+  $('.ftg-info').onclick = () => {
+    setPause(true)
+    guide.showModal()
+  }
+  modeBtn.onclick = () => setMode(mode === 'adaptive' ? 'standard' : 'adaptive')
+  calmBtn.onclick = () => setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')
+  $('.ftg-delete').onclick = () => {
+    clearSaves()
+    refreshDownload()
+  }
+  document.addEventListener('visibilitychange', () => document.hidden && setPause(true))
+</script>

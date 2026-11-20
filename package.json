@@ -1,0 +1,28 @@
+{
+  "name": "find-the-gap",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "node scripts/check-version.ts && astro build",
+    "preview": "astro preview",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "ai": "node src/game/eval/run-ai.ts",
+    "check-sources": "node scripts/check-sources.ts",
+    "size": "node scripts/check-size.ts",
+    "previews": "node scripts/make-previews.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^22.20.5",
+    "astro": "^7.4.13",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.1"
+  }
+}
