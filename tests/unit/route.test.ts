@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { wave } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { route } from '../../src/game/worker/route.ts'
+import { edition } from '../../scripts/results.ts'
 import type { GameEnv } from '../../src/game/worker/route.ts'
 
 const FIXTURE = 1
@@ -210,25 +211,26 @@ describe('step', () => {
 })
 
 describe('result', () => {
-  const row = (hit: number) => [0, 1, 0, 0, hit, 1, 0, 12, 0, 0]
+  const row = (pick: number, hit: number) => [0, 1, 0, pick, hit, 1, 0, 12, 0, 0, 1]
   const body = (waves: number[][]) => ({ v: FIXTURE, level: 1, mode: 0, waves })
 
-  it('stores one row with the day only, drops rows older than a year once a day and rejects a lying hit', async () => {
+  it('stores one row under the exact deck edition with the day only, drops rows older than a year once a day and rejects a lying hit', async () => {
     const { env, results, deleted } = fakeEnv()
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
-    const ok = await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)
+    const ok = await send('/api/game/result', body([row(pick, 1)]), env)
     expect(ok.status).toBe(204)
     expect(results).toHaveLength(1)
     expect(results[0]).toHaveLength(5)
     const [day, version, level, mode, waves] = results[0]
     expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    expect([version, level, mode]).toEqual(['fixture', 1, 0])
+    expect([version, level, mode]).toEqual([edition(d), 1, 0])
     expect(JSON.parse(waves as string)).toHaveLength(1)
     expect(deleted).toEqual([new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10)])
-    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)).status).toBe(204)
+    expect((await send('/api/game/result', body([row(pick, 1)]), env)).status).toBe(204)
     expect(deleted).toHaveLength(1)
-    const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 0, 0]]), env)
+    expect((await send('/api/game/result', body([row(pick, 1).slice(0, 10)]), env)).status).toBe(400)
+    const lie = await send('/api/game/result', body([row(pick, 0)]), env)
     expect(lie.status).toBe(400)
     expect(results).toHaveLength(2)
   })
@@ -238,20 +240,24 @@ describe('result', () => {
     use.result = 5000
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
-    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)).status).toBe(204)
+    expect((await send('/api/game/result', body([row(pick, 1)]), env)).status).toBe(204)
     expect(results).toHaveLength(0)
   })
 
-  it('rejects an invalid pick on the research wave', async () => {
+  it('scores the unseen last wave like any other and rejects an invalid pick on it', async () => {
     const { env } = fakeEnv()
     const d = decks.observations
-    const rows = (research: unknown) => d.levels[0]!.sequence.map((s) => {
-      const r = s.rule === 'research' ? d.rules.length : d.rules.findIndex((x) => x.id === s.rule)
-      return [r, s.step, s.seed, s.rule === 'research' ? research : wave(d, s).answers[0], s.rule === 'research' ? 2 : 1, 1, -1, 0, 0, 0]
+    const seq = d.levels[0]!.sequence
+    const rows = (last: unknown, hit: number) => seq.map((s, i) => {
+      const right = wave(d, s).answers[0]!
+      return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, i === seq.length - 1 ? last : right, i === seq.length - 1 ? hit : 1, 1, -1, 0, 0, 0, 1]
     })
-    const send0 = (research: unknown) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(research) }, env)
-    expect((await send0('x')).status).toBe(400)
-    expect((await send0(99)).status).toBe(400)
-    expect((await send0(0)).status).toBe(204)
+    const right = wave(d, seq.at(-1)!).answers[0]!
+    const send0 = (last: unknown, hit: number) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(last, hit) }, env)
+    expect((await send0('x', 0)).status).toBe(400)
+    expect((await send0(99, 0)).status).toBe(400)
+    expect((await send0(right, 0)).status).toBe(400)
+    expect((await send0(right, 1)).status).toBe(204)
+    expect((await send0((right + 1) % 4, 0)).status).toBe(204)
   })
 })

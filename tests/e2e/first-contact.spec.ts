@@ -1,31 +1,25 @@
 import { expect, test, type Page } from '@playwright/test'
-import { open, play, playButton, strings } from './helpers.ts'
+import { begin, shoot } from '../../src/game/engine.ts'
+import { deck, displayed, expectEnd, open, play, playButton, rockNames, strings } from './helpers.ts'
 
 const l = strings.labels.en
 
 for (const lang of ['en', 'pl'] as const)
-  test(`scanning in ${lang} reveals equivalent readings and does not advance the wave`, async ({ page }) => {
+  test(`in ${lang} every rock carries its evidence from the first frame, with nothing to reveal and one pick per wave`, async ({ page }) => {
     await open(page, lang)
     await playButton(page, lang).click()
-    const scan = page.getByRole('button', { name: strings.labels[lang].inspect })
+    const g = begin(deck, 1, 'standard')
     const twins = page.locator('[data-rock]')
-    const readout = page.locator('.ftg-readout')
-    const first = await twins.evaluateAll((buttons) => buttons.map((b) => b.ariaLabel!))
-    expect(new Set(first).size).toBe(4)
-    await expect(readout).toBeHidden()
-    await scan.focus()
-    await page.keyboard.press('Space')
-    await expect(scan).toBeFocused()
-    await expect(scan).toHaveAttribute('aria-pressed', 'true')
-    await expect(readout).toBeVisible()
-    await expect(page.locator('.ftg-wave')).toHaveText('1/20')
-    await expect(page.locator('.ftg-sr')).toBeEmpty()
-    const readings = await readout.locator('li').allTextContents()
-    for (const [i, reading] of readings.entries()) await expect(twins.nth(i)).toHaveAccessibleName(`${first[i]}. ${reading}`)
-    await page.keyboard.press('Space')
-    await expect(readout).toBeHidden()
-    for (const [i, name] of first.entries()) await expect(twins.nth(i)).toHaveAccessibleName(name)
-    await play(page, { lang, begun: true, limit: 1 })
+    await expect.poll(() => twins.evaluateAll((bs) => bs.map((b) => b.ariaLabel))).toEqual(rockNames(deck, g, lang))
+    await expect(page.locator('.ftg-hud button')).toHaveCount(3)
+    await expect(page.locator('.ftg-wave')).toHaveText('1/21')
+    await twins.nth(0).dispatchEvent('click')
+    await twins.nth(1).dispatchEvent('click')
+    await expect(page.locator('.ftg-wave')).toHaveText('2/21')
+    const after = await play(page, { lang, begun: true, start: shoot(deck, g, displayed(deck, g)[0]!.sourceIndex) })
+    expect(after.decisions).toHaveLength(21)
+    await expectEnd(page, after, lang)
+    await expect(page.locator('.ftg-duel strong').first()).toHaveText(`${after.decisions.filter((d) => d.hit).length}/21`)
   })
 
 test('pointer input on the canvas picks a rock', async ({ page }, info) => {

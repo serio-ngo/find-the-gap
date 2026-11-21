@@ -1,7 +1,7 @@
-export type Result = { deck: string; level: number; score: number; agree: number; names: { score: string; agreement: string }; url: string }
+export type Result = { deck: string; level: number; score: number; you: string; ai: string; names: { score: string; you: string; ai: string }; url: string }
 
 export const resultText = (r: Result): string =>
-  [`${r.deck} #${r.level}`, `${r.names.score} ${r.score}`, `${r.names.agreement} ${r.agree}%`, r.url].join('\n')
+  [`${r.deck} #${r.level}`, `${r.names.score} ${r.score}`, `${r.names.you} ${r.you} · ${r.names.ai} ${r.ai}`, r.url].join('\n')
 
 export const links = (text: string, url: string) => {
   const t = encodeURIComponent(text), u = encodeURIComponent(url)

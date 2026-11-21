@@ -81,10 +81,10 @@ export function png(level: number): Buffer {
 
   const spec = deck.levels.find((l) => l.id === level)!.sequence[0]!
   const objects = presentObjects(deck, wave(deck, spec), `${deck.id}:${level}:standard:0`)
-  const radius = Math.min(130, W / (2.1 * objects.length))
+  const radius = Math.min(170, W / (2 * objects.length))
   for (const [i, { shape }] of objects.entries()) {
     const x = W * (i + 0.5) / objects.length
-    paintObject(shape, (part) => raster(part, x * SS, H * SS / 2, radius * SS), true)
+    paintObject(shape, (part) => raster(part, x * SS, H * SS / 2, radius * SS))
   }
 
   const raw = Buffer.alloc((W * 3 + 1) * H)
