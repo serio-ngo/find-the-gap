@@ -19,7 +19,8 @@ const visibleTexts = (page: Page) =>
   })
 
 const names = async (page: Page) => {
-  const all = [...(await page.getByRole('button').all()), ...(await page.getByRole('link').all())]
+  const game = page.locator('.ftg')
+  const all = [...(await game.getByRole('button').all()), ...(await game.getByRole('link').all())]
   const out: string[] = []
   for (const e of all) {
     if ((await e.getAttribute('data-rock')) !== null) continue
