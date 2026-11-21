@@ -11,6 +11,7 @@ const fakeEnv = (over: Partial<GameEnv> = {}) => {
   const cache = new Map<string, { body: string; created: number }>()
   const use = { step: 0, result: 0 }
   const results: unknown[][] = []
+  const deleted: string[] = []
   const env: GameEnv = {
     DB: {
       prepare: (sql: string) => ({
@@ -21,6 +22,7 @@ const fakeEnv = (over: Partial<GameEnv> = {}) => {
               : cache.get(v[0] as string) ?? null) as any,
           run: async () => {
             if (sql.includes('game_cache')) cache.set(v[0] as string, { body: v[1] as string, created: v[2] as number })
+            else if (sql.startsWith('DELETE')) deleted.push(v[0] as string)
             else results.push(v)
           },
         }),
@@ -30,7 +32,7 @@ const fakeEnv = (over: Partial<GameEnv> = {}) => {
     KEY: 'k',
     ...over,
   }
-  return { env, cache, results, use }
+  return { env, cache, results, use, deleted }
 }
 
 const send = async (path: string, body: unknown, env: GameEnv, headers: Record<string, string> = {}) => {
@@ -211,8 +213,8 @@ describe('result', () => {
   const row = (hit: number) => [0, 1, 0, 0, hit, 1, 0, 12, 0, 0]
   const body = (waves: number[][]) => ({ v: FIXTURE, level: 1, mode: 0, waves })
 
-  it('stores one row with the day only and rejects a lying hit', async () => {
-    const { env, results } = fakeEnv()
+  it('stores one row with the day only, drops rows older than a year and rejects a lying hit', async () => {
+    const { env, results, deleted } = fakeEnv()
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
     const ok = await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)
@@ -223,6 +225,7 @@ describe('result', () => {
     expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect([version, level, mode]).toEqual(['fixture', 1, 0])
     expect(JSON.parse(waves as string)).toHaveLength(1)
+    expect(deleted).toEqual([new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10)])
     const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 0, 0]]), env)
     expect(lie.status).toBe(400)
     expect(results).toHaveLength(1)

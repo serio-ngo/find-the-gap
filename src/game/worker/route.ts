@@ -15,6 +15,7 @@ const MAX_BYTES = 2048
 const RESULT_CAP = 5000
 const POOL_FROM = 1000
 const TIMEOUT = 1500
+const KEEP_DAYS = 365
 
 class Bad extends Error {}
 const bad = (): never => {
@@ -113,6 +114,7 @@ const result = async (b: Record<string, unknown>, env: GameEnv) => {
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
     .bind(new Date().toISOString().slice(0, 10), d.id, b.level, standard ? 0 : 1, JSON.stringify(waves))
     .run()
+  await env.DB.prepare('DELETE FROM game_results WHERE day < ?').bind(new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString().slice(0, 10)).run()
   return new Response(null, { status: 204 })
 }
 
