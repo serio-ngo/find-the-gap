@@ -53,14 +53,6 @@ export const clue = (r: Row) => r.roles.map((role, i) => `${role} ${r.values[i]}
 // What the player sees, as a signature: equal or different commits, otherwise the values in role order.
 export const pattern = (r: Row) => (r.rule === 'odd_revision' ? (r.values[0] === r.values[1] ? 'same' : 'differ') : r.values.join(','))
 
-// Parameters a run gives from its own values: how many items, how many break the rule, and its pattern.
-export const params = (r: Row) => {
-  const breaks = r.rule === 'odd_revision' ? +(r.values[0] !== r.values[1])
-    : r.rule === 'missing_link' ? r.values.filter((v) => v === 'missing').length
-    : r.values.filter((v) => r.values.indexOf(v) !== r.values.lastIndexOf(v)).length
-  return { arity: r.values.length, breaks, pattern: pattern(r) }
-}
-
 const scored = rows.filter((r) => !r.research)
 
 // Share of the rule's scored runs with the same gap flag that show this pattern.

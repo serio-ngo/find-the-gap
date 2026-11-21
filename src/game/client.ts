@@ -6,6 +6,7 @@ import { askStep, resultRequest, resultRow, sendResult, stepRequest } from './ne
 import type { Step } from './net.ts'
 import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
+import { aimTracker } from './aim.ts'
 import { bindInput } from './input.ts'
 import { load, save, clearSaves } from './stats.ts'
 import { describe, refreshDownload, showReplay, showResult } from './debrief.ts'
@@ -33,22 +34,8 @@ const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
 // Aim behaviour for research: how long the lock rested on each rock this wave, and how often it moved to another rock.
-// A switch is a lock on a rock other than the last one locked, empty space between them included; paused time never counts.
-let dwell: number[] = []
-let aimed = -1
-let last = -1
-let aimedAt = 0
-let switches = 0
-const onAim = (i: number) => {
-  // while paused the clock stands still at the pause; resume shifts aimedAt past it
-  const now = root.dataset.phase === 'paused' ? pausedAt : performance.now()
-  if (aimed >= 0) dwell[aimed] = (dwell[aimed] ?? 0) + now - aimedAt
-  aimed = i
-  aimedAt = now
-  if (i < 0 || root.dataset.phase !== 'play') return
-  if (last >= 0 && i !== last) switches++
-  last = i
-}
+const aim = aimTracker()
+const onAim = (i: number) => aim.lock(i, root.dataset.phase === 'paused' ? pausedAt : performance.now(), root.dataset.phase === 'play')
 const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches, onAim })
 
 let mode: Mode = ai && query.get('mode') === 'adaptive' ? 'adaptive' : 'standard'
@@ -85,7 +72,7 @@ const setPause = (p: boolean) => {
   if (p) pausedAt = performance.now()
   else {
     t0 += performance.now() - pausedAt
-    aimedAt += performance.now() - pausedAt
+    aim.resume(performance.now() - pausedAt)
   }
   phase(p ? 'paused' : 'play')
   pauseEl.hidden = !p
@@ -111,10 +98,6 @@ const nextWave = () => {
   field.show(objects, names)
   $('.ftg-hits').textContent = String(score(g))
   $('.ftg-wave').textContent = `${i + 1}/${total}`
-  dwell = []
-  aimed = -1
-  last = -1
-  switches = 0
   answer = null
   if (api && !fixed(deck, g, i)) {
     askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects && g.decisions.length === i) answer = a })
@@ -123,9 +106,8 @@ const nextWave = () => {
   rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
   // the automatic first focus is not the player's aim
   field.lock(-1)
-  dwell = []
-  last = -1
   t0 = performance.now()
+  aim.reset(t0)
 }
 
 const pick = async (i: number, w: Wave) => {
@@ -135,12 +117,12 @@ const pick = async (i: number, w: Wave) => {
   const rule = g.rule
   const got = answer
   onAim(i)
-  const aim = { ms: performance.now() - t0, dwell: dwell[i] ?? 0, switches }
+  const aimed = { ms: performance.now() - t0, ...aim.read(i) }
   g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
   const d = g.decisions.at(-1)!
   d.ai = got ? got.ai : ai && aiPick(ai, deck, g, g.decisions.length - 1)
   const p = g.mode === 'adaptive' ? (got ? got[d.hit ? 'hit' : 'miss'] : estimate(deck, { ...g, rule })) : 0
-  waves.push(resultRow(deck, d, p, got, first, aim))
+  waves.push(resultRow(deck, d, p, got, first, aimed))
   const switched = g.mode === 'adaptive' && g.rule !== rule
   $('.ftg-switch').hidden = !switched
   live.textContent = [d.anchor ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
