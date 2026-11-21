@@ -1,15 +1,19 @@
 import { rng } from './engine.ts'
-import type { Deck, Wave } from './engine.ts'
+import type { ChoiceRecord, Deck, Wave } from './engine.ts'
 import { families, hash, shape } from './gen.ts'
-import { choiceRecords } from './levels/records.ts'
+
+const hues = ['signal', 'copper', 'violet', 'rose', 'lime']
+
+export const records = (d: Deck, w: Wave): ChoiceRecord[] =>
+  d.choiceRecords?.(w) ?? w.symbols.map((clue) => ({ clue, cells: [hues[w.symbols.indexOf(clue)]!] }))
 
 export function objectsFor(d: Deck, w: Wave, occurrence = '') {
   const key = JSON.stringify([d.id, w.rule, w.step, w.seed, occurrence])
   const r = rng(hash(key))
   const order = families.map((family) => ({ family, rank: r() })).sort((a, b) => a.rank - b.rank)
-  return choiceRecords(d, w).map((record, i) => {
+  return records(d, w).map((record, i) => {
     const id = JSON.stringify([key, record.clue, i])
-    return { ...record, id, shape: shape(record, id, order[i % order.length]!.family, w.rule === 'missing') }
+    return { ...record, id, shape: shape(record.cells, id, order[i % order.length]!.family) }
   })
 }
 

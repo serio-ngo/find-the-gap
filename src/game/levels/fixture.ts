@@ -6,7 +6,7 @@ const rule = (id: string, symbol: (i: number, k: number) => string): Rule => ({
   make: (step, seed) => {
     const n = step + 3
     const k = Math.floor(rng(seed)() * n)
-    return { symbols: Array.from({ length: n }, (_, i) => symbol(i, k)), answers: [k], evidence: '' }
+    return { symbols: Array.from({ length: n }, (_, i) => symbol(i, k)), answers: [k] }
   },
 })
 
@@ -16,7 +16,6 @@ export const fixture: Deck = {
   policy: { high: 0.8, low: 0.55, window: 4, confirm: 2 },
   rules: [rule('colour', (i, k) => (i === k ? 'blue' : 'red')), rule('count', (i, k) => (i === k ? '••' : '•'))],
   poolSize: 2,
-  evidence: [],
   levels: [
     {
       id: 1,

@@ -1,26 +1,19 @@
-import type { ChoiceRecord } from './levels/records.ts'
-
 export type Mode = 'standard' | 'adaptive'
 export type Spec = { rule: string; step: number; seed: number }
-export type Wave = Spec & { symbols: string[]; answers: number[]; evidence: string }
+export type Wave = Spec & { symbols: string[]; answers: number[]; ids?: string[] }
 export type Policy = { high: number; low: number; window: number; confirm: number }
-export type Evidence = { id: string; kind: 'comment' | 'job' | 'run'; api: string; url: string; quote: string[] }
-export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'evidence'> }
+export type ChoiceRecord = { id?: string; clue: string; cells: string[]; url?: string }
+export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'ids'> }
 export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[] }
 export type Deck = {
   id: string; steps: number; policy: Policy; rules: Rule[]; research?: Rule['make']
-  poolSize: number; evidence: Evidence[]; question?: string; levels: Level[]
+  poolSize: number; question?: string; levels: Level[]
   choiceRecords?: (wave: Wave) => ChoiceRecord[]
 }
-export type Decision = { spec: Spec; pick: number; hit: boolean | null; anchor: boolean; secs: number }
+export type Decision = { spec: Spec; pick: number; hit: boolean | null; anchor: boolean; secs: number; ai?: number | null }
 export type Game = { mode: Mode; level: number; rule: string; step: number; streak: number; decisions: Decision[] }
 export type AiPick = { choice: string; probabilities: Record<string, number> }
-export type AiRun = {
-  hash: string; model: string; date: string
-  standard: Record<string, AiPick[]>
-  pool: Record<string, (AiPick & { seed: number })[]>
-  spread: { choiceDiffs: number; maxProbDiff: number }
-}
+export type AiRun = { hash: string; model: string; date: string; standard: Record<string, (number | null)[]> }
 
 export const rng = (seed: number) => () => {
   seed = (seed + 0x6d2b79f5) | 0
@@ -90,32 +83,15 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   return { ...next, rule, step, streak }
 }
 
-export const replay = (d: Deck, level: number, mode: Mode, picks: number[]): Game =>
-  picks.reduce((g, p) => shoot(d, g, p), begin(d, level, mode))
-
 export const score = (g: Game) =>
   g.decisions.reduce((t, x) => (x.anchor && x.hit ? t + 100 + Math.max(0, Math.round(100 - 10 * x.secs)) : t), 0)
 
-export const aiPick = (run: AiRun, g: Game, i: number): AiPick | undefined => {
-  const { spec } = g.decisions[i]!
-  if (g.mode === 'standard' || spec.rule === 'research') return run.standard[g.level]?.[i]
-  return run.pool[`${spec.rule}:${spec.step}`]?.find((e) => e.seed === spec.seed)
-}
+export const aiPick = (run: AiRun, g: Game, i: number): number | null | undefined =>
+  g.mode === 'standard' || g.decisions[i]!.spec.rule === 'research' ? run.standard[g.level]?.[i] : undefined
 
-// atypical: 0 = AI-like, 50 = as surprising as a uniform random pick, 100 = very atypical
-export const deviation = (d: Deck, run: AiRun, g: Game): { agree: number; atypical: number } | null => {
-  const rows = g.decisions.flatMap((x, i) => {
-    const ai = aiPick(run, g, i)
-    if (!ai) return []
-    const p = ai.probabilities['r' + x.pick] ?? 0
-    const surprise = Math.min(2, Math.max(0, -Math.log(Math.max(p, 0.001)) / Math.log(Math.max(2, wave(d, x.spec).symbols.length))))
-    return [{ same: x.pick === Number(ai.choice.slice(1)), surprise: 50 * surprise }]
-  })
-  if (!rows.length) return null
-  return {
-    agree: Math.round((100 * rows.filter((r) => r.same).length) / rows.length),
-    atypical: Math.round(rows.reduce((t, r) => t + r.surprise, 0) / rows.length),
-  }
+export const agreement = (g: Game): { agree: number; n: number } | null => {
+  const rows = g.decisions.filter((x) => typeof x.ai === 'number')
+  return rows.length ? { agree: Math.round((100 * rows.filter((x) => x.ai === x.pick).length) / rows.length), n: rows.length } : null
 }
 
 export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
@@ -153,9 +129,9 @@ export const stepBody = (d: Deck, w: Wave, past: Past[]): object => {
   }
 }
 
-export const validate = (ks: string[], answer: AiPick): AiPick => {
+export const validate = (ks: string[], answer: AiPick | undefined): AiPick => {
   const p = answer?.probabilities
-  if (!ks.includes(answer?.choice)) throw new Error(`bad choice: ${String(answer?.choice)}`)
+  if (!answer || !ks.includes(answer.choice)) throw new Error(`bad choice: ${String(answer?.choice)}`)
   if (!p || typeof p !== 'object') throw new Error('missing probabilities')
   const got = Object.keys(p)
   if (got.length !== ks.length || !ks.every((k) => got.includes(k))) throw new Error('probability keys differ from criteria')
@@ -170,7 +146,6 @@ export const content = (d: Deck): unknown => ({
   steps: d.steps,
   poolSize: d.poolSize,
   policy: d.policy,
-  evidence: d.evidence,
   question: d.question,
   levels: d.levels.map((l) => ({ id: l.id, start: l.start, waves: l.sequence.map((s) => wave(d, s)) })),
   pool: d.rules.flatMap((r) =>

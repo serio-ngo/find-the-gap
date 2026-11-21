@@ -1,0 +1,28 @@
+import { readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { gapOf } from '../src/game/levels/observations.ts'
+import type { Row } from '../src/game/levels/observations.ts'
+
+type Observation = {
+  id: string; relation: string; items: { role: string; value: unknown }[]; gap: boolean
+  links: { run: string }; flags: { visibility: string; split: string; labelled: boolean }
+}
+
+const value = (v: unknown) => String(v).replace(/^AC\d+(-AC\d+)?:\s*/, '')
+const label = (rule: string, v: string[]) => (rule === 'pair' ? v.map((x) => `t${v.indexOf(x) + 1}`) : v)
+
+export const toRows = (text: string): Row[] =>
+  text.trim().split('\n').map((line) => JSON.parse(line) as Observation)
+    .filter((o) => o.flags.visibility === 'public' && o.flags.split === 'deck' && o.relation in gapOf)
+    .map((o) => ({
+      id: o.id, rule: o.relation, roles: o.items.map((i) => i.role), values: label(o.relation, o.items.map((i) => value(i.value))),
+      gap: o.gap, research: !o.flags.labelled, run: o.links.run,
+    }))
+    .filter((r) => gapOf[r.rule]!(r.values) === r.gap)
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const rows = toRows(readFileSync(process.argv[2]!, 'utf8'))
+  const out = fileURLToPath(new URL('../src/game/levels/rows.ts', import.meta.url))
+  writeFileSync(out, `import type { Row } from './observations.ts'\n\nexport const rows: Row[] = [\n${rows.map((r) => `  ${JSON.stringify(r)},`).join('\n')}\n]\n`)
+  console.log(`${rows.length} rows`)
+}

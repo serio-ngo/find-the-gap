@@ -4,33 +4,35 @@ import { decks } from '../../src/game/levels/index.ts'
 import { route } from '../../src/game/worker/route.ts'
 import type { GameEnv } from '../../src/game/worker/route.ts'
 
-const FIXTURE = 1 // index in decks: lifecycle 0, fixture 1
+const FIXTURE = 1
 const ORIGIN = 'https://example.org'
 
 const fakeEnv = (over: Partial<GameEnv> = {}) => {
   const cache = new Map<string, { body: string; created: number }>()
   const use = { step: 0, result: 0 }
   const results: unknown[][] = []
+  const deleted: string[] = []
   const env: GameEnv = {
-    ASK_DB: {
+    DB: {
       prepare: (sql: string) => ({
         bind: (...v: unknown[]) => ({
           first: async () =>
             (sql.includes('game_use')
-              ? { n: ++use[sql.includes('(day, step)') ? 'step' : 'result'] }
+              ? { n: (use[sql.includes('(day, step)') ? 'step' : 'result'] += v[1] as number) }
               : cache.get(v[0] as string) ?? null) as any,
           run: async () => {
             if (sql.includes('game_cache')) cache.set(v[0] as string, { body: v[1] as string, created: v[2] as number })
+            else if (sql.startsWith('DELETE')) deleted.push(v[0] as string)
             else results.push(v)
           },
         }),
       }),
     },
-    RL_GAME: { limit: async () => ({ success: true }) },
-    LIQUID_AI_KEY: 'k',
+    LIMIT: { limit: async () => ({ success: true }) },
+    KEY: 'k',
     ...over,
   }
-  return { env, cache, results, use }
+  return { env, cache, results, use, deleted }
 }
 
 const send = async (path: string, body: unknown, env: GameEnv, headers: Record<string, string> = {}) => {
@@ -103,14 +105,14 @@ describe('route checks', () => {
   })
 
   it('429 when the rate limit fails', async () => {
-    const { env } = fakeEnv({ RL_GAME: { limit: async () => ({ success: false }) } })
+    const { env } = fakeEnv({ LIMIT: { limit: async () => ({ success: false }) } })
     expect((await send('/api/game/step', stepReq, env)).status).toBe(429)
   })
 })
 
 describe('step', () => {
   it('falls back without key', async () => {
-    const { env } = fakeEnv({ LIQUID_AI_KEY: undefined })
+    const { env } = fakeEnv({ KEY: undefined })
     expect(await (await send('/api/game/step', stepReq, env)).json()).toEqual({ fallback: true })
   })
 
@@ -143,7 +145,7 @@ describe('step', () => {
     const boom = async () => {
       throw new Error('d1')
     }
-    const { env } = fakeEnv({ ASK_DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom }) }) } })
+    const { env } = fakeEnv({ DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom }) }) } })
     const res = await send('/api/game/step', stepReq, env)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ fallback: true })
@@ -152,8 +154,8 @@ describe('step', () => {
   it.each([
     ['throws', { limit: async () => { throw new Error('rl') } }],
     ['is missing', undefined],
-  ])('falls back when the limiter %s', async (_, RL_GAME) => {
-    const { env } = fakeEnv({ RL_GAME: RL_GAME as any })
+  ])('falls back when the limiter %s', async (_, LIMIT) => {
+    const { env } = fakeEnv({ LIMIT: LIMIT as any })
     const res = await send('/api/game/step', stepReq, env)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ fallback: true })
@@ -170,23 +172,35 @@ describe('step', () => {
     const { env, use } = fakeEnv()
     stubFetch(async () => new Response('no', { status: 500 }))
     await send('/api/game/step', stepReq, env)
-    expect(use.step).toBe(1)
+    expect(use.step).toBe(2)
     stubFetch()
     await send('/api/game/step', stepReq, env)
-    expect(use.step).toBe(2)
+    expect(use.step).toBe(4)
     await send('/api/game/step', stepReq, env)
-    expect(use.step).toBe(2)
+    expect(use.step).toBe(4)
+  })
+
+  it('gives no AI pick when the two model passes disagree', async () => {
+    let n = 0
+    const answer = (choice: string) => ({ answers: {
+      ai: { choice, probabilities: { r0: 0.5, r1: 0.5, r2: 0, r3: 0, r4: 0 } },
+      if_hit: { choice: 'hit', probabilities: { hit: 0.8, miss: 0.2 } },
+      if_miss: { choice: 'miss', probabilities: { hit: 0.4, miss: 0.6 } },
+    } })
+    stubFetch(async () => new Response(JSON.stringify(answer(n++ ? 'r1' : 'r0'))))
+    const { env } = fakeEnv()
+    expect(await (await send('/api/game/step', stepReq, env)).json()).toMatchObject({ ai: null, hit: 0.8, miss: 0.4 })
   })
 
   it('rounds floats, caches, and sends no client strings to Liquid', async () => {
     const { env, cache } = fakeEnv()
     const f = stubFetch()
     const first = await (await send('/api/game/step', stepReq, env)).json()
-    expect(first).toEqual({ ai: { pick: 1, p: 0.6 }, hit: 0.85, miss: 0.4, cached: false })
+    expect(first).toEqual({ ai: 1, hit: 0.85, miss: 0.4, cached: false })
     expect(cache.size).toBe(1)
     const second = await (await send('/api/game/step', stepReq, env)).json()
     expect(second).toEqual({ ...first, cached: true })
-    expect(f).toHaveBeenCalledTimes(1)
+    expect(f).toHaveBeenCalledTimes(2)
     expect(f.mock.calls[0][0]).toBe('https://api.liquid.ai/decisions/v1/systemone')
     expect(f.mock.calls[0][1].headers.authorization).toBe('Bearer k')
     const sent = JSON.parse(f.mock.calls[0][1].body)
@@ -196,14 +210,14 @@ describe('step', () => {
 })
 
 describe('result', () => {
-  const row = (hit: number) => [0, 1, 0, 0, hit, 1, 0, 12, 12, 0, 0]
+  const row = (hit: number) => [0, 1, 0, 0, hit, 1, 0, 12, 0, 0]
   const body = (waves: number[][]) => ({ v: FIXTURE, level: 1, mode: 0, waves })
 
-  it('stores one row with the day only and rejects a lying hit', async () => {
-    const { env, results } = fakeEnv()
+  it('stores one row with the day only, drops rows older than a year once a day and rejects a lying hit', async () => {
+    const { env, results, deleted } = fakeEnv()
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
-    const ok = await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 12, 0, 0]]), env)
+    const ok = await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)
     expect(ok.status).toBe(204)
     expect(results).toHaveLength(1)
     expect(results[0]).toHaveLength(5)
@@ -211,9 +225,12 @@ describe('result', () => {
     expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect([version, level, mode]).toEqual(['fixture', 1, 0])
     expect(JSON.parse(waves as string)).toHaveLength(1)
-    const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 12, 0, 0]]), env)
+    expect(deleted).toEqual([new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10)])
+    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)).status).toBe(204)
+    expect(deleted).toHaveLength(1)
+    const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 0, 0]]), env)
     expect(lie.status).toBe(400)
-    expect(results).toHaveLength(1)
+    expect(results).toHaveLength(2)
   })
 
   it('204 without inserting past the daily result cap', async () => {
@@ -221,7 +238,20 @@ describe('result', () => {
     use.result = 5000
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
-    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 12, 0, 0]]), env)).status).toBe(204)
+    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)).status).toBe(204)
     expect(results).toHaveLength(0)
+  })
+
+  it('rejects an invalid pick on the research wave', async () => {
+    const { env } = fakeEnv()
+    const d = decks.observations
+    const rows = (research: unknown) => d.levels[0]!.sequence.map((s) => {
+      const r = s.rule === 'research' ? d.rules.length : d.rules.findIndex((x) => x.id === s.rule)
+      return [r, s.step, s.seed, s.rule === 'research' ? research : wave(d, s).answers[0], s.rule === 'research' ? 2 : 1, 1, -1, 0, 0, 0]
+    })
+    const send0 = (research: unknown) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(research) }, env)
+    expect((await send0('x')).status).toBe(400)
+    expect((await send0(99)).status).toBe(400)
+    expect((await send0(0)).status).toBe(204)
   })
 })

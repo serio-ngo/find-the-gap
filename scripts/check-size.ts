@@ -30,7 +30,7 @@ const pages = (dir: string): string[] =>
     e.isDirectory() ? pages(join(dir, e.name)) : e.name === 'index.html' ? [join(dir, e.name)] : [])
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const dist = 'dist'
+  const dist = process.argv[2] ?? 'dist'
   const found = existsSync(dist) ? pages(dist) : []
   if (!found.length) {
     console.error('no pages found in dist')

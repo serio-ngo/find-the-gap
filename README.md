@@ -1,35 +1,27 @@
 # Find the Gap
 
-A pattern game built from real software delivery evidence.
-
-- Phase 1: offline, standalone game (this repo).
-- Phase 2: site integration, tracked in serio-ngo/audioblog#133.
-- Docs: [Design](docs/DESIGN.md) · [Levels](docs/LEVELS.md) · [Runtime](docs/RUNTIME.md) · [Data and loops](docs/DATA.md) · [Research](docs/RESEARCH.md)
+A pattern game built from public software delivery evidence. Every rock is one public gate run; one rock per wave breaks its rule.
 
 ## Play
 
-Open `/find-the-gap/1` in Polish or `/en/find-the-gap/1` in English. Scan the field to split every rock and compare the cores, then select one by mouse, touch or keyboard. A shot records one choice and cracks that rock. Two waves per level award points; on the others the next wave flies in while the rock bursts. Adaptive mode shows a shuffle icon after a rule switch. The final research wave accepts any pick.
-
-The four levels draw from public workflow evidence. Every choice is an asteroid drawn from its own record: crystals for the step outputs of its job, craters and inner bands for the stages, and a core with the clue that the scan splits open. Replaying the same presentation recreates it. After the game, the decision history shows the selected evidence and the stored d1.1 comparison. [How a record becomes a level](docs/LEVELS.md)
+Three levels of 20 scored waves: odd revision, missing link, pair. Scan the rocks, compare their cores, pick the broken one by mouse, touch or keyboard. Adaptive mode asks the AI live and changes the rule as you play. The last wave of each level has no right answer.
 
 ## Run
 
+The game is a module in `src/game/`; the host site serves its pages and Worker route.
+
 ```
 npm ci
-npm run dev
 npm test
-npm run build
-npx playwright test
+npm run typecheck
 ```
 
-## Offline AI run
+With the host running locally (`npm run dev` there, port 4321):
 
-`npm run ai` writes `src/game/eval/ai-run.json` from the real d1.1 model through the local audioblog Worker (`wrangler dev`), which holds the key. This repository holds no model key. Today the script still calls Liquid directly with `LIQUID_AI_KEY`; moving it to the Worker is open.
-The build fails when that run is stale.
-
-## Source check
-
-`GH_TOKEN=... npm run check-sources` verifies the evidence lines against GitHub.
+```
+npm run e2e
+npm run ai
+```
 
 ## License
 

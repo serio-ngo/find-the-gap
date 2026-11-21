@@ -7,22 +7,18 @@
     "node": ">=22.22.0"
   },
   "scripts": {
-    "dev": "astro dev",
-    "build": "node scripts/check-version.ts && astro build",
-    "preview": "astro preview",
     "test": "vitest run",
     "e2e": "playwright test",
-    "ai": "node src/game/eval/run-ai.ts",
+    "ai": "node scripts/ai.ts",
     "check-sources": "node scripts/check-sources.ts",
     "size": "node scripts/check-size.ts",
     "previews": "node scripts/make-previews.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.game.json",
+    "deck": "node scripts/make-deck.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
     "@types/node": "^22.20.5",
-    "astro": "^7.4.1",
-    "rolldown": "^1.3.3",
     "typescript": "^6.0.3",
     "vitest": "^5.1.1"
   }
