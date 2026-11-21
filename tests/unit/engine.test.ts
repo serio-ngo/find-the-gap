@@ -88,7 +88,7 @@ describe('engine', () => {
       expect([up.step, down.step]).toEqual([3, 1])
       expect(split.step).toBe(split.decisions[3]!.hit ? 3 : 1)
       const next = { ...g, decisions: split.decisions }
-      expect(shoot(deck, g, pick).step).toBe(advance(deck, g, estimate(deck, next)).step)
+      expect(shoot(deck, g, pick).step).toBe(advance(deck, g, estimate(deck, { ...next, decisions: next.decisions.filter((x) => x.anchor) })).step)
     }
   })
 

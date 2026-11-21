@@ -88,7 +88,8 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
   // adaptive play moves its parameters only after a certain wave, so a research wave's truth never shows in the next wave
   if (g.mode === 'standard' || !anchor) return next
-  const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, next))
+  // shortcut: the live AI forecast still sees research picks, as a fuzzy aggregate; filter its history if that proves readable
+  const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, { ...next, decisions: next.decisions.filter((x) => x.anchor) }))
   return { ...next, rule, step, streak }
 }
 

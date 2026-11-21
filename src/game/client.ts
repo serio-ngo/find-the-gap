@@ -40,13 +40,14 @@ let last = -1
 let aimedAt = 0
 let switches = 0
 const onAim = (i: number) => {
-  const now = performance.now()
+  // while paused the clock stands still at the pause; resume shifts aimedAt past it
+  const now = root.dataset.phase === 'paused' ? pausedAt : performance.now()
   if (aimed >= 0) dwell[aimed] = (dwell[aimed] ?? 0) + now - aimedAt
-  aimed = root.dataset.phase === 'play' ? i : -1
+  aimed = i
   aimedAt = now
-  if (aimed < 0) return
-  if (last >= 0 && aimed !== last) switches++
-  last = aimed
+  if (i < 0 || root.dataset.phase !== 'play') return
+  if (last >= 0 && i !== last) switches++
+  last = i
 }
 const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches, onAim })
 
