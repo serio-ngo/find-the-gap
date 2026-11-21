@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { MODEL, canonical, content, wave } from '../src/game/engine.ts'
+import { MODEL, band, canonical, content, stepBody, wave } from '../src/game/engine.ts'
 import type { AiRun, Deck, Decision } from '../src/game/engine.ts'
 import { digest } from '../src/game/eval/version.ts'
 import { decks } from '../src/game/levels/index.ts'
@@ -8,7 +8,9 @@ import { stepRequest } from '../src/game/net.ts'
 
 export const RUN = fileURLToPath(new URL('../src/game/eval/ai-run.json', import.meta.url))
 
-export const hashContent = (d: Deck): string => digest(canonical(content(d)))
+export const hashContent = (d: Deck): string =>
+  digest(canonical([content(d), jobsFor(d).map(({ level, index, past }) => stepBody(d, wave(d, d.levels.find((l) => l.id === level)!.sequence[index]!),
+    past.filter((x) => x.hit !== null).map((x) => ({ w: wave(d, x.spec), hit: x.hit, tempo: band(x.secs) }))))]))
 
 export type Job = { level: number; index: number; past: Decision[] }
 

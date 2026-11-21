@@ -108,7 +108,7 @@ const nextWave = () => {
   t0 = performance.now()
   answer = null
   if (api && g.mode === 'adaptive' && !research) {
-    askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects) answer = a })
+    askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects && g.decisions.length === i) answer = a })
   }
   busy = false
   rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })

@@ -9,12 +9,13 @@ type Observation = {
 }
 
 const value = (v: unknown) => String(v).replace(/^AC\d+(-AC\d+)?:\s*/, '')
+const label = (rule: string, v: string[]) => (rule === 'pair' ? v.map((x) => `t${v.indexOf(x) + 1}`) : v)
 
 export const toRows = (text: string): Row[] =>
   text.trim().split('\n').map((line) => JSON.parse(line) as Observation)
     .filter((o) => o.flags.visibility === 'public' && o.flags.split === 'deck' && o.relation in gapOf)
     .map((o) => ({
-      id: o.id, rule: o.relation, roles: o.items.map((i) => i.role), values: o.items.map((i) => value(i.value)),
+      id: o.id, rule: o.relation, roles: o.items.map((i) => i.role), values: label(o.relation, o.items.map((i) => value(i.value))),
       gap: o.gap, research: !o.flags.labelled, run: o.links.run,
     }))
     .filter((r) => gapOf[r.rule]!(r.values) === r.gap)

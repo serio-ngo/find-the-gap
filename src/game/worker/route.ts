@@ -4,7 +4,7 @@ import { decks } from '../levels/index.ts'
 
 export type GameEnv = {
   DB: {
-    prepare(sql: string): { bind(...v: unknown[]): { first<T = any>(): Promise<T | null>; run(): Promise<unknown> } }
+    prepare(sql: string): { bind(...v: unknown[]): { first<T = unknown>(): Promise<T | null>; run(): Promise<unknown> } }
   }
   LIMIT: { limit(o: { key: string }): Promise<{ success: boolean }> }
   KEY?: string
