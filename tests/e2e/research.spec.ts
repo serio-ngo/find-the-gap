@@ -87,3 +87,42 @@ for (const [name, answer] of [['hangs', () => new Promise(() => {})], ['answers 
     await expect.poll(() => results.length).toBe(1)
     expect(results[0].waves.every((w) => w[8] === 0)).toBe(true)
   })
+
+test('aim data: moving between rocks is one switch, and paused time counts neither in dwell nor in reaction time', async ({ page }, info) => {
+  test.skip(info.project.name === 'touch', 'hover needs a mouse')
+  await page.addInitScript(() => localStorage.setItem('ftg:study', '1'))
+  const { results } = await mock(page)
+  await open(page)
+  await page.locator('.ftg-play').click()
+  const box = (await page.locator('canvas').boundingBox())!
+  const n = await page.locator('[data-rock]').count()
+  // the game's grid: the column count with the largest cells
+  const h = box.height - 64 - 8
+  const cell = (c: number) => Math.min(box.width / c, h / Math.ceil(n / c))
+  const cols = Array.from({ length: n }, (_, i) => i + 1).reduce((b, c) => (cell(c) > cell(b) ? c : b))
+  const rows = Math.ceil(n / cols)
+  const centre = (k: number) => {
+    const row = Math.floor(k / cols)
+    const len = Math.min(cols, n - row * cols)
+    return [box.x + (((k % cols) + 0.5) / len) * box.width, box.y + 8 + ((row + 0.5) / rows) * h] as const
+  }
+  await page.mouse.move(...centre(0), { steps: 5 })
+  await page.mouse.move(...centre(1), { steps: 10 })
+  await page.keyboard.press('p')
+  await page.waitForTimeout(1500)
+  await page.getByRole('button', { name: strings.visible.en.resume }).click()
+  await page.mouse.move(...centre(1))
+  await page.mouse.down()
+  await page.mouse.up()
+  await expect(page.locator('.ftg-wave')).toHaveText('2/21')
+  for (let i = 2; i <= 21; i++) {
+    await expect(page.locator('.ftg-wave')).toHaveText(`${i}/21`)
+    await page.locator('[data-rock="0"]').dispatchEvent('click')
+  }
+  await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
+  await expect.poll(() => results.length).toBe(1)
+  const [ms, dwell, switches] = results[0]!.waves[0]!.slice(11)
+  expect(switches).toBe(1)
+  expect(dwell).toBeLessThanOrEqual(ms!)
+  expect(ms).toBeLessThan(1500)
+})

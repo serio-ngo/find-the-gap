@@ -86,7 +86,8 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   const hit = wave(d, spec).answers.includes(pick)
   const anchor = d.levels.find((l) => l.id === g.level)!.anchors.includes(g.decisions.length)
   const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
-  if (g.mode === 'standard') return next
+  // adaptive play moves its parameters only after a certain wave, so a research wave's truth never shows in the next wave
+  if (g.mode === 'standard' || !anchor) return next
   const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, next))
   return { ...next, rule, step, streak }
 }

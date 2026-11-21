@@ -31,7 +31,7 @@ export const colors: Record<string, string> = {
 
 // Unit space: 1 is half of the rock's cell. The rock reaches about 0.68, its crystals about 0.95.
 // under: the halo behind the rock; over: craters and the alien on it; marks: the evidence; facts: what is drawn, for accessible names.
-export type Facts = { crystals: number; sockets: number; symmetric: boolean; segments: number; lit: number; craters: number; eyes: number }
+export type Facts = { crystals: number; sockets: number; symmetric: boolean; segments: number; lit: number; craters: number; eyes: number; bright: boolean }
 export type Shape = { family: Family; outline: Pt[]; under: Part[]; body: Part[]; over: Part[]; marks: Part[]; facts: Facts }
 
 export const hash = (s: string) => {
@@ -299,6 +299,7 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, f
     lit: sg?.share ?? 0,
     craters: sg?.impacts ?? 0,
     eyes: sg ? 1 + sg.agent : 0,
+    bright: sg?.job === 2,
   }
   return { family, outline, under, body, over, marks, facts }
 }

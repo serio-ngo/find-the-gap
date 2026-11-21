@@ -30,11 +30,13 @@ export const bindInput = (
   }
   let pressed = -1
   const onDown = (e: PointerEvent) => {
+    if (e.button !== 0) return
     const [x, y] = at(e)
     handlers.aim(x, y)
     pressed = field.rockAt(x, y)
   }
   const onUp = (e: PointerEvent) => {
+    if (e.button !== 0) return
     const [x, y] = at(e)
     const i = field.rockAt(x, y)
     if (i >= 0 && i === pressed) twins()[i]?.click()

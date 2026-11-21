@@ -114,8 +114,8 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean; on
       if (!s.shot) lock(i)
     },
     focus(i: number) {
+      if (!s.shot && (i >= 0 || s.focused === s.aim)) lock(i)
       s.focused = i
-      if (i >= 0 && !s.shot) lock(i)
     },
     shoot(index: number, outcome: boolean | null, answerIndices: readonly number[] = []) {
       finish(s)

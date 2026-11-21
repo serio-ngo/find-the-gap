@@ -22,7 +22,7 @@ export const describe = (f: Facts, l: Record<string, string | undefined>) => {
   const n = (key: string, v: number) => l[key]!.replace('{n}', String(v))
   return [
     n('crystals', f.crystals), n('sockets', f.sockets), f.symmetric ? l.symmetric : l.lopsided,
-    ...(f.segments ? [n('halo', f.segments).replace('{q}', String(f.lit)), n('craters', f.craters), n('alien', f.eyes)] : []),
+    ...(f.segments ? [n('halo', f.segments).replace('{q}', String(f.lit)), n('craters', f.craters), n('alien', f.eyes), f.bright ? l.bright! : l.dim!] : []),
   ].join(', ')
 }
 

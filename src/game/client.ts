@@ -33,16 +33,20 @@ const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
 // Aim behaviour for research: how long the lock rested on each rock this wave, and how often it moved to another rock.
+// A switch is a lock on a rock other than the last one locked, empty space between them included; paused time never counts.
 let dwell: number[] = []
 let aimed = -1
+let last = -1
 let aimedAt = 0
 let switches = 0
 const onAim = (i: number) => {
   const now = performance.now()
   if (aimed >= 0) dwell[aimed] = (dwell[aimed] ?? 0) + now - aimedAt
-  if (i >= 0 && aimed >= 0 && i !== aimed) switches++
-  aimed = i
+  aimed = root.dataset.phase === 'play' ? i : -1
   aimedAt = now
+  if (aimed < 0) return
+  if (last >= 0 && aimed !== last) switches++
+  last = aimed
 }
 const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches, onAim })
 
@@ -78,7 +82,10 @@ const setMode = (m: Mode) => {
 const setPause = (p: boolean) => {
   if (root.dataset.phase !== (p ? 'play' : 'paused')) return
   if (p) pausedAt = performance.now()
-  else t0 += performance.now() - pausedAt
+  else {
+    t0 += performance.now() - pausedAt
+    aimedAt += performance.now() - pausedAt
+  }
   phase(p ? 'paused' : 'play')
   pauseEl.hidden = !p
   if (p) field.pause()
@@ -103,9 +110,9 @@ const nextWave = () => {
   field.show(objects, names)
   $('.ftg-hits').textContent = String(score(g))
   $('.ftg-wave').textContent = `${i + 1}/${total}`
-  t0 = performance.now()
   dwell = []
   aimed = -1
+  last = -1
   switches = 0
   answer = null
   if (api && !fixed(deck, g, i)) {
@@ -113,6 +120,11 @@ const nextWave = () => {
   }
   busy = false
   rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
+  // the automatic first focus is not the player's aim
+  field.lock(-1)
+  dwell = []
+  last = -1
+  t0 = performance.now()
 }
 
 const pick = async (i: number, w: Wave) => {
@@ -166,7 +178,8 @@ const end = () => {
   rocksEl.replaceChildren()
   $('.ftg-hits').textContent = String(score(g))
   $('.ftg-end').hidden = false
-  save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions })
+  // the saved history keeps a research wave's truth out, like the screen does
+  save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions.map(({ hit, ...d }) => (d.anchor ? { ...d, hit } : d)) })
   refreshDownload(root)
   showResult(root, deck, g, edition, text)
   showReplay(root, deck, g, rounds, text)

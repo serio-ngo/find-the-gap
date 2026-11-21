@@ -79,7 +79,9 @@
       "halo": "aureola: segmenty {n}, świeci {q} z 4",
       "craters": "kratery: {n}",
       "alien": "kosmita, oczy: {n}",
-      "certain": "Fala pewna"
+      "certain": "Fala pewna",
+      "bright": "kosmita jasny",
+      "dim": "kosmita przygaszony"
     },
     "en": {
       "pause": "Pause",
@@ -130,7 +132,9 @@
       "halo": "halo segments: {n}, lit {q} of 4",
       "craters": "craters: {n}",
       "alien": "alien eyes: {n}",
-      "certain": "Certain wave"
+      "certain": "Certain wave",
+      "bright": "alien bright",
+      "dim": "alien dim"
     }
   }
 }
