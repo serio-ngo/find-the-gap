@@ -213,7 +213,7 @@ describe('result', () => {
   const row = (hit: number) => [0, 1, 0, 0, hit, 1, 0, 12, 0, 0]
   const body = (waves: number[][]) => ({ v: FIXTURE, level: 1, mode: 0, waves })
 
-  it('stores one row with the day only, drops rows older than a year and rejects a lying hit', async () => {
+  it('stores one row with the day only, drops rows older than a year once a day and rejects a lying hit', async () => {
     const { env, results, deleted } = fakeEnv()
     const d = decks.fixture
     const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
@@ -226,9 +226,11 @@ describe('result', () => {
     expect([version, level, mode]).toEqual(['fixture', 1, 0])
     expect(JSON.parse(waves as string)).toHaveLength(1)
     expect(deleted).toEqual([new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10)])
+    expect((await send('/api/game/result', body([[0, 1, 0, pick, 1, 1, 0, 12, 0, 0]]), env)).status).toBe(204)
+    expect(deleted).toHaveLength(1)
     const lie = await send('/api/game/result', body([[0, 1, 0, pick, 0, 1, 0, 12, 0, 0]]), env)
     expect(lie.status).toBe(400)
-    expect(results).toHaveLength(1)
+    expect(results).toHaveLength(2)
   })
 
   it('204 without inserting past the daily result cap', async () => {
