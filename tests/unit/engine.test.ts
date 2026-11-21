@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  advance, agreement, aiBody, band, begin, canonical, estimate, pool, rng, score, shoot, stepBody, upcoming, wave,
+  advance, aiBody, aiPick, band, begin, canonical, estimate, pool, report, rng, score, shoot, stepBody, upcoming, wave,
 } from '../../src/game/engine.ts'
-import type { Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
+import type { AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
 import { replay } from '../replay.ts'
 
 const policy = { high: 0.8, low: 0.55, window: 4, confirm: 2 }
@@ -17,7 +17,7 @@ const rule = (id: string) => ({
 
 const sequence: Spec[] = [
   ...Array.from({ length: 10 }, (_, i) => ({ rule: 'a', step: 1, seed: i + 1 })),
-  { rule: 'research', step: 1, seed: 99 },
+  { rule: 'b', step: 1, seed: 99 },
 ]
 
 const deck: Deck = {
@@ -25,10 +25,9 @@ const deck: Deck = {
   steps: 3,
   policy,
   rules: [rule('a'), rule('b'), rule('c')],
-  research: () => ({ symbols: ['x', 'y', 'z'], answers: [] }),
   poolSize: 3,
   question: 'q',
-  levels: [{ id: 1, start: { rule: 'a', step: 1 }, anchors: [3, 4], sequence }],
+  levels: [{ id: 1, start: { rule: 'a', step: 1 }, anchors: [3, 4], sequence, tail: 1 }],
 }
 
 const picks = [0, 1, 2, 0, 1, 0, 2, 1, 0, 1, 0]
@@ -49,17 +48,17 @@ describe('engine', () => {
     expect(advance(deck, { rule: 'a', step: 1, streak: 1 }, 0.3)).toMatchObject({ rule: 'a', step: 1 })
   })
 
-  it('estimate uses the last four non-research waves of the current rule', () => {
-    const d = (r: string, hit: boolean | null) => ({ spec: { rule: r, step: 1, seed: 1 }, pick: 0, hit, anchor: false, secs: 0 })
+  it('estimate uses the last four waves of the current rule', () => {
+    const d = (r: string, hit: boolean) => ({ spec: { rule: r, step: 1, seed: 1 }, pick: 0, hit, anchor: false, secs: 0 })
     const g: Game = {
       mode: 'adaptive', level: 1, rule: 'a', step: 1, streak: 0,
-      decisions: [d('a', true), d('a', true), d('b', false), d('a', true), d('research', null), d('a', false), d('a', false), d('a', false)],
+      decisions: [d('a', true), d('a', true), d('b', false), d('a', true), d('b', true), d('a', false), d('a', false), d('a', false)],
     }
     expect(estimate(deck, g)).toBe(0.35)
     expect(estimate(deck, { ...g, decisions: [] })).toBe(0.5)
   })
 
-  it('shoot is pure and scores research waves as null', () => {
+  it('shoot is pure and scores every wave against its answer', () => {
     const g = begin(deck, 1, 'standard')
     const before = JSON.stringify(g)
     const next = shoot(deck, g, 0)
@@ -67,7 +66,7 @@ describe('engine', () => {
     expect(next.decisions).toHaveLength(1)
     expect(next.decisions[0].hit).toBe(wave(deck, sequence[0]).answers.includes(0))
     const end = picks.reduce((acc, p) => shoot(deck, acc, p), g)
-    expect(end.decisions[10].hit).toBeNull()
+    expect(end.decisions[10].hit).toBe(wave(deck, sequence[10]).answers.includes(picks[10]))
     expect(end.decisions.map((x) => x.anchor)).toEqual(picks.map((_, i) => i === 3 || i === 4))
     expect(score(end)).toBe(400)
   })
@@ -119,6 +118,18 @@ describe('engine', () => {
     expect(upcoming(deck, begin(deck, 1, 'standard'))).toEqual(sequence[0])
   })
 
+  it('adaptive mode plays the fixed tail from the sequence, and only fixed waves take the stored AI pick', () => {
+    let g = begin(deck, 1, 'adaptive')
+    for (let i = 0; i < 10; i++) g = shoot(deck, g, 0)
+    expect(upcoming(deck, g)).toEqual(sequence[10])
+    g = shoot(deck, g, 0)
+    expect(upcoming(deck, g)).toBeNull()
+    const run: AiRun = { hash: '', model: '', date: '', standard: { 1: sequence.map((_, i) => i % 3) } }
+    expect(g.decisions.map((_, i) => aiPick(run, deck, g, i))).toEqual([...Array(10).fill(undefined), 1])
+    const s = replay(deck, 1, 'standard', picks)
+    expect(s.decisions.map((_, i) => aiPick(run, deck, s, i))).toEqual(run.standard[1])
+  })
+
   it('adaptive never repeats the previous seed', () => {
     let g = begin(deck, 1, 'adaptive')
     for (let i = 0; i < 10; i++) {
@@ -128,11 +139,14 @@ describe('engine', () => {
     }
   })
 
-  it('agreement counts only decisions with a stable AI pick', () => {
+  it('report compares you, the AI and chance on scored waves only, split by typical and atypical patterns', () => {
     const g = replay(deck, 1, 'standard', picks)
-    expect(agreement(g)).toBeNull()
-    g.decisions.forEach((d, i) => (d.ai = i < 4 ? d.pick : i < 8 ? d.pick + 1 : null))
-    expect(agreement(g)).toEqual({ agree: 50, n: 8 })
+    expect(report(deck, g).typical).toBeNull()
+    g.decisions.forEach((d, i) => (d.ai = i === 3 ? 1 : i === 4 ? null : d.pick))
+    expect(report(deck, g).all).toEqual({ you: 2, ai: 0, aiN: 1, chance: 1 / 3 + 1 / 3, n: 2 })
+    const typed = { ...deck, typical: (w: Wave) => w.seed === 4 }
+    expect(report(typed, g).typical).toEqual({ you: 1, ai: 0, aiN: 1, chance: 1 / 3, n: 1 })
+    expect(report(typed, g).atypical).toEqual({ you: 1, ai: 0, aiN: 0, chance: 1 / 3, n: 1 })
   })
 
   it('aiBody holds rocks and history but never the current answers', () => {

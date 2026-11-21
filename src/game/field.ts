@@ -2,7 +2,8 @@ import { rng } from './engine.ts'
 import { colors, paintObject } from './gen.ts'
 import type { Shape } from './gen.ts'
 
-export type Target = { x: number; y: number; vx: number; vy: number; angle: number; rate: number; n: number; key: string; shape: Shape }
+// cx, cy: the centre of the rock's own cell as a share of the play area, so a resize keeps every rock in its cell.
+export type Target = { cx: number; cy: number; phase: number; key: string; shape: Shape }
 export type Shot = { to: number; outcome: boolean | null; phase: 0 | 1 | 2; t: number }
 export type Shard = { x: number; y: number; vx: number; vy: number; life: number; c: string }
 export type Colors = { field: string; paper: string; paper2: string; paper3: string; ink2: string; ink3: string; brick: string }
@@ -13,14 +14,14 @@ export type State = {
   w: number
   h: number
   dpr: number
+  cols: number
+  rows: number
   ts: Target[]
-  inspected: boolean
-  open: number
   answers: readonly number[]
   shot: Shot | null
   done: (() => void) | null
   shards: Shard[]
-  ghost: { t: Target; x: number; y: number; angle: number; life: number } | null
+  ghost: { t: Target; x: number; y: number; life: number } | null
   focused: number
   acc: number
   tick: number
@@ -34,6 +35,7 @@ export type State = {
 export const STEP = 1000 / 60
 export const BAND = 64
 export const EDGE = 24
+export const TOP = 8
 export const PS = 1.4
 export const LAYERS = [
   { n: 60, size: 1, v: 0.15, c: 'ink2' },
@@ -46,21 +48,17 @@ export const stars = LAYERS.map((L, i) => {
 })
 
 export const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x))
-export const rad = (s: State) => Math.max(28, Math.min(s.w, s.h) * 0.14)
-export const k = (s: State) => (s.calm ? 0.35 : 1)
+// half a cell: the rock and all its marks fit inside, so neighbours never overlap
+export const rad = (s: State) => Math.max(14, Math.min(s.w / s.cols, (s.h - BAND - TOP) / s.rows) / 2)
 export const effect = (s: State) => (s.calm ? 8 : s.shot!.outcome === null ? 21 : s.shot!.outcome ? 40 : 30)
 
-export const pos = (s: State, t: Target) => {
-  const a = s.shot ? 0 : (s.acc / STEP) * k(s)
-  const e = t.n <= 0 ? 0 : 1 - (1 - Math.min(1, (t.n * k(s)) / 30)) ** 3
-  const y = t.y + t.vy * a
-  const o = t.angle + t.rate * a
-  return { x: t.x + t.vx * a, y: y - (1 - e) * (y + 2 * rad(s)) + 0.04 * rad(s) * Math.cos(o), angle: (1 - s.open) * 0.35 * Math.sin(o) }
-}
+export const pos = (s: State, t: Target) => ({
+  x: t.cx * s.w,
+  y: TOP + t.cy * (s.h - BAND - TOP) + (s.calm ? 0 : 0.03 * rad(s) * Math.sin((s.tick + s.acc / STEP) * 0.03 + t.phase)),
+})
 
-export const sprite = (s: State, t: Target, split = false) => {
-  const key = t.key + Number(split)
-  const cached = s.sprites.get(key)
+export const sprite = (s: State, t: Target) => {
+  const cached = s.sprites.get(t.key)
   if (cached) return cached
   const R = rad(s)
   const c = document.createElement('canvas')
@@ -83,8 +81,8 @@ export const sprite = (s: State, t: Target, split = false) => {
       g.strokeStyle = colors[stroke]!
       g.stroke()
     }
-  }, split)
-  s.sprites.set(key, c)
+  })
+  s.sprites.set(t.key, c)
   return c
 }
 

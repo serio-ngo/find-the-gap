@@ -1,4 +1,4 @@
-import { URL_AI, canonical, keys, round05, stepBody, validate, wave } from '../engine.ts'
+import { URL_AI, canonical, content, keys, round05, stepBody, validate, wave } from '../engine.ts'
 import type { AiPick, Deck, Past, Spec } from '../engine.ts'
 import { decks } from '../levels/index.ts'
 
@@ -28,10 +28,10 @@ const exact = (x: unknown, ks: string[]): Record<string, unknown> =>
   x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).sort().join() === [...ks].sort().join() ? (x as Record<string, unknown>) : bad()
 
 const spec = (d: Deck, standard: boolean, seq: Spec[], pos: number, a: unknown[]): Spec => {
-  const [r, step, seed] = [int(a[0], d.rules.length), int(a[1], 1e6), int(a[2], 1e9)]
-  const s = { rule: r === d.rules.length ? 'research' : d.rules[r]!.id, step, seed }
+  const [r, step, seed] = [int(a[0], d.rules.length - 1), int(a[1], 1e6), int(a[2], 1e9)]
+  const s = { rule: d.rules[r]!.id, step, seed }
   const same = (q: Spec) => q.rule === s.rule && q.step === s.step && q.seed === s.seed
-  const inPool = s.rule !== 'research' && step >= 1 && step <= d.steps && seed >= POOL_FROM && seed < POOL_FROM + d.poolSize
+  const inPool = step >= 1 && step <= d.steps && seed >= POOL_FROM && seed < POOL_FROM + d.poolSize
   return (standard ? seq[pos] && same(seq[pos]) : inPool || seq.some(same)) ? s : bad()
 }
 
@@ -44,12 +44,18 @@ const context = (b: Record<string, unknown>) => {
 
 const hitOf = (d: Deck, s: Spec, pick: number) => {
   const w = wave(d, s)
-  const p = int(pick, w.symbols.length - 1)
-  return { w, hit: s.rule === 'research' ? null : w.answers.includes(p) }
+  return { w, hit: w.answers.includes(int(pick, w.symbols.length - 1)) }
 }
 
 const sha256 = async (s: string) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((x) => x.toString(16).padStart(2, '0')).join('')
+
+// Stored results name the exact deck content they were scored against, so a later deck never re-reads them.
+const editions = new Map<Deck, Promise<string>>()
+export const edition = (d: Deck) => {
+  if (!editions.has(d)) editions.set(d, sha256(canonical(content(d))).then((h) => `${d.id}:${h.slice(0, 12)}`))
+  return editions.get(d)!
+}
 
 const json = (o: unknown) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 const FALLBACK = { fallback: true }
@@ -104,16 +110,16 @@ const result = async (b: Record<string, unknown>, env: GameEnv) => {
   const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'waves']))
   const rows = Array.isArray(b.waves) && b.waves.length <= seq.length ? b.waves : bad()
   const waves = rows.map((r, i) => {
-    const a = list(r, 10)
+    const a = list(r, 11)
     const s = spec(d, standard, seq, i, a)
     const { w, hit } = hitOf(d, s, a[3] as number)
-    if (a[4] !== (hit === null ? 2 : hit ? 1 : 0)) bad()
+    if (a[4] !== +hit) bad()
     const n = w.symbols.length - 1
-    return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 1), int(a[9], 1)]
+    return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 1), int(a[9], 1), int(a[10], 1)]
   })
   if ((await used(env, 'result')) > RESULT_CAP) return new Response(null, { status: 204 })
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
-    .bind(new Date().toISOString().slice(0, 10), d.id, b.level, standard ? 0 : 1, JSON.stringify(waves))
+    .bind(new Date().toISOString().slice(0, 10), await edition(d), b.level, standard ? 0 : 1, JSON.stringify(waves))
     .run()
   const day = new Date().toISOString().slice(0, 10)
   if (pruned !== day) {

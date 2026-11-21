@@ -1,15 +1,12 @@
-import { rng } from './engine.ts'
-import type { Wave } from './engine.ts'
-import { hash } from './gen.ts'
 import type { TargetObject } from './objects.ts'
-import { BAND, EDGE, LAYERS, STEP, clamp, finish, pos, rad, sprite } from './field.ts'
+import { BAND, EDGE, LAYERS, STEP, TOP, clamp, finish, pos, rad, sprite } from './field.ts'
 import type { State } from './field.ts'
 import { update } from './motion.ts'
 import { draw } from './paint.ts'
 
 export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) => {
   const s: State = {
-    ctx: canvas.getContext('2d')!, calm: opts.calm, w: 1, h: 1, dpr: 1, ts: [], inspected: false, open: 0, answers: [], shot: null,
+    ctx: canvas.getContext('2d')!, calm: opts.calm, w: 1, h: 1, dpr: 1, cols: 1, rows: 1, ts: [], answers: [], shot: null,
     done: null, shards: [], ghost: null, focused: -1, acc: 0, tick: 0, sx: -1, tx: -1, off: LAYERS.map(() => 0), sprites: new Map(),
     col: { field: '', paper: '', paper2: '', paper3: '', ink2: '', ink3: '', brick: '' },
   }
@@ -75,36 +72,27 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
   sync()
 
   return {
-    show(wave: Wave, objects: TargetObject[], names: string[]) {
+    // Every rock and its marks are in place in the first frame; the display order (already neutral) fills the cells row by row.
+    show(objects: TargetObject[], names: string[]) {
       if (s.shot && s.shot.phase === 2) {
         const t = s.ts[s.shot.to]!
         const q = pos(s, t)
-        s.ghost = { t, x: q.x, y: q.y, angle: q.angle, life: 0 }
+        s.ghost = { t, x: q.x, y: q.y, life: 0 }
       }
       finish(s)
       if (canvas.clientWidth !== s.w || canvas.clientHeight !== s.h) fit()
       s.answers = []
-      s.inspected = false
-      s.open = 0
       s.sprites = new Map()
       s.focused = -1
-      const rand = rng(hash(objects[0]!.id))
-      const R = rad(s)
-      const speed = 0.9 + 0.3 * wave.step
       const count = objects.length
-      const height = Math.max(2 * R, s.h - BAND - 8)
-      const columns = Math.min(count, Math.ceil(Math.sqrt(count * s.w / height)))
-      const rows = Math.ceil(count / columns)
-      const slots = objects.map((_, i) => ({ i, rank: rand() })).sort((a, b) => a.rank - b.rank)
-      s.ts = objects.map(({ id, shape }, i) => {
-        const slot = slots[i]!.i
-        const row = Math.floor(slot / columns)
-        const rowLength = Math.min(columns, count - row * columns)
-        const a = rand() * 2 * Math.PI
-        return {
-          x: s.w * (slot % columns + 0.5) / rowLength, y: 8 + height * (row + 0.5) / rows, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
-          angle: shape.spin.phase, rate: shape.spin.rate, n: -slot * 4, key: id, shape,
-        }
+      // the grid with the largest cells wins; on a tie, fewer columns
+      const cell = (c: number) => Math.min(s.w / c, (s.h - BAND - TOP) / Math.ceil(count / c))
+      s.cols = Array.from({ length: count }, (_, i) => i + 1).reduce((best, c) => (cell(c) > cell(best) ? c : best))
+      s.rows = Math.ceil(count / s.cols)
+      s.ts = objects.map(({ id, shape }, slot) => {
+        const row = Math.floor(slot / s.cols)
+        const rowLength = Math.min(s.cols, count - row * s.cols)
+        return { cx: (slot % s.cols + 0.5) / rowLength, cy: (row + 0.5) / s.rows, phase: slot * 1.7, key: id, shape }
       })
       s.ts.forEach((t) => sprite(s, t))
       canvas.setAttribute('aria-label', names.join(', '))
@@ -116,15 +104,10 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     focus(i: number) {
       s.focused = i
     },
-    inspect(enabled: boolean) {
-      s.inspected = enabled
-      if (s.calm || !enabled) s.open = Number(enabled && s.calm)
-      draw(s)
-    },
     shoot(index: number, outcome: boolean | null, answerIndices: readonly number[] = []) {
       finish(s)
       s.answers = answerIndices
-      s.tx = s.ts[index]!.x
+      s.tx = pos(s, s.ts[index]!).x
       s.shot = { to: index, outcome, phase: 0, t: 0 }
       return new Promise<void>((resolve) => {
         s.done = resolve
@@ -143,7 +126,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean }) 
     },
     rockAt(x: number, y: number): number {
       let best = -1
-      let d = (rad(s) * 1.3) ** 2
+      let d = (rad(s) * 0.9) ** 2
       s.ts.forEach((t, i) => {
         const p = pos(s, t)
         const e = (p.x - x) ** 2 + (p.y - y) ** 2

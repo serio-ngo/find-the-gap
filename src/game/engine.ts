@@ -2,15 +2,17 @@ export type Mode = 'standard' | 'adaptive'
 export type Spec = { rule: string; step: number; seed: number }
 export type Wave = Spec & { symbols: string[]; answers: number[]; ids?: string[] }
 export type Policy = { high: number; low: number; window: number; confirm: number }
-export type ChoiceRecord = { id?: string; clue: string; cells: string[]; url?: string }
+export type ChoiceRecord = { id?: string; clue: string; rule: string; values: string[]; url?: string }
 export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'ids'> }
-export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[] }
+// tail: the last waves every mode plays from the fixed sequence
+export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[]; tail?: number }
 export type Deck = {
-  id: string; steps: number; policy: Policy; rules: Rule[]; research?: Rule['make']
+  id: string; steps: number; policy: Policy; rules: Rule[]
   poolSize: number; question?: string; levels: Level[]
   choiceRecords?: (wave: Wave) => ChoiceRecord[]
+  typical?: (wave: Wave) => boolean
 }
-export type Decision = { spec: Spec; pick: number; hit: boolean | null; anchor: boolean; secs: number; ai?: number | null }
+export type Decision = { spec: Spec; pick: number; hit: boolean; anchor: boolean; secs: number; ai?: number | null }
 export type Game = { mode: Mode; level: number; rule: string; step: number; streak: number; decisions: Decision[] }
 export type AiPick = { choice: string; probabilities: Record<string, number> }
 export type AiRun = { hash: string; model: string; date: string; standard: Record<string, (number | null)[]> }
@@ -30,10 +32,7 @@ export const round05 = (x: number) => Math.round(x * 20) / 20
 
 export const keys = (w: Wave) => w.symbols.map((_, i) => `r${i}`)
 
-export const wave = (d: Deck, s: Spec): Wave => ({
-  ...s,
-  ...(s.rule === 'research' ? d.research! : d.rules.find((r) => r.id === s.rule)!.make)(s.step, s.seed),
-})
+export const wave = (d: Deck, s: Spec): Wave => ({ ...s, ...d.rules.find((r) => r.id === s.rule)!.make(s.step, s.seed) })
 
 export const pool = (d: Deck, rule: string, step: number): Spec[] =>
   Array.from({ length: d.poolSize }, (_, i) => ({ rule, step, seed: 1000 + i }))
@@ -43,18 +42,22 @@ export const begin = (d: Deck, level: number, mode: Mode): Game => {
   return { mode, level, rule, step, streak: 0, decisions: [] }
 }
 
+const fixedFrom = (d: Deck, level: number) => {
+  const l = d.levels.find((x) => x.id === level)!
+  return l.sequence.length - (l.tail ?? 0)
+}
+
 export const upcoming = (d: Deck, g: Game): Spec | null => {
   const sequence = d.levels.find((l) => l.id === g.level)!.sequence
   const i = g.decisions.length
-  const waves = sequence.at(-1)?.rule === 'research' ? sequence.length - 1 : sequence.length
-  if (g.mode === 'standard' || i >= waves) return sequence[i] ?? null
+  if (g.mode === 'standard' || i >= fixedFrom(d, g.level)) return sequence[i] ?? null
   const p = pool(d, g.rule, g.step)
   const j = Math.floor(rng(g.level * 100 + i)() * d.poolSize)
   return p[p[j]!.seed === g.decisions.at(-1)?.spec.seed ? (j + 1) % d.poolSize : j]!
 }
 
 export const estimate = (d: Deck, g: Game): number => {
-  const last = g.decisions.filter((x) => x.spec.rule === g.rule && x.hit !== null).slice(-d.policy.window)
+  const last = g.decisions.filter((x) => x.spec.rule === g.rule).slice(-d.policy.window)
   return round05((last.filter((x) => x.hit).length + 1) / (last.length + 2))
 }
 
@@ -75,10 +78,10 @@ export const band = (secs: number): 0 | 1 | 2 => (secs < 3 ? 0 : secs < 8 ? 1 : 
 export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: number; miss: number }): Game => {
   const spec = upcoming(d, g)
   if (!spec) return g
-  const hit = spec.rule === 'research' ? null : wave(d, spec).answers.includes(pick)
+  const hit = wave(d, spec).answers.includes(pick)
   const anchor = d.levels.find((l) => l.id === g.level)!.anchors.includes(g.decisions.length)
   const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
-  if (g.mode === 'standard' || hit === null) return next
+  if (g.mode === 'standard') return next
   const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, next))
   return { ...next, rule, step, streak }
 }
@@ -86,12 +89,33 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
 export const score = (g: Game) =>
   g.decisions.reduce((t, x) => (x.anchor && x.hit ? t + 100 + Math.max(0, Math.round(100 - 10 * x.secs)) : t), 0)
 
-export const aiPick = (run: AiRun, g: Game, i: number): number | null | undefined =>
-  g.mode === 'standard' || g.decisions[i]!.spec.rule === 'research' ? run.standard[g.level]?.[i] : undefined
+// Wave i is the same for everyone: all of standard mode and the fixed tail of adaptive mode. The stored AI run covers exactly these.
+export const fixed = (d: Deck, g: Game, i: number) => g.mode === 'standard' || i >= fixedFrom(d, g.level)
 
-export const agreement = (g: Game): { agree: number; n: number } | null => {
-  const rows = g.decisions.filter((x) => typeof x.ai === 'number')
-  return rows.length ? { agree: Math.round((100 * rows.filter((x) => x.ai === x.pick).length) / rows.length), n: rows.length } : null
+export const aiPick = (run: AiRun, d: Deck, g: Game, i: number): number | null | undefined =>
+  fixed(d, g, i) ? run.standard[g.level]?.[i] : undefined
+
+export type Tally = { you: number; ai: number; aiN: number; chance: number; n: number }
+
+// Scored waves only. You: hits of n. AI: hits of the aiN waves where it gave a stable pick. Chance: expected hits by guessing.
+export const report = (d: Deck, g: Game) => {
+  const rows = g.decisions.filter((x) => x.anchor).map((x) => ({ x, w: wave(d, x.spec) }))
+  const tally = (rs: typeof rows): Tally => {
+    const ai = rs.filter(({ x }) => typeof x.ai === 'number')
+    return {
+      you: rs.filter(({ x }) => x.hit).length,
+      ai: ai.filter(({ x, w }) => w.answers.includes(x.ai!)).length,
+      aiN: ai.length,
+      chance: rs.reduce((t, { w }) => t + 1 / w.symbols.length, 0),
+      n: rs.length,
+    }
+  }
+  const typical = d.typical
+  return {
+    all: tally(rows),
+    typical: typical ? tally(rows.filter(({ w }) => typical(w))) : null,
+    atypical: typical ? tally(rows.filter(({ w }) => !typical(w))) : null,
+  }
 }
 
 export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({

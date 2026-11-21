@@ -1,57 +1,32 @@
-import { colors } from './gen.ts'
 import type { Pt } from './gen.ts'
 import { BAND, LAYERS, PS, effect, pos, rad, sprite, stars } from './field.ts'
 import type { State, Target } from './field.ts'
 
-type Put = (t: Target, x: number, y: number, angle: number, scale?: number, alpha?: number, split?: number) => void
+type Put = (t: Target, x: number, y: number, scale?: number, alpha?: number) => void
 
-const placer = (s: State, shake: number): Put => (t, x, y, angle, scale = 1, alpha = 1, split = 0) => {
+const placer = (s: State, shake: number): Put => (t, x, y, scale = 1, alpha = 1) => {
   const { ctx, dpr } = s
   const R = rad(s)
-  const c = Math.cos(angle) * scale * dpr
-  const n = Math.sin(angle) * scale * dpr
   ctx.globalAlpha = alpha
-  ctx.setTransform(c, n, -n, c, (x + shake) * dpr, y * dpr)
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, (x + shake) * dpr, y * dpr)
   ctx.drawImage(sprite(s, t), -R, -R, 2 * R, 2 * R)
-  const o = Math.max(s.open, split)
-  if (o > 0) {
-    const z = 1 + 0.35 * o
-    const c2 = Math.cos(angle * (1 - o)) * scale * dpr
-    const s2 = Math.sin(angle * (1 - o)) * scale * dpr
-    ctx.setTransform(c2, s2, -s2, c2, (x + shake) * dpr, y * dpr)
-    ctx.globalAlpha = alpha * o
-    ctx.drawImage(sprite(s, t, true), -R * z, -R * z, 2 * R * z, 2 * R * z)
-  }
   ctx.globalAlpha = 1
   ctx.setTransform(dpr, 0, 0, dpr, shake * dpr, 0)
-}
-
-const label = (s: State, i: number, x: number, y: number) => {
-  const { ctx } = s
-  ctx.fillStyle = colors.void!
-  ctx.beginPath()
-  ctx.arc(x, y, 7, 0, 2 * Math.PI)
-  ctx.fill()
-  ctx.fillStyle = colors.light!
-  ctx.font = 'bold 10px system-ui, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(String(i + 1), x, y)
 }
 
 const verdict = (s: State, p: number) => {
   const { ctx, col, shot } = s
   const R = rad(s)
   const q = pos(s, s.ts[shot!.to]!)
-  const cx = q.x + R * 0.8
-  const cy = q.y - R * 0.8
+  const cx = q.x + R * 0.75
+  const cy = q.y - R * 0.75
   ctx.lineCap = 'round'
   ctx.lineWidth = 3
   ctx.strokeStyle = col.brick
   ctx.beginPath()
   if (shot!.outcome) {
     ctx.globalAlpha = 1 - p
-    ctx.arc(q.x, q.y, R * (0.8 + 1.2 * p), 0, 7)
+    ctx.arc(q.x, q.y, R * (0.6 + 0.6 * p), 0, 7)
     ctx.stroke()
     ctx.globalAlpha = 1
     ctx.strokeStyle = col.paper
@@ -72,7 +47,7 @@ const verdict = (s: State, p: number) => {
     for (const a of s.answers) {
       const z = pos(s, s.ts[a]!)
       ctx.beginPath()
-      ctx.arc(z.x, z.y, R + 6, 0, 7)
+      ctx.arc(z.x, z.y, R * 0.97, 0, 7)
       ctx.stroke()
     }
     ctx.setLineDash([])
@@ -141,23 +116,21 @@ export const draw = (s: State) => {
   ctx.lineWidth = 2
   s.ts.forEach((t, i) => {
     const q = pos(s, t)
-    if (shot && shot.to === i && shot.phase === 2) {
-      if (shot.outcome === false) put(t, q.x, q.y, q.angle, 1, 1, 1)
-      else put(t, q.x, q.y, q.angle, 1 + 0.4 * p, 1 - p, 1)
+    if (shot && shot.to === i && shot.phase === 2 && shot.outcome !== false) {
+      put(t, q.x, q.y, 1 + 0.3 * p, 1 - p)
       return
     }
-    put(t, q.x, q.y, q.angle, 1, 1, shot?.phase === 2 && shot.outcome === false && s.answers.includes(i) ? 1 : 0)
-    if (s.open > 0.5) label(s, i, q.x, q.y + R * 1.12)
+    put(t, q.x, q.y)
     if (i === s.focused) {
       ctx.strokeStyle = col.brick
       ctx.beginPath()
-      ctx.arc(q.x, q.y, R + 4, 0, 7)
+      ctx.arc(q.x, q.y, R * 0.97, 0, 7)
       ctx.stroke()
     }
   })
   if (s.ghost) {
     const g = s.ghost.life / (s.calm ? 8 : 30)
-    put(s.ghost.t, s.ghost.x, s.ghost.y, s.ghost.angle, 1 + 0.4 * g, 1 - g, 1)
+    put(s.ghost.t, s.ghost.x, s.ghost.y, 1 + 0.3 * g, 1 - g)
   }
   if (shot && shot.phase === 2 && shot.outcome !== null) verdict(s, p)
   for (const d of s.shards) {

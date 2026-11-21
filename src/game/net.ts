@@ -19,7 +19,7 @@ export const askStep = async (api: string, body: unknown, ms = 1500): Promise<St
 
 export const sendResult = (api: string, body: unknown) => post(api, 'result', body, { keepalive: true }).then(() => {}, () => {})
 
-const ruleIdx = (d: Deck, r: string) => (r === 'research' ? d.rules.length : d.rules.findIndex((x) => x.id === r))
+const ruleIdx = (d: Deck, r: string) => d.rules.findIndex((x) => x.id === r)
 const u = (x: number) => Math.round(20 * x)
 
 export const stepRequest = (d: Deck, v: number, level: number, w: Spec, past: Decision[]) => ({
@@ -27,12 +27,13 @@ export const stepRequest = (d: Deck, v: number, level: number, w: Spec, past: De
   level,
   mode: 1,
   wave: [ruleIdx(d, w.rule), w.step, w.seed],
-  past: past.filter((x) => x.hit !== null).map((x) => [ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, band(x.secs)]),
+  past: past.map((x) => [ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, band(x.secs)]),
 })
 
-export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null) => [
-  ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, x.hit === null ? 2 : +x.hit, band(x.secs),
-  typeof x.ai === 'number' ? x.ai : -1, u(p), live ? 1 : 0, +!!live?.cached,
+// first: 1 when this device had not finished this level edition before, so the wave was a first exposure
+export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, first: boolean) => [
+  ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, +x.hit, band(x.secs),
+  typeof x.ai === 'number' ? x.ai : -1, u(p), live ? 1 : 0, +!!live?.cached, +first,
 ]
 
 export const resultRequest = (v: number, level: number, mode: Mode, waves: number[][]) => ({ v, level, mode: mode === 'adaptive' ? 1 : 0, waves })

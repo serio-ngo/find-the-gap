@@ -1,5 +1,5 @@
 import { rng } from '../engine.ts'
-import type { ChoiceRecord, Deck, Rule } from '../engine.ts'
+import type { ChoiceRecord, Deck, Rule, Wave } from '../engine.ts'
 import { rows } from './rows.ts'
 
 export type Row = { id: string; rule: string; roles: string[]; values: string[]; gap: boolean; research: boolean; run: string }
@@ -12,53 +12,91 @@ export const gapOf: Record<string, (values: string[]) => boolean> = {
 
 const order = ['odd_revision', 'missing_link', 'pair']
 const counts = [4, 5, 6, 6, 7]
-const status: Record<string, string> = { passed: 'signal', failed: 'copper', missing: 'void' }
-const hues = ['signal', 'copper', 'violet', 'rose', 'lime']
 const WAVES = 20
+// Seeds 900 to 999 draw runs that no scored wave of the deck uses.
+export const UNSEEN = 900
+export const unseen = (seed: number) => seed >= UNSEEN && seed < UNSEEN + 100
+// A gap pattern seen in fewer than a quarter of its rule's gap runs is atypical.
+export const ATYPICAL = 0.25
 
 for (const r of rows) {
   if (gapOf[r.rule]?.(r.values) !== r.gap) throw new Error(`row ${r.id} breaks its rule`)
 }
 
 export const clue = (r: Row) => r.roles.map((role, i) => `${role} ${r.values[i]}`).join(' · ')
-export const cells = (r: Row) => r.values.map((v) => (r.rule === 'missing_link' ? status[v]! : hues[r.values.indexOf(v)]!))
 
-const shuffle = <T>(r: () => number, a: T[]) => a.map((x) => [r(), x] as const).sort((p, q) => p[0] - q[0]).map((p) => p[1])
-const distinct = (a: Row[], n: number) => a.filter((x, i) => a.findIndex((y) => clue(y) === clue(x)) === i).slice(0, n)
+// What the player sees, as a signature: equal or different commits, otherwise the values in role order.
+export const pattern = (r: Row) => (r.rule === 'odd_revision' ? (r.values[0] === r.values[1] ? 'same' : 'differ') : r.values.join(','))
 
-const choose = (r: () => number, from: Row[], n: number, research: boolean) => {
-  if (research) return distinct(shuffle(r, from), n)
-  const gap = shuffle(r, from.filter((x) => x.gap))[0]!
-  return shuffle(r, [gap, ...distinct(shuffle(r, from.filter((x) => !x.gap)), n - 1)])
+// Parameters a run gives from its own values: how many items, how many break the rule, and its pattern.
+export const params = (r: Row) => {
+  const breaks = r.rule === 'odd_revision' ? +(r.values[0] !== r.values[1])
+    : r.rule === 'missing_link' ? r.values.filter((v) => v === 'missing').length
+    : r.values.filter((v) => r.values.indexOf(v) !== r.values.lastIndexOf(v)).length
+  return { arity: r.values.length, breaks, pattern: pattern(r) }
 }
 
-const wave = (rule: string, n: number, seed: number, research: boolean) => {
-  const choice = choose(rng(seed), rows.filter((x) => x.rule === rule && x.research === research), n, research)
-  return { symbols: choice.map(clue), answers: research ? [] : choice.flatMap((x, i) => (x.gap ? [i] : [])), ids: choice.map((x) => x.id) }
+const scored = rows.filter((r) => !r.research)
+
+// Share of the rule's scored runs with the same gap flag that show this pattern.
+export const typicality = (r: Row) => {
+  const peers = scored.filter((x) => x.rule === r.rule && x.gap === r.gap)
+  return peers.filter((x) => pattern(x) === pattern(r)).length / peers.length
+}
+
+const shuffle = <T>(r: () => number, a: T[]) => a.map((x) => [r(), x] as const).sort((p, q) => p[0] - q[0]).map((p) => p[1])
+
+// A control that shares a surface feature with gaps: a failed result looks like trouble, a matching criteria count hides the gap.
+const lookalike = (x: Row, gap: Row) => (x.rule === 'missing_link' ? x.values.includes('failed') : x.rule === 'pair' && x.values.length === gap.values.length)
+
+// Step k mixes k control patterns. Steps 1 and 2 keep look-alikes out, steps 4 and 5 bring them in first.
+const controls = (r: () => number, from: Row[], gap: Row, n: number, step: number) => {
+  const groups = new Map<string, Row[]>()
+  for (const x of shuffle(r, from)) groups.set(pattern(x), [...(groups.get(pattern(x)) ?? []), x])
+  const lean = step < 3 ? 1 : step > 3 ? -1 : 0
+  const sorted = [...groups.values()].sort((a, b) => lean * (+lookalike(a[0]!, gap) - +lookalike(b[0]!, gap)))
+  const lanes = sorted.slice(0, step)
+  const out: Row[] = []
+  while (out.length < n && lanes.some((l) => l.length)) for (const l of lanes) if (l.length && out.length < n) out.push(l.shift()!)
+  for (const x of sorted.slice(step).flat()) if (out.length < n) out.push(x)
+  return out
+}
+
+const wave = (rule: string, step: number, seed: number) => {
+  const from = rows.filter((x) => x.rule === rule && x.research === unseen(seed))
+  // gaps take turns, so consecutive seeds show every gap run before any repeats
+  const gaps = shuffle(rng(order.indexOf(rule) + 7), from.filter((x) => x.gap))
+  const gap = gaps[seed % gaps.length]!
+  const r = rng(seed)
+  const choice = shuffle(r, [gap, ...controls(r, from.filter((x) => !x.gap), gap, counts[step - 1]! - 1, step)])
+  return { symbols: choice.map(clue), answers: choice.flatMap((x, i) => (x.gap ? [i] : [])), ids: choice.map((x) => x.id) }
 }
 
 const byId = new Map(rows.map((r) => [r.id, r]))
+export const rowOf = (id: string) => byId.get(id)!
+export const gapRow = (w: Wave) => rowOf(w.ids![w.answers[0]!]!)
 
 export const observations: Deck = {
   id: 'observations',
   steps: 5,
   policy: { high: 0.8, low: 0.55, window: 4, confirm: 2 },
-  rules: order.map((id): Rule => ({ id, make: (step, seed) => wave(id, counts[step - 1]!, seed, false) })),
-  research: (_step, seed) => wave(order[seed % order.length]!, 4, seed, true),
+  rules: order.map((id): Rule => ({ id, make: (step, seed) => wave(id, step, seed) })),
   choiceRecords: (w): ChoiceRecord[] => w.ids!.map((id) => {
     const r = byId.get(id)!
-    return { id, clue: clue(r), cells: cells(r), url: r.run }
+    return { id, clue: clue(r), rule: r.rule, values: r.values, url: r.run }
   }),
+  typical: (w) => typicality(gapRow(w)) >= ATYPICAL,
   poolSize: 8,
   question:
-    'Each rock is the evidence of one public gate run. odd_revision: the reported and the tested commit should be the same. missing_link: every criterion should have a test result. pair: every criterion should have its own test. Exactly one rock breaks the rule of the wave; pick it. A research wave may have none.',
+    'Each rock is the evidence of one public gate run. odd_revision: the reported and the tested commit should be the same. missing_link: every criterion should have a test result. pair: every criterion should have its own test. Exactly one rock breaks the rule of the wave; pick it.',
   levels: order.map((rule, k) => ({
     id: k + 1,
     start: { rule, step: 1 },
-    anchors: Array.from({ length: WAVES }, (_, i) => i),
+    anchors: Array.from({ length: WAVES + 1 }, (_, i) => i),
+    tail: 1,
     sequence: [
       ...Array.from({ length: WAVES }, (_, i) => ({ rule, step: 1 + Math.floor(i / 4), seed: k * 100 + i })),
-      { rule: 'research', step: 1, seed: 900 + k },
+      { rule, step: 1, seed: UNSEEN + k },
     ],
   })),
 }

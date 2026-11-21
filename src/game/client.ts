@@ -1,5 +1,5 @@
 import { decks } from './levels/index.ts'
-import { aiPick, begin, estimate, upcoming, wave, shoot, score } from './engine.ts'
+import { aiPick, begin, estimate, fixed, upcoming, wave, shoot, score } from './engine.ts'
 import type { AiRun, Game, Mode, Wave } from './engine.ts'
 import stored from './eval/ai-run.json'
 import { askStep, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
@@ -7,8 +7,8 @@ import type { Step } from './net.ts'
 import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
 import { bindInput } from './input.ts'
-import { save, clearSaves } from './stats.ts'
-import { refreshDownload, showReplay, showResult } from './debrief.ts'
+import { load, save, clearSaves } from './stats.ts'
+import { refreshDownload, say, showReplay, showResult } from './debrief.ts'
 import type { Rounds, Text } from './debrief.ts'
 
 const root = document.querySelector<HTMLElement>('.ftg')!
@@ -19,7 +19,7 @@ const query = new URLSearchParams(location.search)
 const deck = decks[query.get('deck') === 'fixture' ? 'fixture' : 'observations']
 const edition = JSON.parse(root.dataset.editions!)[deck.id] as string
 const level = deck.levels.find((x) => x.id === Number(root.dataset.level))?.id ?? 1
-const total = deck.levels.find((x) => x.id === level)!.sequence.filter((s) => s.rule !== 'research').length
+const total = deck.levels.find((x) => x.id === level)!.sequence.length
 const ai: AiRun | undefined = deck.question ? stored : undefined
 const api = root.dataset.api
 const deckIdx = Object.values(decks).indexOf(deck)
@@ -28,8 +28,6 @@ const fieldEl = $('.ftg-field')
 const rocksEl = $('.ftg-rocks')
 const pauseEl = $('.ftg-pause')
 const live = $('.ftg-sr')
-const inspectBtn = $<HTMLButtonElement>('.ftg-inspect')
-const readout = $('.ftg-readout')
 const modeBtn = $<HTMLButtonElement>('.ftg-mode')
 const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
@@ -42,8 +40,7 @@ let busy = false
 let t0 = 0
 let pausedAt = 0
 let toggled = false
-let neutral: string[] = []
-let clues: string[] = []
+let first = false
 let rounds: Rounds = []
 let answer: Step | null = null
 let waves: number[][] = []
@@ -52,7 +49,6 @@ let sent = false
 const phase = (p: string) => {
   root.dataset.phase = p
   modeBtn.disabled = p === 'play' || p === 'paused'
-  inspectBtn.hidden = p !== 'play'
 }
 
 const setCalm = (b: boolean) => {
@@ -77,14 +73,7 @@ const setPause = (p: boolean) => {
   else field.resume()
 }
 
-const inspect = (enabled: boolean) => {
-  inspectBtn.setAttribute('aria-pressed', String(enabled))
-  readout.hidden = !enabled
-  readout.replaceChildren(...(enabled ? clues : []).map((clue) => Object.assign(document.createElement('li'), { textContent: clue })))
-  rocksEl.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-label', enabled ? `${neutral[i]}. ${clues[i]}` : neutral[i]!))
-  field.inspect(enabled)
-}
-
+// The whole wave, evidence included, is on screen and in every accessible name before the clock starts; one pick ends the wave.
 const nextWave = () => {
   const spec = upcoming(deck, g)
   if (!spec) return end()
@@ -92,22 +81,19 @@ const nextWave = () => {
   const i = g.decisions.length
   const objects = presentObjects(deck, w, `${deck.id}:${level}:${g.mode}:${i}`)
   rounds[i] = objects
-  neutral = objects.map((o, i) => l.rock.replace('{n}', String(i + 1)).replace('{s}', l[o.shape.family] ?? l.object))
-  clues = objects.map((o) => l[o.clue] ?? o.clue)
-  rocksEl.replaceChildren(...objects.map((_, i) => {
-    const b = Object.assign(document.createElement('button'), { className: 'ftg-rock', onclick: () => pick(i, w) })
-    b.dataset.rock = String(i)
+  const names = objects.map((o, k) => `${l.rock.replace('{n}', String(k + 1)).replace('{s}', l[o.shape.family] ?? l.object)}. ${say(o.clue, l)}`)
+  rocksEl.replaceChildren(...objects.map((_, k) => {
+    const b = Object.assign(document.createElement('button'), { className: 'ftg-rock', onclick: () => pick(k, w) })
+    b.dataset.rock = String(k)
+    b.setAttribute('aria-label', names[k]!)
     return b
   }))
-  field.show(w, objects, neutral)
-  inspect(false)
-  const research = w.rule === 'research'
+  field.show(objects, names)
   $('.ftg-hits').textContent = String(score(g))
-  $('.ftg-wave').textContent = research ? '?' : `${g.decisions.length + 1}/${total}`
-  $('.ftg-wave').setAttribute('aria-label', research ? l.research : l.wave)
+  $('.ftg-wave').textContent = `${i + 1}/${total}`
   t0 = performance.now()
   answer = null
-  if (api && g.mode === 'adaptive' && !research) {
+  if (api && !fixed(deck, g, i)) {
     askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects && g.decisions.length === i) answer = a })
   }
   busy = false
@@ -122,12 +108,12 @@ const pick = async (i: number, w: Wave) => {
   const got = answer
   g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
   const d = g.decisions.at(-1)!
-  d.ai = got ? got.ai : ai && aiPick(ai, g, g.decisions.length - 1)
-  const p = g.mode === 'adaptive' && d.hit !== null ? (got ? got[d.hit ? 'hit' : 'miss'] : estimate(deck, { ...g, rule })) : 0
-  waves.push(resultRow(deck, d, p, got))
+  d.ai = got ? got.ai : ai && aiPick(ai, deck, g, g.decisions.length - 1)
+  const p = g.mode === 'adaptive' ? (got ? got[d.hit ? 'hit' : 'miss'] : estimate(deck, { ...g, rule })) : 0
+  waves.push(resultRow(deck, d, p, got, first))
   const switched = g.mode === 'adaptive' && g.rule !== rule
   $('.ftg-switch').hidden = !switched
-  live.textContent = [d.anchor && d.hit !== null ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
+  live.textContent = [d.anchor ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
   const answers = d.anchor ? objects.flatMap((o, index) => w.answers.includes(o.sourceIndex) ? [index] : []) : undefined
   await field.shoot(i, d.anchor ? d.hit : null, answers)
   nextWave()
@@ -135,6 +121,7 @@ const pick = async (i: number, w: Wave) => {
 
 const start = () => {
   g = begin(deck, level, mode)
+  first = !load(deck.id, level, undefined, edition)?.plays
   rounds = []
   waves = []
   sent = false
@@ -160,7 +147,7 @@ const end = () => {
   field.pause()
   fieldEl.hidden = true
   rocksEl.replaceChildren()
-  readout.hidden = true
+  $('.ftg-hits').textContent = String(score(g))
   $('.ftg-end').hidden = false
   save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions })
   refreshDownload(root)
@@ -180,7 +167,6 @@ $('.ftg-play').onclick = start
 $('.ftg-again').onclick = start
 $('.ftg-resume').onclick = () => setPause(false)
 $('.ftg-pausebtn').onclick = () => setPause(root.dataset.phase === 'play')
-inspectBtn.onclick = () => { if (!busy && root.dataset.phase === 'play') inspect(inspectBtn.getAttribute('aria-pressed') !== 'true') }
 modeBtn.onclick = () => setMode(mode === 'adaptive' ? 'standard' : 'adaptive')
 calmBtn.onclick = () => (toggled = true) && setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')
 studyBtn.hidden = !api

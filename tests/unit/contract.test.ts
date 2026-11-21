@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { aiPick, begin, estimate, shoot, upcoming } from '../../src/game/engine.ts'
+import { aiPick, begin, estimate, fixed, shoot, upcoming } from '../../src/game/engine.ts'
 import type { AiRun, Mode } from '../../src/game/engine.ts'
 import { resultRequest, resultRow, stepRequest } from '../../src/game/net.ts'
 import { decks } from '../../src/game/levels/index.ts'
@@ -38,7 +38,7 @@ const play = async (name: 'observations' | 'fixture', mode: Mode) => {
   const waves: number[][] = []
   for (let spec = upcoming(d, g); spec; spec = upcoming(d, g)) {
     let live = null
-    if (mode === 'adaptive' && spec.rule !== 'research') {
+    if (!fixed(d, g, g.decisions.length)) {
       const res = await send('/api/game/step', stepRequest(d, v, 1, spec, g.decisions))
       expect(res.status).toBe(200)
       live = await res.json()
@@ -47,9 +47,9 @@ const play = async (name: 'observations' | 'fixture', mode: Mode) => {
     const rule = g.rule
     g = shoot(d, g, g.decisions.length % 2, 2, live ? { hit: live.hit, miss: live.miss } : undefined)
     const x = g.decisions.at(-1)!
-    x.ai = live ? live.ai : ai && aiPick(ai, g, g.decisions.length - 1)
-    const p = mode === 'adaptive' && x.hit !== null ? (live ? live[x.hit ? 'hit' : 'miss'] : estimate(d, { ...g, rule })) : 0
-    waves.push(resultRow(d, x, p, live))
+    x.ai = live ? live.ai : ai && aiPick(ai, d, g, g.decisions.length - 1)
+    const p = mode === 'adaptive' ? (live ? live[x.hit ? 'hit' : 'miss'] : estimate(d, { ...g, rule })) : 0
+    waves.push(resultRow(d, x, p, live, true))
   }
   return { body: resultRequest(v, 1, mode, waves), waves, g }
 }
@@ -67,6 +67,6 @@ describe('client bodies are accepted by the route', () => {
   it('wave bodies are integers and the fixture sends no AI pick as -1', async () => {
     const { waves } = await play('fixture', 'standard')
     expect(waves.flat().every(Number.isInteger)).toBe(true)
-    expect(waves.every((r) => r[6] === -1 && r[7] === 0)).toBe(true)
+    expect(waves.every((r) => r[6] === -1 && r[7] === 0 && r[10] === 1)).toBe(true)
   })
 })

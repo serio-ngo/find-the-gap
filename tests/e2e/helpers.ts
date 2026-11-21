@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { begin, shoot, upcoming, wave } from '../../src/game/engine.ts'
 import type { AiRun, Deck, Game, Mode } from '../../src/game/engine.ts'
 import { presentObjects } from '../../src/game/objects.ts'
+import { say } from '../../src/game/debrief.ts'
 import { decks } from '../../src/game/levels/index.ts'
 
 export type Lang = 'pl' | 'en'
@@ -25,6 +26,12 @@ export const wrong = (d: Deck, g: Game) => {
 export const displayed = (d: Deck, g: Game, i = g.decisions.length) =>
   presentObjects(d, wave(d, g.decisions[i]?.spec ?? upcoming(d, g)!), `${d.id}:${g.level}:${g.mode}:${i}`)
 
+// Each twin's accessible name: its number and skin, then the run's evidence in the page language.
+export const rockNames = (d: Deck, g: Game, lang: Lang) => {
+  const labels = strings.labels[lang]
+  return displayed(d, g).map((o, k) => `${labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]!)}. ${say(o.clue, labels)}`)
+}
+
 export const open = (page: Page, lang: Lang = 'en', level = 1, query = '') => page.goto(urlPath(lang, level, query))
 export const playButton = (page: Page, lang: Lang = 'en') => page.getByRole('button', { name: strings.visible[lang].play, exact: true })
 
@@ -37,31 +44,23 @@ type Options = {
   pick?: (g: Game) => number
   limit?: number
   begun?: boolean
-  inspect?: boolean
   start?: Game
   live?: { hit: number; miss: number }
 }
 
 export async function play(page: Page, o: Options = {}) {
-  const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false, inspect = false, live } = o
-  const labels = strings.labels[lang]
+  const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false, live } = o
   if (!begun) await playButton(page, lang).click()
   let g = o.start ?? begin(d, level, mode)
   for (let spec = upcoming(d, g); spec && g.decisions.length < limit; spec = upcoming(d, g)) {
     const i = pick(g)
-    const w = wave(d, spec)
     const objects = displayed(d, g)
     const slot = objects.findIndex((o) => o.sourceIndex === i)
-    const names = objects.map((o, k) => labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]))
-    // the page must show exactly the wave the engine replay expects (this is what proves the adaptive path)
+    const names = rockNames(d, g, lang)
+    // the page must show exactly the wave the engine replay expects, evidence included (this is what proves the adaptive path)
     await expect.poll(() => page.locator('.ftg-rocks button').evaluateAll((bs) => bs.map((b) => b.ariaLabel))).toEqual(names)
-    if (inspect) {
-      await page.getByRole('button', { name: labels.inspect }).click()
-      await expect(page.locator('.ftg-readout li')).toHaveText(objects.map((o) => w.symbols[o.sourceIndex]).map((s) => labels[s] ?? s))
-    }
     const before = await page.locator('.ftg-wave').textContent()
     if (by === 'keys') {
-      if (inspect) await page.locator('[data-rock="0"]').focus()
       for (let k = 0; k < slot; k++) await page.keyboard.press('ArrowRight')
       await page.keyboard.press(slot % 2 ? 'Enter' : 'Space')
     } else await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click') // targets are drawn on canvas; the twin buttons are invisible

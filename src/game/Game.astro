@@ -11,10 +11,10 @@ const l = strings.labels[lang]
 const files = import.meta.glob<string>(['./*.ts', './Game.astro', './game.css', './strings.json', './levels/**/*.{ts,json}'], { query: '?raw', import: 'default', eager: true })
 const editions = Object.fromEntries(Object.values(decks).map((deck) => [deck.id, hashEdition(deck, files)]))
 const path = `${lang === 'en' ? '/en' : ''}/find-the-gap`
-const total = decks.observations.levels.find((x) => x.id === level)?.anchors.length ?? 0
+const total = decks.observations.levels.find((x) => x.id === level)?.sequence.length ?? 0
 const paths = {
   play: 'M7 4l13 8-13 8z', pause: 'M8 5v14M16 5v14', calm: 'M3 12c3-4 6-4 9 0s6 4 9 0', adaptive: 'M4 18l5-6 4 3 7-10',
-  inspect: 'M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M7 12h10', details: 'M12 11v6m0-10v1M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0z',
+  details: 'M12 11v6m0-10v1M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0z',
   again: 'M4 12a8 8 0 1 0 3-6M4 4v5h5', next: 'M5 12h14M13 6l6 6-6 6', share: 'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6',
   copy: 'M9 9h11v11H9zM5 15V4h11', switch: 'M3 7h4l10 10h4M3 17h4l3-3m4-4l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3', download: 'M12 3v12M7 10l5 5 5-5M5 20h14', study: 'M4 20V10M10 20V4M16 20v-7M22 20H2', delete: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
   x: 'M5 5l14 14M19 5L5 19', bluesky: 'M12 11C10 7 6 5 4 5c0 4 1 7 4 8-3 1-3 4 0 5 3 0 4-3 4-5 0 2 1 5 4 5 3-1 3-4 0-5 3-1 4-4 4-8-2 0-6 2-8 6z',
@@ -31,7 +31,6 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
     <button class="ftg-pausebtn" aria-label={l.pause}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.pause} /></svg></button>
     <button class="ftg-mode" aria-pressed="false" aria-label={l.adaptive}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.adaptive} /></svg></button>
     <button class="ftg-calm" aria-pressed="false" aria-label={l.calm}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.calm} /></svg></button>
-    <button class="ftg-inspect" aria-pressed="false" aria-controls="ftg-readout" aria-label={l.inspect} title={l.inspect} hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.inspect} /></svg></button>
     </span>
   </div>
   <div class="ftg-field">
@@ -40,14 +39,11 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
     <div class="ftg-start"><button class="ftg-play"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg> {v.play}</button></div>
     <div class="ftg-pause" hidden><strong>{v.paused}</strong><button class="ftg-resume" aria-label={l.resume}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg> {v.resume}</button></div>
   </div>
-  <ol id="ftg-readout" class="ftg-readout" aria-label={l.readout} hidden></ol>
   <div class="ftg-sr" role="status" aria-live="polite"></div>
   <section class="ftg-end" role="region" aria-label={`${v.title} ${v.level} ${level}`} hidden>
     <h2 class="ftg-score" tabindex="-1"></h2>
     <div class="ftg-duel"></div>
-    <dl class="ftg-ind" hidden>
-      <dt>{v.agreement}</dt><dd class="ftg-agree"></dd>
-    </dl>
+    <table class="ftg-table"></table>
     <ol class="ftg-top" aria-label={l.top}></ol>
     <details class="ftg-replay">
       <summary aria-label={l.details} title={l.details}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.details} /></svg></summary>
