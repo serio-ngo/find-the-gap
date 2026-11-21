@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { begin, shoot, upcoming, wave } from '../../src/game/engine.ts'
 import type { AiRun, Deck, Game, Mode } from '../../src/game/engine.ts'
 import { presentObjects } from '../../src/game/objects.ts'
-import { say } from '../../src/game/debrief.ts'
+import { describe } from '../../src/game/debrief.ts'
 import { decks } from '../../src/game/levels/index.ts'
 
 export type Lang = 'pl' | 'en'
@@ -24,12 +24,12 @@ export const wrong = (d: Deck, g: Game) => {
 }
 
 export const displayed = (d: Deck, g: Game, i = g.decisions.length) =>
-  presentObjects(d, wave(d, g.decisions[i]?.spec ?? upcoming(d, g)!), `${d.id}:${g.level}:${g.mode}:${i}`)
+  presentObjects(d, wave(d, g.decisions[i]?.spec ?? upcoming(d, g)!))
 
-// Each twin's accessible name: its number and skin, then the run's evidence in the page language.
+// Each twin's accessible name: its number and mineral, then what is drawn on it, in the page language.
 export const rockNames = (d: Deck, g: Game, lang: Lang) => {
   const labels = strings.labels[lang]
-  return displayed(d, g).map((o, k) => `${labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]!)}. ${say(o.clue, labels)}`)
+  return displayed(d, g).map((o, k) => `${labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]!)}. ${describe(o.shape.facts, labels)}`)
 }
 
 export const open = (page: Page, lang: Lang = 'en', level = 1, query = '') => page.goto(urlPath(lang, level, query))

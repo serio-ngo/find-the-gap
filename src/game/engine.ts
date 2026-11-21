@@ -1,8 +1,10 @@
+import type { Signs } from './gen.ts'
+
 export type Mode = 'standard' | 'adaptive'
 export type Spec = { rule: string; step: number; seed: number }
 export type Wave = Spec & { symbols: string[]; answers: number[]; ids?: string[] }
 export type Policy = { high: number; low: number; window: number; confirm: number }
-export type ChoiceRecord = { id?: string; clue: string; rule: string; values: string[]; url?: string }
+export type ChoiceRecord = { id?: string; clue: string; rule: string; values: string[]; url?: string; signs?: Signs | null }
 export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'ids'> }
 // tail: the last waves every mode plays from the fixed sequence
 export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[]; tail?: number }

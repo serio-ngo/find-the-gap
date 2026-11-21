@@ -2,11 +2,16 @@ import { rng } from './engine.ts'
 import type { ChoiceRecord } from './engine.ts'
 
 export type Pt = [number, number]
-export type Part = { points: Pt[]; fill?: string; stroke?: string; width: number }
+// fill and stroke name a palette colour or carry a #hex mixed for the level's context strength
+export type Part = { points: Pt[]; fill?: string; stroke?: string; width: number; crystal?: true }
+// Context at the gate, as drawn levels: locks 0-3, job 0 none / 1 failed / 2 passed, share 0-4 quarters, impacts 0-2, agent 0-3.
+export type Signs = { locks: number; job: number; share: number; impacts: number; agent: number }
 
 const base = {
   void: '#141c23', shadow: '#283541', frame: '#576776', armor: '#aeb9bc', light: '#f3f1de',
   glass: '#3f7f8a', signal: '#a6e8e1', copper: '#e0ac70', ember: '#9b4f2f', violet: '#b79cf0', rose: '#f08fb0', lime: '#c6e87a', dull: '#4a5157',
+  // context hues: never an evidence hue, so a halo or an alien is never read as a crystal
+  halo0: '#2e4166', halo1: '#3f63b0', halo2: '#a9c6ff', alien0: '#7d6a1c', alien1: '#f2d45c', alienDim0: '#55503f', alienDim1: '#bdb595',
 }
 const minerals = {
   basalt: ['#1a2127', '#28323a', '#3f4c55', '#5f6e77', '#8b9a9f'],
@@ -25,7 +30,9 @@ export const colors: Record<string, string> = {
 }
 
 // Unit space: 1 is half of the rock's cell. The rock reaches about 0.68, its crystals about 0.95.
-export type Shape = { family: Family; outline: Pt[]; body: Part[]; marks: Part[] }
+// under: the halo behind the rock; over: craters and the alien on it; marks: the evidence; facts: what is drawn, for accessible names.
+export type Facts = { crystals: number; sockets: number; symmetric: boolean; segments: number; lit: number; craters: number; eyes: number }
+export type Shape = { family: Family; outline: Pt[]; under: Part[]; body: Part[]; over: Part[]; marks: Part[]; facts: Facts }
 
 export const hash = (s: string) => {
   let n = 2166136261
@@ -62,9 +69,9 @@ const digits = (v: string) => [...(v.length > 7 ? hash(v).toString(16) : v).padE
 })
 
 type Face = { points: Pt[]; edge: [Pt, Pt]; ring: number; noise: number }
-type Side = { out: Pt[]; faces: Face[]; craters: { c: Pt; size: number }[]; fissures: Pt[][] }
+type Side = { out: Pt[]; faces: Face[] }
 
-// One half of a rock (x >= 0, 12 o'clock to 6 o'clock), all from one seed; equal seeds give mirror-equal halves.
+// One half of a rock (x >= 0, 12 o'clock to 6 o'clock), all from one data seed; equal seeds give mirror-equal halves.
 function side(seed: string, ends: [number, number], squash: number): Side {
   const r = rng(hash(seed))
   const n = 7 + Math.floor(r() * 4)
@@ -82,27 +89,15 @@ function side(seed: string, ends: [number, number], squash: number): Side {
       faces.push({ points: b ? [a[i]!, a[i + 1]!, b[i + 1]!, b[i]!] : [a[i]!, a[i + 1]!, [0, 0]], edge: [out[i]!, out[i + 1]!], ring: k, noise: (r() - 0.5) * 0.8 })
     }
   }
-  const inside = (): Pt => at(-Math.PI / 2 + 0.35 + r() * (Math.PI - 0.7), 0.1 + r() * 0.22)
-  const craters = Array.from({ length: 1 + Math.floor(r() * 2) }, () => ({ c: inside(), size: 0.045 + r() * 0.04 }))
-  for (let i = 3 + Math.floor(r() * 4); i > 0; i--) craters.push({ c: inside(), size: 0.01 + r() * 0.012 })
-  const fissures: Pt[][] = []
-  if (r() < 0.6) {
-    let p = rings[1]![1 + Math.floor(r() * (n - 1))]!
-    const line: Pt[] = [p]
-    for (let s = 0; s < 3; s++) line.push((p = add(add(p, p, -(0.2 + r() * 0.15)), [(r() - 0.5) * 0.1, (r() - 0.5) * 0.1])))
-    fissures.push(line.map((q): Pt => [Math.max(0.01, q[0]), q[1]]))
-  }
-  return { out, faces, craters, fissures }
+  return { out, faces }
 }
 
 const flip = (s: Side): Side => ({
   out: s.out.map(mirror),
   faces: s.faces.map((f) => ({ ...f, points: f.points.map(mirror), edge: [mirror(f.edge[0]), mirror(f.edge[1])] })),
-  craters: s.craters.map((c) => ({ ...c, c: mirror(c.c) })),
-  fissures: s.fissures.map((l) => l.map(mirror)),
 })
 
-// A lit, faceted rock from two halves: shading, craters and cracks follow the geometry, so equal halves give a mirror-symmetric rock.
+// A lit, faceted rock from two halves: shading follows the geometry, so equal halves give a mirror-symmetric rock.
 function rock(family: Family, shared: string, right: string, left: string) {
   const s = rng(hash(shared))
   const ends: [number, number] = [0.5 + 0.12 * s(), 0.5 + 0.12 * s()]
@@ -126,17 +121,6 @@ function rock(family: Family, shared: string, right: string, left: string) {
     for (let i = 0; i + 1 < h.out.length; i++) {
       const l = lit([h.out[i]!, h.out[i + 1]!])
       body.push(wire([h.out[i]!, h.out[i + 1]!], tone(l > 0.25 ? 4 : l < -0.35 ? 0 : 1), l > 0.25 ? 0.016 : 0.022))
-    }
-    for (const line of h.fissures) {
-      body.push(wire(line.map((q) => add(q, LIGHT, -0.012)), tone(4), 0.008))
-      body.push(wire(line, tone(0), 0.016))
-    }
-    for (const { c, size } of h.craters) {
-      const flat = 1 - Math.min(0.5, len(c) * 0.9)
-      const angle = Math.atan2(c[1], c[0])
-      body.push(plate(ellipse(c, size * flat, size, angle), tone(1)))
-      body.push(plate(ellipse(add(c, LIGHT, -size * 0.28), size * flat * 0.72, size * 0.72, angle), tone(3)))
-      body.push(plate(ellipse(add(c, LIGHT, -size * 0.12), size * flat * 0.62, size * 0.62, angle), tone(2)))
     }
   }
   const [a, b] = halves
@@ -172,7 +156,7 @@ function crystal(root: Pt, dir: Pt, length: number, w: number, tint: string, mar
   const failed = tint === 'failed'
   const tip = add(add(root, dir, l), perp, failed ? w * 0.9 : 0)
   const [lit, shade, edge] = tints[tint] ?? tints.passed!
-  marks.push(plate([add(root, perp, w), add(shaft, perp, w), tip, root], lit, edge, 0.007))
+  marks.push({ ...plate([add(root, perp, w), add(shaft, perp, w), tip, root], lit, edge, 0.007), crystal: true })
   marks.push(plate([root, tip, add(shaft, perp, -w), add(root, perp, -w)], shade, edge, 0.007))
   if (failed) marks.push(wire([add(shaft, perp, w), add(add(root, dir, l * 0.55), perp, -w * 0.6)], 'void', 0.014))
 }
@@ -204,19 +188,76 @@ function druse(v: string, right: boolean, vent: number, out: Pt[], marks: Part[]
   }
 }
 
-// Evidence comes from the record's values only; the identity seeds nothing but the neutral rock under it.
-export function shape(record: Pick<ChoiceRecord, 'rule' | 'values'>, identity: string, family: Family): Shape {
+// A palette colour moved toward another by 1 - k: the step's context strength fades context into what lies behind it.
+const mix = (a: string, b: string, k: number) =>
+  `#${[1, 3, 5].map((i) => Math.round(parseInt(colors[a]!.slice(i, i + 2), 16) * k + parseInt(colors[b]!.slice(i, i + 2), 16) * (1 - k)).toString(16).padStart(2, '0')).join('')}`
+
+// Halo: one segment per lock plus one, centred on 12 o'clock; each segment lights its middle by the pass share.
+function halo(sg: Signs, k: number, parts: Part[]) {
+  const n = 1 + sg.locks
+  const span = TAU / n - (n > 1 ? 0.24 : 0)
+  const arc = (c: number, w: number): Pt[] => {
+    const m = Math.max(6, Math.ceil((64 * w) / TAU))
+    return Array.from({ length: m + 1 }, (_, i) => at(c - w / 2 + (i * w) / m, 0.86))
+  }
+  for (let i = 0; i < n; i++) {
+    const c = -Math.PI / 2 + (i * TAU) / n
+    parts.push(wire(arc(c, span), mix('halo0', 'void', k), 0.035))
+    if (!sg.share) continue
+    const lit = arc(c, (span * sg.share) / 4)
+    parts.push(wire(lit, mix('halo1', 'void', k), 0.085))
+    parts.push(wire(lit, mix('halo2', 'void', k), 0.032))
+  }
+}
+
+// Craters: review findings since the previous gate, on fixed mirrored spots.
+const SPOTS: Pt[][] = [[], [[0, -0.36]], [[-0.3, -0.26], [0.3, -0.26]]]
+function craters(sg: Signs, family: Family, k: number, parts: Part[]) {
+  for (const c of SPOTS[sg.impacts]!) {
+    const size = 0.09
+    const flat = 1 - Math.min(0.5, len(c) * 0.9)
+    const angle = Math.atan2(c[1], c[0])
+    const tone = (t: number) => mix(`${family}${t}`, `${family}2`, k)
+    parts.push(plate(ellipse(c, size * flat, size, angle), tone(0)))
+    parts.push(plate(ellipse(add(c, LIGHT, -size * 0.28), size * flat * 0.72, size * 0.72, angle), tone(4)))
+    parts.push(plate(ellipse(add(c, LIGHT, -size * 0.12), size * flat * 0.62, size * 0.62, angle), tone(1)))
+  }
+}
+
+// Alien: colour = tests job, eyes = agent commits since the previous gate (plus one), size grows with them.
+function alien(sg: Signs, family: Family, k: number, parts: Part[]) {
+  const r = 0.2 + 0.015 * sg.agent
+  const y = 0.1
+  const job = sg.job === 2 ? 'alien' : 'alienDim'
+  const c = (t: string) => mix(t, `${family}2`, k)
+  for (const s of [-1, 1]) {
+    parts.push(wire([[s * 0.35 * r, y - 0.8 * r], [s * 0.62 * r, y - 1.4 * r]], c(`${job}0`), 0.02))
+    parts.push(plate(ellipse([s * 0.62 * r, y - 1.4 * r], 0.17 * r, 0.17 * r, 0, 10), c(`${job}1`), c(`${job}0`), 0.008))
+  }
+  parts.push(plate(ellipse([0, y], r, r * 1.05, 0, 20), c(`${job}0`), c(`${job}0`), 0.01))
+  parts.push(plate(ellipse([0, y - 0.12 * r], r * 0.86, r * 0.9, 0, 20), c(`${job}1`)))
+  for (const e of [[0], [-0.38, 0.38], [-0.48, 0, 0.48], [-0.56, -0.19, 0.19, 0.56]][sg.agent]!) {
+    parts.push(plate(ellipse([e * r, y - 0.12 * r], 0.2 * r, 0.27 * r, 0, 12), c('armor')))
+    parts.push(plate(ellipse([e * r, y - 0.06 * r], 0.1 * r, 0.14 * r, 0, 10), c('void')))
+  }
+}
+
+// Every part comes from the record: evidence from its values, context from the pull request when the gate ran.
+// strength (0 to 1) is the step's context strength: it changes how strongly context shows, never what is drawn.
+export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, family: Family, strength = 1): Shape {
   const v = record.values
   const mirrored = record.rule === 'odd_revision'
-  const { outline, body } = rock(family, identity, `${identity}:r`, mirrored ? `${identity}:r` : `${identity}:l`)
+  const seed = `${record.rule}:${v.join(',')}`
+  // odd_revision grows each half from one commit, so equal commits give a mirror-symmetric rock
+  const { outline, body } = rock(family, record.rule, mirrored ? `c:${v[1]}` : seed, mirrored ? `c:${v[0]}` : seed)
   const marks: Part[] = []
   if (mirrored) {
-    const vent = -0.35 + ((hash(identity) % 100) / 100) * 0.7
+    const vent = -0.35 + ((hash(record.rule) % 100) / 100) * 0.7
     druse(v[0] ?? '', false, vent, outline, marks)
     druse(v[1] ?? '', true, vent, outline, marks)
   } else if (record.rule === 'missing_link') {
     // each result is a druse on its own slot; a missing result leaves the slot an empty socket
-    const r = rng(hash(`${identity}:druse`))
+    const r = rng(hash(`${seed}:druse`))
     for (const [i, s] of v.entries()) {
       const { rim, dir, root } = radial(outline, i, v.length)
       if (s === 'missing') {
@@ -234,7 +275,7 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values'>, identity: s
     })
     for (const h of new Set(home)) {
       const fan = home.filter((x) => x === h).length
-      const r = rng(hash(`${identity}:${h}`))
+      const r = rng(hash(`${seed}:${h}`))
       for (let j = 0; j < fan; j++) crystal(radial(outline, h, v.length).root, at(slot(h, v.length) + (j - (fan - 1) / 2) * 0.42 + (r() - 0.5) * 0.2, 1), 0.26 + 0.06 * r(), 0.05, 'passed', marks)
     }
   } else {
@@ -242,10 +283,29 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values'>, identity: s
     const n = 1 + (k % 5)
     for (let i = 0; i < n; i++) crystal(radial(outline, i, n).root, radial(outline, i, n).dir, 0.26, 0.045, ['passed', 'violet', 'lime'][k % 3]!, marks)
   }
-  return { family, outline, body, marks }
+  const under: Part[] = []
+  const over: Part[] = []
+  const sg = record.signs
+  if (sg) {
+    halo(sg, strength, under)
+    craters(sg, family, strength, over)
+    alien(sg, family, strength, over)
+  }
+  const facts: Facts = {
+    crystals: marks.filter((m) => m.crystal).length,
+    sockets: marks.filter((m) => m.fill === 'light').length,
+    symmetric: !mirrored || v[0] === v[1],
+    segments: sg ? 1 + sg.locks : 0,
+    lit: sg?.share ?? 0,
+    craters: sg?.impacts ?? 0,
+    eyes: sg ? 1 + sg.agent : 0,
+  }
+  return { family, outline, under, body, over, marks, facts }
 }
 
 export function paintObject(s: Shape, draw: (part: Part) => void) {
+  s.under.forEach(draw)
   s.body.forEach(draw)
+  s.over.forEach(draw)
   s.marks.forEach(draw)
 }

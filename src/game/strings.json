@@ -1,7 +1,33 @@
 {
   "visible": {
-    "pl": {"title": "Find the Gap", "play": "Graj", "level": "Poziom", "paused": "Pauza", "resume": "Wznów", "score": "Wynik", "you": "Ty", "ai": "AI", "chance": "Los", "typical": "Typowe", "atypical": "Nietypowe", "all": "Razem"},
-    "en": {"title": "Find the Gap", "play": "Play", "level": "Level", "paused": "Paused", "resume": "Resume", "score": "Score", "you": "You", "ai": "AI", "chance": "Chance", "typical": "Typical", "atypical": "Atypical", "all": "All"}
+    "pl": {
+      "title": "Find the Gap",
+      "play": "Graj",
+      "level": "Poziom",
+      "paused": "Pauza",
+      "resume": "Wznów",
+      "score": "Wynik",
+      "you": "Ty",
+      "ai": "AI",
+      "chance": "Los",
+      "typical": "Typowe",
+      "atypical": "Nietypowe",
+      "all": "Razem"
+    },
+    "en": {
+      "title": "Find the Gap",
+      "play": "Play",
+      "level": "Level",
+      "paused": "Paused",
+      "resume": "Resume",
+      "score": "Score",
+      "you": "You",
+      "ai": "AI",
+      "chance": "Chance",
+      "typical": "Typical",
+      "atypical": "Atypical",
+      "all": "All"
+    }
   },
   "labels": {
     "pl": {
@@ -23,7 +49,7 @@
       "red": "czerwony",
       "details": "Przebieg gry i źródła",
       "sources": "Źródła i etapy",
-      "switch": "Reguła się zmieniła",
+      "switch": "Poziom się zmienił",
       "hit": "Trafienie",
       "miss": "Pudło",
       "current": "Twój bieżący wynik",
@@ -45,7 +71,15 @@
       "tested": "testowany",
       "passed": "zaliczone",
       "failed": "niezaliczone",
-      "missing": "brak wyniku"
+      "missing": "brak wyniku",
+      "crystals": "kryształy: {n}",
+      "sockets": "puste gniazda: {n}",
+      "symmetric": "symetryczny",
+      "lopsided": "nierówny",
+      "halo": "aureola: segmenty {n}, świeci {q} z 4",
+      "craters": "kratery: {n}",
+      "alien": "kosmita, oczy: {n}",
+      "certain": "Fala pewna"
     },
     "en": {
       "pause": "Pause",
@@ -66,7 +100,7 @@
       "red": "red",
       "details": "Decisions and sources",
       "sources": "Sources and stages",
-      "switch": "The rule changed",
+      "switch": "The level changed",
       "hit": "Hit",
       "miss": "Miss",
       "current": "Your current score",
@@ -88,7 +122,15 @@
       "tested": "tested",
       "passed": "passed",
       "failed": "failed",
-      "missing": "missing"
+      "missing": "missing",
+      "crystals": "crystals: {n}",
+      "sockets": "empty sockets: {n}",
+      "symmetric": "symmetric",
+      "lopsided": "lopsided",
+      "halo": "halo segments: {n}, lit {q} of 4",
+      "craters": "craters: {n}",
+      "alien": "alien eyes: {n}",
+      "certain": "Certain wave"
     }
   }
 }

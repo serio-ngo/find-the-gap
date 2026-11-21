@@ -31,26 +31,33 @@ test('a keyboard-only player finishes level 1 through the rock twins', async ({ 
 
 const live = (page: import('@playwright/test').Page) => page.locator('.ftg-sr')
 
-test('a live region announces a hit on an anchor wave', async ({ page }) => {
+test('a research wave announces only its number', async ({ page }) => {
   await open(page)
-  await play(page, { limit: 3 })
+  await play(page, { limit: 4 })
+  await expect(live(page)).toHaveText(`${l.wave} 4`)
+})
+
+test('a live region announces a hit on a certain wave', async ({ page }) => {
+  await open(page)
+  await play(page, { limit: 5 })
   await expect(live(page)).toHaveText(l.hit)
 })
 
-test('a live region announces a miss on an anchor wave', async ({ page }) => {
+test('a live region announces a miss on a certain wave', async ({ page }) => {
   await open(page)
-  await play(page, { limit: 3, pick: (g) => (g.decisions.length === 2 ? wrong(deck, g) : right(deck, g)) })
+  await play(page, { limit: 5, pick: (g) => (g.decisions.length === 4 ? wrong(deck, g) : right(deck, g)) })
   await expect(live(page)).toHaveText(l.miss)
 })
 
-test('anchor choices have neutral names before the shot and announce a hit after it', async ({ page }) => {
+test('choices are named by what is drawn, never by raw values, and a certain hit is announced', async ({ page }) => {
   for (const lang of ['en', 'pl'] as const) {
     await open(page, lang)
     await playButton(page, lang).click()
-    const g = await play(page, { lang, limit: 2, begun: true })
+    const g = await play(page, { lang, limit: 4, begun: true })
     const names = await page.locator('.ftg-rocks button').evaluateAll((buttons) => buttons.map((button) => button.ariaLabel))
     const bad = { en: 'bad datum', pl: 'zła dana' }[lang]
     expect(names.filter((name) => name?.trim()).length).toBeGreaterThanOrEqual(4)
+    expect(names.join('|')).not.toMatch(/[0-9a-f]{7}|passed|failed|missing|zaliczone|brak wyniku/)
     expect.soft(names.join('\n')).not.toContain(bad)
     const slot = displayed(deck, g).findIndex((o) => o.sourceIndex === right(deck, g))
     await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click')

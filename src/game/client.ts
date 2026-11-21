@@ -8,7 +8,7 @@ import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
 import { bindInput } from './input.ts'
 import { load, save, clearSaves } from './stats.ts'
-import { refreshDownload, say, showReplay, showResult } from './debrief.ts'
+import { describe, refreshDownload, showReplay, showResult } from './debrief.ts'
 import type { Rounds, Text } from './debrief.ts'
 
 const root = document.querySelector<HTMLElement>('.ftg')!
@@ -32,7 +32,19 @@ const modeBtn = $<HTMLButtonElement>('.ftg-mode')
 const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
-const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches })
+// Aim behaviour for research: how long the lock rested on each rock this wave, and how often it moved to another rock.
+let dwell: number[] = []
+let aimed = -1
+let aimedAt = 0
+let switches = 0
+const onAim = (i: number) => {
+  const now = performance.now()
+  if (aimed >= 0) dwell[aimed] = (dwell[aimed] ?? 0) + now - aimedAt
+  if (i >= 0 && aimed >= 0 && i !== aimed) switches++
+  aimed = i
+  aimedAt = now
+}
+const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches, onAim })
 
 let mode: Mode = ai && query.get('mode') === 'adaptive' ? 'adaptive' : 'standard'
 let g: Game
@@ -73,15 +85,15 @@ const setPause = (p: boolean) => {
   else field.resume()
 }
 
-// The whole wave, evidence included, is on screen and in every accessible name before the clock starts; one pick ends the wave.
+// The whole wave, evidence and context, is on screen and in every accessible name before the clock starts; one pick ends the wave.
 const nextWave = () => {
   const spec = upcoming(deck, g)
   if (!spec) return end()
   const w = wave(deck, spec)
   const i = g.decisions.length
-  const objects = presentObjects(deck, w, `${deck.id}:${level}:${g.mode}:${i}`)
+  const objects = presentObjects(deck, w)
   rounds[i] = objects
-  const names = objects.map((o, k) => `${l.rock.replace('{n}', String(k + 1)).replace('{s}', l[o.shape.family] ?? l.object)}. ${say(o.clue, l)}`)
+  const names = objects.map((o, k) => `${l.rock.replace('{n}', String(k + 1)).replace('{s}', l[o.shape.family] ?? l.object)}. ${describe(o.shape.facts, l)}`)
   rocksEl.replaceChildren(...objects.map((_, k) => {
     const b = Object.assign(document.createElement('button'), { className: 'ftg-rock', onclick: () => pick(k, w) })
     b.dataset.rock = String(k)
@@ -92,6 +104,9 @@ const nextWave = () => {
   $('.ftg-hits').textContent = String(score(g))
   $('.ftg-wave').textContent = `${i + 1}/${total}`
   t0 = performance.now()
+  dwell = []
+  aimed = -1
+  switches = 0
   answer = null
   if (api && !fixed(deck, g, i)) {
     askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects && g.decisions.length === i) answer = a })
@@ -106,11 +121,13 @@ const pick = async (i: number, w: Wave) => {
   const objects = rounds[g.decisions.length]!
   const rule = g.rule
   const got = answer
+  onAim(i)
+  const aim = { ms: performance.now() - t0, dwell: dwell[i] ?? 0, switches }
   g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
   const d = g.decisions.at(-1)!
   d.ai = got ? got.ai : ai && aiPick(ai, deck, g, g.decisions.length - 1)
   const p = g.mode === 'adaptive' ? (got ? got[d.hit ? 'hit' : 'miss'] : estimate(deck, { ...g, rule })) : 0
-  waves.push(resultRow(deck, d, p, got, first))
+  waves.push(resultRow(deck, d, p, got, first, aim))
   const switched = g.mode === 'adaptive' && g.rule !== rule
   $('.ftg-switch').hidden = !switched
   live.textContent = [d.anchor ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
@@ -162,7 +179,7 @@ motion.onchange = (e) => !toggled && setCalm(e.matches)
 setMode(mode)
 modeBtn.hidden = !ai
 phase('start')
-bindInput(root, field, { togglePause: () => setPause(root.dataset.phase === 'play'), focus: (i) => field.focus(i), aim: (x) => field.aim(x) })
+bindInput(root, field, { togglePause: () => setPause(root.dataset.phase === 'play'), focus: (i) => field.focus(i), aim: (x, y) => field.aim(x, y), lock: (i) => field.lock(i) })
 $('.ftg-play').onclick = start
 $('.ftg-again').onclick = start
 $('.ftg-resume').onclick = () => setPause(false)

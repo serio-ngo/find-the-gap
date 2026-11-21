@@ -30,10 +30,16 @@ export const stepRequest = (d: Deck, v: number, level: number, w: Spec, past: De
   past: past.map((x) => [ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, band(x.secs)]),
 })
 
-// first: 1 when this device had not finished this level edition before, so the wave was a first exposure
-export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, first: boolean) => [
+export type Aim = { ms: number; dwell: number; switches: number }
+export const MAX_MS = 600_000
+const ms = (x: number) => Math.min(MAX_MS, Math.max(0, Math.round(x)))
+
+// first: 1 when this device had not finished this level edition before, so the wave was a first exposure.
+// Then the exact reaction time, the aim dwell on the picked rock (both ms) and the aim switches: aggregates only, never a pointer trace.
+export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, first: boolean, aim: Aim) => [
   ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, +x.hit, band(x.secs),
   typeof x.ai === 'number' ? x.ai : -1, u(p), live ? 1 : 0, +!!live?.cached, +first,
+  ms(aim.ms), ms(aim.dwell), Math.min(99, aim.switches),
 ]
 
 export const resultRequest = (v: number, level: number, mode: Mode, waves: number[][]) => ({ v, level, mode: mode === 'adaptive' ? 1 : 0, waves })

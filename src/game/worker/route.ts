@@ -1,6 +1,7 @@
 import { URL_AI, canonical, content, keys, round05, stepBody, validate, wave } from '../engine.ts'
 import type { AiPick, Deck, Past, Spec } from '../engine.ts'
 import { decks } from '../levels/index.ts'
+import { MAX_MS } from '../net.ts'
 
 export type GameEnv = {
   DB: {
@@ -110,12 +111,12 @@ const result = async (b: Record<string, unknown>, env: GameEnv) => {
   const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'waves']))
   const rows = Array.isArray(b.waves) && b.waves.length <= seq.length ? b.waves : bad()
   const waves = rows.map((r, i) => {
-    const a = list(r, 11)
+    const a = list(r, 14)
     const s = spec(d, standard, seq, i, a)
     const { w, hit } = hitOf(d, s, a[3] as number)
     if (a[4] !== +hit) bad()
     const n = w.symbols.length - 1
-    return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 1), int(a[9], 1), int(a[10], 1)]
+    return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 1), int(a[9], 1), int(a[10], 1), int(a[11], MAX_MS), int(a[12], MAX_MS), int(a[13], 99)]
   })
   if ((await used(env, 'result')) > RESULT_CAP) return new Response(null, { status: 204 })
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')

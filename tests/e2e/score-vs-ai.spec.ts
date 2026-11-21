@@ -28,11 +28,11 @@ test('after two plays the top list has two entries and one is current', async ({
   await expect(page.locator('.ftg-top [aria-current]')).toHaveCount(1)
 })
 
-test('the debrief shows both duel scores and links every choice to its public run', async ({ page }) => {
+test('the debrief scores certain waves only, links their runs and keeps research waves hidden', async ({ page }) => {
   await open(page, 'en', 2)
   const g = await play(page, { level: 2, pick: (s) => wrong(deck, s) })
   await expectEnd(page, g)
-  const scored = g.decisions.map((d, i) => ({ d, ai: aiPick(run, deck, g, i) }))
+  const scored = g.decisions.flatMap((d, i) => (d.anchor ? [{ d, ai: aiPick(run, deck, g, i) }] : []))
   const aiPlayed = scored.filter(({ ai }) => typeof ai === 'number')
   const aiHits = aiPlayed.filter(({ d, ai }) => wave(deck, d.spec).answers.includes(ai!)).length
   await expect(page.locator('.ftg-duel strong')).toHaveText([`0/${scored.length}`, `${aiHits}/${aiPlayed.length}`])
@@ -40,9 +40,12 @@ test('the debrief shows both duel scores and links every choice to its public ru
   await replay.locator(':scope > summary').click()
   const rowsShown = replay.locator('.ftg-decision')
   await expect(rowsShown).toHaveCount(g.decisions.length)
-  await rowsShown.first().locator('summary').first().click()
-  const objects = rowsShown.first().locator('.ftg-object-evidence')
-  const slots = displayed(deck, g, 0)
+  await expect(rowsShown.first().locator('details, a, svg')).toHaveCount(0)
+  await expect(rowsShown.first()).not.toContainText('✓')
+  const certain = rowsShown.nth(4)
+  await certain.locator('summary').first().click()
+  const objects = certain.locator('.ftg-object-evidence')
+  const slots = displayed(deck, g, 4)
   await expect(objects).toHaveCount(slots.length)
   await objects.first().locator('summary').click()
   await expect(objects.first().getByRole('link')).toHaveAttribute('href', slots[0]!.url!)

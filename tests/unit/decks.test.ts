@@ -67,10 +67,10 @@ describe('observation deck', () => {
     }
   })
 
-  it('has three levels of 21 scored waves, the last from runs no scored wave uses', () => {
+  it('has three levels of 21 waves, certain only at 5, 10, 15 and 20, the last from runs no scored wave uses', () => {
     expect(observations.levels).toHaveLength(3)
     for (const l of observations.levels) {
-      expect(l.anchors).toHaveLength(21)
+      expect(l.anchors).toEqual([4, 9, 14, 19])
       expect(l.sequence).toHaveLength(21)
       expect(l.tail).toBe(1)
       expect(unseen(l.sequence.at(-1)!.seed)).toBe(true)
