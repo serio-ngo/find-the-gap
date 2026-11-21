@@ -1,4 +1,4 @@
-import { band } from './engine.ts'
+import { MAX_MS, band } from './engine.ts'
 import type { Deck, Decision, Mode, Spec } from './engine.ts'
 
 export type Step = { ai: number | null; hit: number; miss: number; cached: boolean }
@@ -31,7 +31,6 @@ export const stepRequest = (d: Deck, v: number, level: number, w: Spec, past: De
 })
 
 export type Aim = { ms: number; dwell: number; switches: number }
-export const MAX_MS = 600_000
 const ms = (x: number) => Math.min(MAX_MS, Math.max(0, Math.round(x)))
 
 // first: 1 when this device had not finished this level edition before, so the wave was a first exposure.

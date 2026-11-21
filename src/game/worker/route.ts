@@ -1,7 +1,6 @@
-import { URL_AI, canonical, content, keys, round05, stepBody, validate, wave } from '../engine.ts'
+import { MAX_MS, URL_AI, canonical, content, keys, round05, stepBody, validate, wave } from '../engine.ts'
 import type { AiPick, Deck, Past, Spec } from '../engine.ts'
 import { decks } from '../levels/index.ts'
-import { MAX_MS } from '../net.ts'
 
 export type GameEnv = {
   DB: {

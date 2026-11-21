@@ -30,6 +30,9 @@ export const MODEL = 'd1.1'
 export const URL_AI = 'https://api.liquid.ai/decisions/v1/systemone'
 export const HISTORY = 3
 
+// longest reaction time or aim dwell a research row stores, in ms
+export const MAX_MS = 600_000
+
 export const round05 = (x: number) => Math.round(x * 20) / 20
 
 export const keys = (w: Wave) => w.symbols.map((_, i) => `r${i}`)
