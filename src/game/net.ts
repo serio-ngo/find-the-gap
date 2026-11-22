@@ -33,9 +33,6 @@ export const stepRequest = (d: Deck, v: number, level: number, w: Spec, past: De
 export type Aim = { ms: number; dwell: number[]; switches: number }
 const ms = (x: number) => Math.min(MAX_MS, Math.max(0, Math.round(x)))
 
-// Row layout and scoring version: part of the edition, so stored rows never mix layouts.
-export const LAYOUT = 1
-
 // Columns after first (1 on a first exposure): reaction ms, aim switches, certain wave, aim dwell ms per rock in source order; aggregates only.
 export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, first: boolean, aim: Aim) => [
   ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, +x.hit, band(x.secs),
