@@ -25,8 +25,8 @@ export type Channel = keyof typeof level
 // Channels drawn per level; tests/unit/leak.test.ts keeps out any that gives the gap away.
 export const CHANNELS: Record<string, Channel[]> = {
   odd_revision: ['job', 'share', 'impacts'],
-  missing_link: ['locks', 'job', 'share', 'impacts', 'agent'],
-  pair: ['job', 'share', 'impacts'],
+  missing_link: ['locks', 'share', 'impacts', 'agent'],
+  pair: ['job', 'share'],
 }
 
 // A channel the level does not draw shows at its resting level, so a rock never carries a channel that gives its gap away.
@@ -79,11 +79,20 @@ const controls = (r: () => number, from: Row[], gap: Row, n: number, step: numbe
   return out
 }
 
+const turn = <T>(gaps: T[], i: number) => {
+  const queue = [...gaps]
+  for (let k = 0; k < i; k++) {
+    const head = queue.shift()!
+    if (!CERTAIN.includes(k)) queue.push(head)
+  }
+  return queue[0]!
+}
+
 const wave = (rule: string, step: number, seed: number) => {
   const from = rows.filter((x) => x.rule === rule && x.research === unseen(seed))
   // gaps take turns, so consecutive seeds show every gap run before any repeats
   const gaps = shuffle(rng(order.indexOf(rule) + 7), from.filter((x) => x.gap))
-  const gap = gaps[seed % gaps.length]!
+  const gap = seed < UNSEEN ? turn(gaps, seed % 100) : gaps[seed % gaps.length]!
   const r = rng(seed)
   const choice = shuffle(r, [gap, ...controls(r, from.filter((x) => !x.gap), gap, counts[step - 1]! - 1, step)])
   return { symbols: choice.map(clue), answers: choice.flatMap((x, i) => (x.gap ? [i] : [])), ids: choice.map((x) => x.id) }
