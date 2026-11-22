@@ -56,9 +56,11 @@ export const upcoming = (d: Deck, g: Game): Spec | null => {
   const sequence = d.levels.find((l) => l.id === g.level)!.sequence
   const i = g.decisions.length
   if (g.mode === 'standard' || i >= fixedFrom(d, g.level)) return sequence[i] ?? null
-  const p = pool(d, g.rule, g.step)
-  const j = Math.floor(rng(g.level * 100 + i)() * d.poolSize)
-  return p[p[j]!.seed === g.decisions.at(-1)?.spec.seed ? (j + 1) % d.poolSize : j]!
+  const all = pool(d, g.rule, g.step)
+  const free = all.filter((s) => !g.decisions.some((x) => x.spec.seed === s.seed))
+  // shortcut: a game longer than the pool repeats seeds, so keep the pool at least as long as the adaptive waves
+  const from = free.length ? free : all
+  return from[Math.floor(rng(g.level * 100 + i)() * from.length)]!
 }
 
 export const estimate = (d: Deck, g: Game): number => {
@@ -128,10 +130,9 @@ export const report = (d: Deck, g: Game) => {
 export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
   model: MODEL,
   state: {
-    rule: w.rule,
     step: w.step,
     rocks: w.symbols,
-    history: history.slice(-HISTORY).map((h) => ({ rocks: h.symbols, answers: h.answers })),
+    history: history.slice(-HISTORY).map((h) => ({ rocks: h.symbols })),
   },
   questions: {
     ai: {
@@ -154,7 +155,7 @@ export const stepBody = (d: Deck, w: Wave, past: Past[]): object => {
     ...body,
     state: {
       ...body.state,
-      history: past.slice(-HISTORY).map((p) => ({ rocks: p.w.symbols, answers: p.w.answers, hit: p.hit, tempo: p.tempo })),
+      history: past.slice(-HISTORY).map((p) => ({ rocks: p.w.symbols, hit: p.hit, tempo: p.tempo })),
     },
     questions: { ...body.questions, if_hit: { ...answer, instructions: IF_HIT }, if_miss: { ...answer, instructions: IF_MISS } },
   }
@@ -178,7 +179,7 @@ export const content = (d: Deck): unknown => ({
   poolSize: d.poolSize,
   policy: d.policy,
   question: d.question,
-  levels: d.levels.map((l) => ({ id: l.id, start: l.start, waves: l.sequence.map((s) => wave(d, s)) })),
+  levels: d.levels.map((l) => ({ id: l.id, start: l.start, anchors: l.anchors, waves: l.sequence.map((s) => wave(d, s)) })),
   pool: d.rules.flatMap((r) =>
     Array.from({ length: d.steps }, (_, i) => pool(d, r.id, i + 1).map((s) => wave(d, s))).flat(),
   ),

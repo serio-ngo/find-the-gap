@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { canonical, content, wave } from '../src/game/engine.ts'
 import type { Deck } from '../src/game/engine.ts'
+import { wilson } from '../src/game/stats.ts'
 import { digest } from '../src/game/eval/version.ts'
 import { decks } from '../src/game/levels/index.ts'
 import { ATYPICAL, gapRow, pattern, rowOf, typicality } from '../src/game/levels/observations.ts'
@@ -33,16 +34,6 @@ const rate = (s: Stat) => ({ shown: s.shown, human: s.human / s.shown, ai: s.aiS
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b)
   return s.length ? (s[(s.length - 1) >> 1]! + s[s.length >> 1]!) / 2 : null
-}
-
-// 95% Wilson interval for k of n
-export const wilson = (k: number, n: number): [number, number] => {
-  const z = 1.96
-  const p = k / n
-  const d = 1 + (z * z) / n
-  const c = (p + (z * z) / (2 * n)) / d
-  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d
-  return [Math.max(0, c - h), Math.min(1, c + h)]
 }
 
 // The same id the Worker writes into `version`.

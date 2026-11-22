@@ -112,7 +112,7 @@ export const observations: Deck = {
     return { id, clue: clue(r), rule: r.rule, values: r.values, url: r.run, signs: signs(r) }
   }),
   typical: (w) => typicality(gapRow(w)) >= ATYPICAL,
-  poolSize: 8,
+  poolSize: 20,
   // the AI gets the task the players get: no rule is named
   question: 'Each rock is one public gate run, given by its recorded values. Which rock does not fit with the others? Pick one.',
   levels: order.map((rule, k) => ({

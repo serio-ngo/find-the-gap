@@ -206,7 +206,7 @@ describe('step', () => {
     expect(f.mock.calls[0][1].headers.authorization).toBe('Bearer k')
     const sent = JSON.parse(f.mock.calls[0][1].body)
     expect(JSON.stringify(sent)).not.toMatch(/example|1\.2\.3\.4/)
-    expect(sent.state.rule).toBe('colour')
+    expect(sent.state).not.toHaveProperty('rule')
   })
 })
 

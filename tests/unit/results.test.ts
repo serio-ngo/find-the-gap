@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest'
 import { wave } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
-import { edition, summarize, wilson } from '../../scripts/results.ts'
+import { edition, summarize } from '../../scripts/results.ts'
+import { wilson } from '../../src/game/stats.ts'
 
 it('reads only results of the current deck edition and splits human and AI hits by rule, pattern and gap case', () => {
   const d = decks.observations!
