@@ -57,8 +57,8 @@ export function png(level: number): Buffer {
       const dy = y2 - y
       return { x, y, y2, dx, dy, length: dx * dx + dy * dy }
     })
-    const interior = fill && rgb(colors[fill])
-    const line = stroke && rgb(colors[stroke])
+    const interior = fill && rgb(colors[fill] ?? fill)
+    const line = stroke && rgb(colors[stroke] ?? stroke)
     for (let y = top; y <= bottom; y++) {
       const intersections = interior && edges.filter((p) => (p.y > y) !== (p.y2 > y))
         .map((p) => p.x + (y - p.y) * p.dx / p.dy).sort((a, b) => a - b)
@@ -80,7 +80,7 @@ export function png(level: number): Buffer {
   }
 
   const spec = deck.levels.find((l) => l.id === level)!.sequence[0]!
-  const objects = presentObjects(deck, wave(deck, spec), `${deck.id}:${level}:standard:0`)
+  const objects = presentObjects(deck, wave(deck, spec))
   const radius = Math.min(170, W / (2 * objects.length))
   for (const [i, { shape }] of objects.entries()) {
     const x = W * (i + 0.5) / objects.length

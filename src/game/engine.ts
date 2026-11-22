@@ -1,8 +1,10 @@
+import type { Signs } from './gen.ts'
+
 export type Mode = 'standard' | 'adaptive'
 export type Spec = { rule: string; step: number; seed: number }
 export type Wave = Spec & { symbols: string[]; answers: number[]; ids?: string[] }
 export type Policy = { high: number; low: number; window: number; confirm: number }
-export type ChoiceRecord = { id?: string; clue: string; rule: string; values: string[]; url?: string }
+export type ChoiceRecord = { id?: string; clue: string; rule: string; values: string[]; url?: string; signs?: Signs | null }
 export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'ids'> }
 // tail: the last waves every mode plays from the fixed sequence
 export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[]; tail?: number }
@@ -27,6 +29,9 @@ export const rng = (seed: number) => () => {
 export const MODEL = 'd1.1'
 export const URL_AI = 'https://api.liquid.ai/decisions/v1/systemone'
 export const HISTORY = 3
+
+// longest reaction time or aim dwell a research row stores, in ms
+export const MAX_MS = 600_000
 
 export const round05 = (x: number) => Math.round(x * 20) / 20
 
@@ -81,8 +86,10 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   const hit = wave(d, spec).answers.includes(pick)
   const anchor = d.levels.find((l) => l.id === g.level)!.anchors.includes(g.decisions.length)
   const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
-  if (g.mode === 'standard') return next
-  const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, next))
+  // adaptive play moves its parameters only after a certain wave, so a research wave's truth never shows in the next wave
+  if (g.mode === 'standard' || !anchor) return next
+  // shortcut: the live AI forecast still sees research picks, as a fuzzy aggregate; filter its history if that proves readable
+  const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, { ...next, decisions: next.decisions.filter((x) => x.anchor) }))
   return { ...next, rule, step, streak }
 }
 

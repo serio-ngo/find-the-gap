@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { wave } from '../../src/game/engine.ts'
-import { colors, families, paintObject, shape } from '../../src/game/gen.ts'
-import type { Part, Shape } from '../../src/game/gen.ts'
+import { colors, paintObject, shape } from '../../src/game/gen.ts'
+import { families } from '../../src/game/geom.ts'
+import type { Part, Shape, Signs } from '../../src/game/gen.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { presentObjects } from '../../src/game/objects.ts'
 
@@ -23,7 +24,7 @@ const picture = (s: Shape) => {
       for (let i = cell(Math.min(...xs)); i <= cell(Math.max(...xs)); i++) if (inside(p.points, ((i + 0.5) / N) * 2 - 1, ((j + 0.5) / N) * 2 - 1)) px[j * N + i] = c
     }
   }
-  paintObject(s, (p) => p.fill && fill(p, colors[p.fill]!))
+  paintObject(s, (p) => p.fill && fill(p, colors[p.fill] ?? p.fill))
   return px
 }
 const holes = (px: string[]) => px.filter((c) => c === colors.light).length
@@ -50,28 +51,58 @@ describe('the board carries the evidence', () => {
   it('is reproducible for every skin', () => {
     for (const family of families) {
       const r = { rule: 'pair', values: ['t1', 't1', 't3'] }
-      expect(shape(r, 'a', family)).toEqual(shape(r, 'a', family))
+      expect(shape(r, family)).toEqual(shape(r, family))
     }
   })
 
   it('odd revision: equal commits give a mirror-symmetric rock, different commits a lopsided one', () => {
-    expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'] }, 'a', 'ice')))).toBe(0)
-    expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'a', 'ice')))).toBeGreaterThan(0.02)
+    expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'] }, 'ice')))).toBe(0)
+    expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'ice')))).toBeGreaterThan(0.02)
+  })
+
+  const full: Signs = { locks: 3, job: 2, share: 3, impacts: 2, agent: 3 }
+  it('halo, craters and alien keep an equal-commit rock mirror-symmetric, and each follows its field', () => {
+    const r = (signs: Signs | null) => shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'], signs }, 'iron')
+    expect(lopsided(picture(r(full)))).toBe(0)
+    expect(r(full).facts).toMatchObject({ segments: 4, lit: 3, craters: 2, eyes: 4, symmetric: true })
+    expect(r(null).under).toEqual([])
+    expect(r(null).over).toEqual([])
+    expect(r({ ...full, impacts: 0 }).over.length).toBe(r(full).over.length - 6)
+    expect(r({ ...full, locks: 0 }).under.length).toBeLessThan(r(full).under.length)
+  })
+
+  it('the alien is at least 0.2 of the half cell wide and grows with agent commits', () => {
+    const width = (agent: number) => {
+      const xs = shape({ rule: 'pair', values: ['t1', 't2'], signs: { ...full, agent } }, 'basalt').over.slice(-(4 + 2 * (agent + 1)) - 2).flatMap((p) => p.points.map((q) => q[0]))
+      return Math.max(...xs) - Math.min(...xs)
+    }
+    expect(width(0)).toBeGreaterThanOrEqual(0.4)
+    expect(width(3)).toBeGreaterThan(width(0))
+  })
+
+  it('context strength fades context colours, never evidence or what is drawn', () => {
+    const a = shape({ rule: 'pair', values: ['t1', 't1', 't3'], signs: full }, 'basalt', 0.4)
+    const b = shape({ rule: 'pair', values: ['t1', 't1', 't3'], signs: full }, 'basalt', 1)
+    expect(a.marks).toEqual(b.marks)
+    expect(a.body).toEqual(b.body)
+    expect(a.facts).toEqual(b.facts)
+    expect(a.over.map((p) => p.points)).toEqual(b.over.map((p) => p.points))
+    expect(a.over.map((p) => p.fill)).not.toEqual(b.over.map((p) => p.fill))
   })
 
   it('missing link and pair: one empty socket per criterion without its own result or test', () => {
-    const sockets = (rule: string, values: string[]) => shape({ rule, values }, 'a', 'iron').marks.filter((m) => m.fill === 'light').length
+    const sockets = (rule: string, values: string[]) => shape({ rule, values }, 'iron').facts.sockets
     expect(sockets('missing_link', ['passed', 'failed', 'passed'])).toBe(0)
     expect(sockets('missing_link', ['failed', 'missing', 'missing', 'passed'])).toBe(2)
     expect(sockets('pair', ['t1', 't2', 't3', 't4'])).toBe(0)
     expect(sockets('pair', ['t1', 't1', 't1', 't4'])).toBe(2)
   })
 
-  it('paints the body, then the evidence', () => {
-    const s = shape({ rule: 'pair', values: ['t1', 't2'] }, 'a', 'carbon')
+  it('paints the halo, the body, craters and alien, then the evidence on top', () => {
+    const s = shape({ rule: 'pair', values: ['t1', 't2'], signs: full }, 'carbon')
     const parts: Part[] = []
     paintObject(s, (p) => parts.push(p))
-    expect(parts).toEqual([...s.body, ...s.marks])
+    expect(parts).toEqual([...s.under, ...s.body, ...s.over, ...s.marks])
   })
 
   // The proof: an observer that sees only the picture finds the gap in every scored wave; the stored AI run reads the text.
@@ -83,7 +114,7 @@ describe('the board carries the evidence', () => {
       let model = 0
       l.sequence.forEach((s, i) => {
         const w = wave(d, s)
-        const objects = presentObjects(d, w, `${d.id}:${l.id}:standard:${i}`)
+        const objects = presentObjects(d, w)
         eye += +w.answers.includes(objects[look(objects.map((o) => o.shape))]!.sourceIndex)
         model += +w.answers.includes(ai[l.id]![i] as number)
       })

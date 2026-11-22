@@ -8,8 +8,8 @@ it('reads only results of the current deck edition and splits human and AI hits 
   const spec = d.levels[0]!.sequence[0]!
   const w = wave(d, spec)
   const right = w.answers[0]!
-  const row = (pick: number, ai: number, first: number) => [0, spec.step, spec.seed, pick, +(pick === right), 1, ai, 0, 0, 0, first]
-  const waves = JSON.stringify([row(right, right, 1), row((right + 1) % w.symbols.length, -1, 1)])
+  const row = (pick: number, ai: number, first: number, ms: number) => [0, spec.step, spec.seed, pick, +(pick === right), 1, ai, 0, 0, 0, first, ms, ms / 2, 1]
+  const waves = JSON.stringify([row(right, right, 1, 1000), row((right + 1) % w.symbols.length, -1, 1, 3000)])
   const out = summarize([
     { version: edition(d), level: 1, mode: 0, waves },
     { version: 'observations:000000000000', level: 1, mode: 0, waves },
@@ -18,6 +18,8 @@ it('reads only results of the current deck edition and splits human and AI hits 
   expect(out.rules.odd_revision).toEqual({ shown: 2, human: 0.5, ai: 1 })
   expect(out.patterns['odd_revision typical']).toEqual({ shown: 2, human: 0.5, ai: 1 })
   expect(out.hardest).toEqual([{ id: w.ids![right], arity: 2, breaks: 1, pattern: 'differ', typicality: 1, shown: 2, human: 0.5, ai: 1 }])
+  expect(out.waves).toEqual({ research: { shown: 2, human: 0.5, ai: 1 } })
+  expect(out.aim).toEqual({ hit: { n: 1, ms: 1000, dwell: 500, switches: 1 }, miss: { n: 1, ms: 3000, dwell: 1500, switches: 1 } })
   expect(out.peers).toEqual([{ wave: `1:odd_revision:${spec.step}:${spec.seed}`, n: 2, enough: false }])
 })
 

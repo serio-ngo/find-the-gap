@@ -49,7 +49,7 @@ const play = async (name: 'observations' | 'fixture', mode: Mode) => {
     const x = g.decisions.at(-1)!
     x.ai = live ? live.ai : ai && aiPick(ai, d, g, g.decisions.length - 1)
     const p = mode === 'adaptive' ? (live ? live[x.hit ? 'hit' : 'miss'] : estimate(d, { ...g, rule })) : 0
-    waves.push(resultRow(d, x, p, live, true))
+    waves.push(resultRow(d, x, p, live, true, { ms: 2345.6, dwell: 812, switches: 3 }))
   }
   return { body: resultRequest(v, 1, mode, waves), waves, g }
 }
@@ -67,6 +67,6 @@ describe('client bodies are accepted by the route', () => {
   it('wave bodies are integers and the fixture sends no AI pick as -1', async () => {
     const { waves } = await play('fixture', 'standard')
     expect(waves.flat().every(Number.isInteger)).toBe(true)
-    expect(waves.every((r) => r[6] === -1 && r[7] === 0 && r[10] === 1)).toBe(true)
+    expect(waves.every((r) => r[6] === -1 && r[7] === 0 && r[10] === 1 && r[11] === 2346 && r[12] === 812 && r[13] === 3)).toBe(true)
   })
 })

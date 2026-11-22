@@ -1,8 +1,11 @@
 import { rng } from '../engine.ts'
 import type { ChoiceRecord, Deck, Rule, Wave } from '../engine.ts'
+import type { Signs } from '../gen.ts'
 import { rows } from './rows.ts'
 
-export type Row = { id: string; rule: string; roles: string[]; values: string[]; gap: boolean; research: boolean; run: string }
+// The pull request when the gate ran; null where the archive has no snapshot of it.
+export type Context = { locks: number | null; impacts: number | null; agent: number | null; job: string | null; share: number | null }
+export type Row = { id: string; rule: string; roles: string[]; values: string[]; gap: boolean; research: boolean; run: string; context: Context | null }
 
 export const gapOf: Record<string, (values: string[]) => boolean> = {
   odd_revision: (v) => v[0] !== v[1],
@@ -10,7 +13,29 @@ export const gapOf: Record<string, (values: string[]) => boolean> = {
   pair: (v) => new Set(v).size < v.length,
 }
 
+// Each context channel at the level it is drawn; a run without a snapshot draws nothing.
+export const level = {
+  locks: (c: Context | null) => Math.min(3, c?.locks ?? 0),
+  job: (c: Context | null) => (c?.job === 'success' ? 2 : c?.job ? 1 : 0),
+  share: (c: Context | null) => (c?.share == null ? 0 : Math.round(c.share * 4)),
+  impacts: (c: Context | null) => Math.min(2, c?.impacts ?? 0),
+  agent: (c: Context | null) => Math.min(3, c?.agent ?? 0),
+}
+export type Channel = keyof typeof level
+// Channels drawn per level; tests/unit/leak.test.ts keeps out any that gives the gap away.
+export const CHANNELS: Record<string, Channel[]> = {
+  odd_revision: ['job', 'share', 'impacts'],
+  missing_link: ['locks', 'job', 'share', 'impacts', 'agent'],
+  pair: ['job', 'share', 'impacts'],
+}
+
+// A channel the level does not draw shows at its resting level, so a rock never carries a channel that gives its gap away.
+export const signs = (r: Row): Signs | null =>
+  r.context && (Object.fromEntries(Object.entries(level).map(([k, f]) => [k, CHANNELS[r.rule]!.includes(k as Channel) ? f(r.context) : 0])) as Signs)
+
 const order = ['odd_revision', 'missing_link', 'pair']
+// Only waves 5, 10, 15 and 20 are certain: the player sees a verdict there and nowhere else. The rest is research.
+export const CERTAIN = [4, 9, 14, 19]
 const counts = [4, 5, 6, 6, 7]
 const WAVES = 20
 // Seeds 900 to 999 draw runs that no scored wave of the deck uses.
@@ -27,14 +52,6 @@ export const clue = (r: Row) => r.roles.map((role, i) => `${role} ${r.values[i]}
 
 // What the player sees, as a signature: equal or different commits, otherwise the values in role order.
 export const pattern = (r: Row) => (r.rule === 'odd_revision' ? (r.values[0] === r.values[1] ? 'same' : 'differ') : r.values.join(','))
-
-// Parameters a run gives from its own values: how many items, how many break the rule, and its pattern.
-export const params = (r: Row) => {
-  const breaks = r.rule === 'odd_revision' ? +(r.values[0] !== r.values[1])
-    : r.rule === 'missing_link' ? r.values.filter((v) => v === 'missing').length
-    : r.values.filter((v) => r.values.indexOf(v) !== r.values.lastIndexOf(v)).length
-  return { arity: r.values.length, breaks, pattern: pattern(r) }
-}
 
 const scored = rows.filter((r) => !r.research)
 
@@ -83,16 +100,16 @@ export const observations: Deck = {
   rules: order.map((id): Rule => ({ id, make: (step, seed) => wave(id, step, seed) })),
   choiceRecords: (w): ChoiceRecord[] => w.ids!.map((id) => {
     const r = byId.get(id)!
-    return { id, clue: clue(r), rule: r.rule, values: r.values, url: r.run }
+    return { id, clue: clue(r), rule: r.rule, values: r.values, url: r.run, signs: signs(r) }
   }),
   typical: (w) => typicality(gapRow(w)) >= ATYPICAL,
   poolSize: 8,
-  question:
-    'Each rock is the evidence of one public gate run. odd_revision: the reported and the tested commit should be the same. missing_link: every criterion should have a test result. pair: every criterion should have its own test. Exactly one rock breaks the rule of the wave; pick it.',
+  // the AI gets the task the players get: no rule is named
+  question: 'Each rock is one public gate run, given by its recorded values. Which rock does not fit with the others? Pick one.',
   levels: order.map((rule, k) => ({
     id: k + 1,
     start: { rule, step: 1 },
-    anchors: Array.from({ length: WAVES + 1 }, (_, i) => i),
+    anchors: CERTAIN,
     tail: 1,
     sequence: [
       ...Array.from({ length: WAVES }, (_, i) => ({ rule, step: 1 + Math.floor(i / 4), seed: k * 100 + i })),

@@ -1,11 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { gapOf } from '../src/game/levels/observations.ts'
-import type { Row } from '../src/game/levels/observations.ts'
+import type { Context, Row } from '../src/game/levels/observations.ts'
 
 type Observation = {
   id: string; relation: string; items: { role: string; value: unknown }[]; gap: boolean
-  links: { run: string }; flags: { visibility: string; split: string; labelled: boolean }
+  links: { run: string }; flags: { visibility: string; split: string; labelled: boolean }; context?: Context | null
 }
 
 const value = (v: unknown) => String(v).replace(/^AC\d+(-AC\d+)?:\s*/, '')
@@ -17,7 +17,7 @@ export const toRows = (text: string): { rows: Row[]; dropped: string[] } => {
     .filter((o) => o.flags.visibility === 'public' && o.flags.split === 'deck' && o.relation in gapOf)
     .map((o): Row => ({
       id: o.id, rule: o.relation, roles: o.items.map((i) => i.role), values: label(o.relation, o.items.map((i) => value(i.value))),
-      gap: o.gap, research: !o.flags.labelled, run: o.links.run,
+      gap: o.gap, research: !o.flags.labelled, run: o.links.run, context: o.context ?? null,
     }))
   const ok = (r: Row) => gapOf[r.rule]!(r.values) === r.gap
   return { rows: all.filter(ok), dropped: all.filter((r) => !ok(r)).map((r) => `${r.id} ${r.rule} [${r.values}] archive gap ${r.gap}`) }

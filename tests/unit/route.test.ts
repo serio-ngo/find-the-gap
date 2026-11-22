@@ -211,7 +211,7 @@ describe('step', () => {
 })
 
 describe('result', () => {
-  const row = (pick: number, hit: number) => [0, 1, 0, pick, hit, 1, 0, 12, 0, 0, 1]
+  const row = (pick: number, hit: number) => [0, 1, 0, pick, hit, 1, 0, 12, 0, 0, 1, 2345, 812, 3]
   const body = (waves: number[][]) => ({ v: FIXTURE, level: 1, mode: 0, waves })
 
   it('stores one row under the exact deck edition with the day only, drops rows older than a year once a day and rejects a lying hit', async () => {
@@ -229,7 +229,9 @@ describe('result', () => {
     expect(deleted).toEqual([new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10)])
     expect((await send('/api/game/result', body([row(pick, 1)]), env)).status).toBe(204)
     expect(deleted).toHaveLength(1)
-    expect((await send('/api/game/result', body([row(pick, 1).slice(0, 10)]), env)).status).toBe(400)
+    expect((await send('/api/game/result', body([row(pick, 1).slice(0, 11)]), env)).status).toBe(400)
+    expect((await send('/api/game/result', body([[...row(pick, 1).slice(0, 11), 600_001, 0, 0]]), env)).status).toBe(400)
+    expect((await send('/api/game/result', body([[...row(pick, 1).slice(0, 13), 100]]), env)).status).toBe(400)
     const lie = await send('/api/game/result', body([row(pick, 0)]), env)
     expect(lie.status).toBe(400)
     expect(results).toHaveLength(2)
@@ -250,7 +252,7 @@ describe('result', () => {
     const seq = d.levels[0]!.sequence
     const rows = (last: unknown, hit: number) => seq.map((s, i) => {
       const right = wave(d, s).answers[0]!
-      return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, i === seq.length - 1 ? last : right, i === seq.length - 1 ? hit : 1, 1, -1, 0, 0, 0, 1]
+      return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, i === seq.length - 1 ? last : right, i === seq.length - 1 ? hit : 1, 1, -1, 0, 0, 0, 1, 600_000, 600_000, 99]
     })
     const right = wave(d, seq.at(-1)!).answers[0]!
     const send0 = (last: unknown, hit: number) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(last, hit) }, env)

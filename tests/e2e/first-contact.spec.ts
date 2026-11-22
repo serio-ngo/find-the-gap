@@ -5,7 +5,7 @@ import { deck, displayed, expectEnd, open, play, playButton, rockNames, strings 
 const l = strings.labels.en
 
 for (const lang of ['en', 'pl'] as const)
-  test(`in ${lang} every rock carries its evidence from the first frame, with nothing to reveal and one pick per wave`, async ({ page }) => {
+  test(`in ${lang} every rock carries its evidence and context from the first frame, one pick per wave, a verdict only on certain waves`, async ({ page }) => {
     await open(page, lang)
     await playButton(page, lang).click()
     const g = begin(deck, 1, 'standard')
@@ -19,7 +19,9 @@ for (const lang of ['en', 'pl'] as const)
     const after = await play(page, { lang, begun: true, start: shoot(deck, g, displayed(deck, g)[0]!.sourceIndex) })
     expect(after.decisions).toHaveLength(21)
     await expectEnd(page, after, lang)
-    await expect(page.locator('.ftg-duel strong').first()).toHaveText(`${after.decisions.filter((d) => d.hit).length}/21`)
+    const certain = after.decisions.filter((d) => d.anchor)
+    expect(certain).toHaveLength(4)
+    await expect(page.locator('.ftg-duel strong').first()).toHaveText(`${certain.filter((d) => d.hit).length}/4`)
   })
 
 test('pointer input on the canvas picks a rock', async ({ page }, info) => {

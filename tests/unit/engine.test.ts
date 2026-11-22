@@ -71,16 +71,24 @@ describe('engine', () => {
     expect(score(end)).toBe(400)
   })
 
-  it('shoot with live moves the step by the float; without it the result is the estimate', () => {
+  it('adaptive shoot holds the step on a research wave', () => {
     const g = { ...begin(deck, 1, 'adaptive'), step: 2 }
+    expect(shoot(deck, g, 0, 0, { hit: 0.9, miss: 0.9 }).step).toBe(2)
+    expect(shoot(deck, g, 0, 0, { hit: 0.1, miss: 0.1 }).step).toBe(2)
+  })
+
+  it('shoot with live moves the step by the float on a certain wave; without it the result is the estimate', () => {
+    const start = { ...begin(deck, 1, 'adaptive'), step: 2 }
+    const g = [0, 0, 0].reduce((acc, p) => shoot(deck, acc, p), start)
+    expect(g.step).toBe(2)
     for (const pick of [0, 1]) {
       const up = shoot(deck, g, pick, 0, { hit: 0.9, miss: 0.9 })
       const down = shoot(deck, g, pick, 0, { hit: 0.1, miss: 0.1 })
       const split = shoot(deck, g, pick, 0, { hit: 0.9, miss: 0.1 })
       expect([up.step, down.step]).toEqual([3, 1])
-      expect(split.step).toBe(split.decisions[0].hit ? 3 : 1)
+      expect(split.step).toBe(split.decisions[3]!.hit ? 3 : 1)
       const next = { ...g, decisions: split.decisions }
-      expect(shoot(deck, g, pick).step).toBe(advance(deck, g, estimate(deck, next)).step)
+      expect(shoot(deck, g, pick).step).toBe(advance(deck, g, estimate(deck, { ...next, decisions: next.decisions.filter((x) => x.anchor) })).step)
     }
   })
 

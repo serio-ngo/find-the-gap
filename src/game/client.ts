@@ -6,9 +6,10 @@ import { askStep, resultRequest, resultRow, sendResult, stepRequest } from './ne
 import type { Step } from './net.ts'
 import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
+import { aimTracker } from './aim.ts'
 import { bindInput } from './input.ts'
 import { load, save, clearSaves } from './stats.ts'
-import { refreshDownload, say, showReplay, showResult } from './debrief.ts'
+import { describe, refreshDownload, showReplay, showResult } from './debrief.ts'
 import type { Rounds, Text } from './debrief.ts'
 
 const root = document.querySelector<HTMLElement>('.ftg')!
@@ -32,7 +33,10 @@ const modeBtn = $<HTMLButtonElement>('.ftg-mode')
 const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
-const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches })
+// Aim behaviour for research: how long the lock rested on each rock this wave, and how often it moved to another rock.
+const aim = aimTracker()
+const onAim = (i: number) => aim.lock(i, root.dataset.phase === 'paused' ? pausedAt : performance.now(), root.dataset.phase === 'play')
+const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches, onAim })
 
 let mode: Mode = ai && query.get('mode') === 'adaptive' ? 'adaptive' : 'standard'
 let g: Game
@@ -66,22 +70,25 @@ const setMode = (m: Mode) => {
 const setPause = (p: boolean) => {
   if (root.dataset.phase !== (p ? 'play' : 'paused')) return
   if (p) pausedAt = performance.now()
-  else t0 += performance.now() - pausedAt
+  else {
+    t0 += performance.now() - pausedAt
+    aim.resume(performance.now() - pausedAt)
+  }
   phase(p ? 'paused' : 'play')
   pauseEl.hidden = !p
   if (p) field.pause()
   else field.resume()
 }
 
-// The whole wave, evidence included, is on screen and in every accessible name before the clock starts; one pick ends the wave.
+// The whole wave, evidence and context, is on screen and in every accessible name before the clock starts; one pick ends the wave.
 const nextWave = () => {
   const spec = upcoming(deck, g)
   if (!spec) return end()
   const w = wave(deck, spec)
   const i = g.decisions.length
-  const objects = presentObjects(deck, w, `${deck.id}:${level}:${g.mode}:${i}`)
+  const objects = presentObjects(deck, w)
   rounds[i] = objects
-  const names = objects.map((o, k) => `${l.rock.replace('{n}', String(k + 1)).replace('{s}', l[o.shape.family] ?? l.object)}. ${say(o.clue, l)}`)
+  const names = objects.map((o, k) => `${l.rock.replace('{n}', String(k + 1)).replace('{s}', l[o.shape.family] ?? l.object)}. ${describe(o.shape.facts, l)}`)
   rocksEl.replaceChildren(...objects.map((_, k) => {
     const b = Object.assign(document.createElement('button'), { className: 'ftg-rock', onclick: () => pick(k, w) })
     b.dataset.rock = String(k)
@@ -91,13 +98,16 @@ const nextWave = () => {
   field.show(objects, names)
   $('.ftg-hits').textContent = String(score(g))
   $('.ftg-wave').textContent = `${i + 1}/${total}`
-  t0 = performance.now()
   answer = null
   if (api && !fixed(deck, g, i)) {
     askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects && g.decisions.length === i) answer = a })
   }
   busy = false
   rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
+  // the automatic first focus is not the player's aim
+  field.lock(-1)
+  t0 = performance.now()
+  aim.reset(t0)
 }
 
 const pick = async (i: number, w: Wave) => {
@@ -106,11 +116,13 @@ const pick = async (i: number, w: Wave) => {
   const objects = rounds[g.decisions.length]!
   const rule = g.rule
   const got = answer
+  onAim(i)
+  const aimed = { ms: performance.now() - t0, ...aim.read(i) }
   g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
   const d = g.decisions.at(-1)!
   d.ai = got ? got.ai : ai && aiPick(ai, deck, g, g.decisions.length - 1)
   const p = g.mode === 'adaptive' ? (got ? got[d.hit ? 'hit' : 'miss'] : estimate(deck, { ...g, rule })) : 0
-  waves.push(resultRow(deck, d, p, got, first))
+  waves.push(resultRow(deck, d, p, got, first, aimed))
   const switched = g.mode === 'adaptive' && g.rule !== rule
   $('.ftg-switch').hidden = !switched
   live.textContent = [d.anchor ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
@@ -149,7 +161,8 @@ const end = () => {
   rocksEl.replaceChildren()
   $('.ftg-hits').textContent = String(score(g))
   $('.ftg-end').hidden = false
-  save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions })
+  // the saved history keeps a research wave's truth out, like the screen does
+  save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions.map(({ hit, ...d }) => (d.anchor ? { ...d, hit } : d)) })
   refreshDownload(root)
   showResult(root, deck, g, edition, text)
   showReplay(root, deck, g, rounds, text)
@@ -162,7 +175,7 @@ motion.onchange = (e) => !toggled && setCalm(e.matches)
 setMode(mode)
 modeBtn.hidden = !ai
 phase('start')
-bindInput(root, field, { togglePause: () => setPause(root.dataset.phase === 'play'), focus: (i) => field.focus(i), aim: (x) => field.aim(x) })
+bindInput(root, field, { togglePause: () => setPause(root.dataset.phase === 'play'), focus: (i) => field.focus(i), aim: (x, y) => field.aim(x, y), lock: (i) => field.lock(i) })
 $('.ftg-play').onclick = start
 $('.ftg-again').onclick = start
 $('.ftg-resume').onclick = () => setPause(false)

@@ -1,6 +1,7 @@
 import { report, score, wave } from './engine.ts'
 import type { Deck, Game, Tally } from './engine.ts'
 import { colors, paintObject } from './gen.ts'
+import type { Facts } from './gen.ts'
 import type { presentObjects } from './objects.ts'
 import { copy, links, resultText, share } from './share.ts'
 import { exportSaves, load } from './stats.ts'
@@ -16,6 +17,15 @@ let download = ''
 // A clue in the page language: known words (reported, passed, missing…) have labels; criteria, tests and commits stay as they are.
 export const say = (clue: string, l: Record<string, string | undefined>) => clue.split(' ').map((t) => l[t] ?? t).join(' ')
 
+// What a rock shows, in words: the same parts a sighted player sees, never the record's raw values.
+export const describe = (f: Facts, l: Record<string, string | undefined>) => {
+  const n = (key: string, v: number) => l[key]!.replace('{n}', String(v))
+  return [
+    n('crystals', f.crystals), n('sockets', f.sockets), f.symmetric ? l.symmetric : l.lopsided,
+    ...(f.segments ? [n('halo', f.segments).replace('{q}', String(f.lit)), n('craters', f.craters), n('alien', f.eyes), f.bright ? l.bright! : l.dim!] : []),
+  ].join(', ')
+}
+
 export const refreshDownload = (root: HTMLElement) => {
   URL.revokeObjectURL(download)
   download = URL.createObjectURL(new Blob([exportSaves()], { type: 'application/json' }))
@@ -26,7 +36,7 @@ const svg = (shape: Rounds[number][number]['shape']) => {
   const paths: string[] = []
   paintObject(shape, ({ points, fill, stroke, width }) => {
     const d = points.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(3)} ${y.toFixed(3)}`).join('')
-    paths.push(`<path d="${d}${fill ? 'Z' : ''}" fill="${fill ? colors[fill] : 'none'}" stroke="${stroke ? colors[stroke] : 'none'}" stroke-width="${width}"/>`)
+    paths.push(`<path d="${d}${fill ? 'Z' : ''}" fill="${fill ? (colors[fill] ?? fill) : 'none'}" stroke="${stroke ? (colors[stroke] ?? stroke) : 'none'}" stroke-width="${width}"/>`)
   })
   return `<svg viewBox="-1.05 -1.05 2.1 2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths.join('')}</svg>`
 }
@@ -57,7 +67,9 @@ export const showReplay = (root: HTMLElement, deck: Deck, g: Game, rounds: Round
       ${a ? `<span>${esc(v.ai)} ${choice(ap)} ${mark(ahit)}</span>` : ''}
       <span>${esc(seconds)}</span>${tags}
     </summary><ul class="ftg-sources" aria-label="${esc(l.sources)}"></ul></details></li>`
-    return { hit: d.anchor ? d.hit : null, ahit: d.anchor ? ahit : null, scored: d.anchor, html, refs, exhibit }
+    // a research wave keeps what was under it hidden: no verdict, no sources, only the pick and its time
+    const hidden = `<li class="ftg-decision"><div class="ftg-quiet"><span>${esc(v.you)} ${target + 1}.</span> <span>${esc(seconds)}</span></div></li>`
+    return { hit: d.anchor ? d.hit : null, ahit: d.anchor ? ahit : null, scored: d.anchor, html: d.anchor ? html : hidden, refs, exhibit }
   })
   const strip = (name: string, hits: (boolean | null)[]) => {
     const played = hits.filter((h) => h !== null)
@@ -66,7 +78,9 @@ export const showReplay = (root: HTMLElement, deck: Deck, g: Game, rounds: Round
   const scored = rows.filter((r) => r.scored)
   root.querySelector('.ftg-duel')!.innerHTML = strip(v.you, scored.map((r) => r.hit)) + (scored.some((r) => r.ahit !== null) ? strip(v.ai, scored.map((r) => r.ahit)) : '')
   root.querySelector('.ftg-decisions')!.innerHTML = rows.map((r) => r.html).join('')
-  root.querySelectorAll<HTMLDetailsElement>('.ftg-decision > details').forEach((entry, i) => {
+  root.querySelectorAll<HTMLElement>('.ftg-decision').forEach((li, i) => {
+    const entry = li.querySelector<HTMLDetailsElement>(':scope > details')
+    if (!entry) return
     entry.ontoggle = () => {
       if (!entry.open) return
       entry.querySelector('.ftg-sources')!.innerHTML = rows[i]!.refs()
