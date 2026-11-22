@@ -104,7 +104,7 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
       const a = ((await res.json()) as { answers?: Record<string, AiPick> }).answers ?? {}
       return { ai: validate(keys(w), a.ai).choice, hit: validate(['hit', 'miss'], a.if_hit).probabilities.hit!, miss: validate(['hit', 'miss'], a.if_miss).probabilities.hit! }
     } catch {
-      return fail('invalid answer')
+      return fail(signal.aborted ? 'timeout' : 'invalid answer')
     }
   }
   const pass = await Promise.all([ask(), ask()]).catch((e: Error) => e)
