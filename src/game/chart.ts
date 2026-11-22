@@ -8,8 +8,9 @@ export type Labels = { you: string; ai: string; chance: string; typical: string;
 export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
 
 const pct = (p: number) => Math.round(p * 100)
-const X0 = 80
-const W = 220
+const X0 = 56
+const W = 240
+const TOP = 22
 
 export const spread = (secs: number[]) => {
   const s = [...secs].sort((a, b) => a - b)
@@ -28,16 +29,18 @@ export const chart = ({ all }: Report, l: Labels) => {
   const x = (p: number) => X0 + p * W
   const label = `${rows.map((r) => `${r.name} ${r.hits}/${r.n}, ${l.chart} ${r.lo}–${r.hi}%`).join('; ')}; ${l.chance.toLowerCase()} ${chance}%`
   const body = rows.map((r, i) => {
-    const y = 30 + i * 36
+    const y = TOP + 18 + i * 36
     return `<text class="ftg-chart-t" x="0" y="${y + 4}">${esc(`${r.name} ${r.hits}/${r.n}`)}</text>`
       + `<line class="ftg-chart-${r.k}" x1="${x(r.lo / 100)}" x2="${x(r.hi / 100)}" y1="${y}" y2="${y}" stroke-width="3"/>`
       + `<circle class="ftg-chart-${r.k}" cx="${x(r.p)}" cy="${y}" r="6"/>`
   }).join('')
-  const h = 30 + rows.length * 36
-  const ticks = [0, 50, 100].map((t) => `<text class="ftg-chart-t" x="${x(t / 100)}" y="${h}" text-anchor="middle">${t}%</text>`).join('')
-  return `<svg class="ftg-chart-svg" viewBox="0 0 320 ${h + 6}" role="img" aria-label="${esc(label)}">`
-    + `<line class="ftg-chart-chance" x1="${x(chance / 100)}" x2="${x(chance / 100)}" y1="8" y2="${h - 16}" stroke-width="2" stroke-dasharray="4 3"/>`
-    + `<text class="ftg-chart-t" x="${x(chance / 100)}" y="6" text-anchor="middle">${esc(`${l.chance} ${chance}%`)}</text>${body}${ticks}</svg>`
+  const base = TOP + rows.length * 36
+  const grid = [0, 50, 100].map((t) => `<line class="ftg-chart-grid" x1="${x(t / 100)}" x2="${x(t / 100)}" y1="${TOP}" y2="${base}"/>`
+    + `<text class="ftg-chart-t" x="${x(t / 100)}" y="${base + 14}" text-anchor="middle">${t}%</text>`).join('')
+  return `<svg class="ftg-chart-svg" viewBox="0 0 320 ${base + 20}" role="img" aria-label="${esc(label)}">${grid}`
+    + `<line class="ftg-chart-grid" x1="${x(0)}" x2="${x(1)}" y1="${base}" y2="${base}"/>`
+    + `<line class="ftg-chart-chance" x1="${x(chance / 100)}" x2="${x(chance / 100)}" y1="${TOP}" y2="${base}" stroke-width="2" stroke-dasharray="4 3"/>`
+    + `<text class="ftg-chart-t" x="${x(chance / 100)}" y="12" text-anchor="${chance > 60 ? 'end' : 'start'}">${esc(`${l.chance} ${chance}%`)}</text>${body}</svg>`
 }
 
 // Typical and atypical rows only when both have waves; chance as a rate.

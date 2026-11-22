@@ -13,7 +13,7 @@
       "typical": "Typowe",
       "atypical": "Nietypowe",
       "all": "Razem",
-      "explain": "tylko pewne fale: 100 za trafienie plus do 100 za szybkość",
+      "explain": "Tylko pewne fale: 100 za trafienie plus do 100 za szybkość",
       "research": "{n} fal badawczych · mediana {median} · {range}"
     },
     "en": {
@@ -29,7 +29,7 @@
       "typical": "Typical",
       "atypical": "Atypical",
       "all": "All",
-      "explain": "certain waves only: 100 per hit plus up to 100 for speed",
+      "explain": "Certain waves only: 100 per hit plus up to 100 for speed",
       "research": "{n} research waves · median {median} · {range}"
     }
   },
