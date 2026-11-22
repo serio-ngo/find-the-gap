@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chart, spread, table } from '../../src/game/chart.ts'
+import { chart, label, spread, table } from '../../src/game/chart.ts'
 import type { Labels } from '../../src/game/chart.ts'
 import strings from '../../src/game/strings.json'
 import { wilson } from '../../src/game/stats.ts'
@@ -8,27 +8,25 @@ const tally = (you: number, n: number, ai: number, aiN: number, chance: number) 
 const rep = (all: ReturnType<typeof tally>, typical: ReturnType<typeof tally> | null = null, atypical: ReturnType<typeof tally> | null = null) => ({ all, typical, atypical })
 const en: Labels = { ...strings.visible.en, chart: strings.labels.en.chart }
 const pl: Labels = { ...strings.visible.pl, chart: strings.labels.pl.chart }
-const label = (svg: string) => /aria-label="([^"]*)"/.exec(svg)![1]!
+const pc = (hits: number, n: number) => wilson(hits, n).map((p) => Math.round(p * 100)).join('–')
 
 describe('chart', () => {
-  it('labels the Wilson interval and chance', () => {
-    const [lo, hi] = wilson(3, 4).map((p) => Math.round(p * 100))
-    const a = label(chart(rep(tally(3, 4, 4, 4, 1.25)), en))
-    expect(a).toContain(`You 3/4, 95% interval ${lo}–${hi}%`)
-    expect(a).toContain('AI 4/4')
-    expect(a).toContain('chance 31%')
+  it('labels each row with its Wilson interval and the chance rate', () => {
+    expect(label(rep(tally(3, 4, 4, 4, 1.25)), en)).toBe(
+      `${en.you} 3/4, ${en.chart} ${pc(3, 4)}%; ${en.ai} 4/4, ${en.chart} ${pc(4, 4)}%; ${en.chance.toLowerCase()} 31%`,
+    )
   })
   it('has no AI row and no NaN without AI waves', () => {
-    const svg = chart(rep(tally(3, 4, 0, 0, 1.25)), en)
-    expect(svg).not.toContain('AI')
-    expect(svg).not.toContain('NaN')
+    const a = label(rep(tally(3, 4, 0, 0, 1.25)), en)
+    expect(a).not.toContain(en.ai)
+    expect(a).not.toContain('NaN')
   })
   it('returns nothing for an empty report', () => {
     expect(chart(rep(tally(0, 0, 0, 0, 0)), en)).toBe('')
   })
   it('speaks PL and EN', () => {
-    expect(label(chart(rep(tally(3, 4, 4, 4, 1.25)), pl))).toContain('Ty 3/4, przedział 95%')
-    expect(strings.visible.pl.explain).not.toBe(strings.visible.en.explain)
+    const r = rep(tally(3, 4, 4, 4, 1.25))
+    expect(label(r, pl)).toBe(label(r, en).replace(en.you, pl.you).replace(en.ai, pl.ai).replaceAll(en.chart, pl.chart).replace(en.chance.toLowerCase(), pl.chance.toLowerCase()))
   })
 })
 

@@ -12,7 +12,7 @@ export type GameEnv = {
 }
 
 const DAILY_CAP = 1000
-const MAX_BYTES = 4096
+const MAX_BYTES = 2048
 const RESULT_CAP = 5000
 const POOL_FROM = 1000
 const TIMEOUT = 1500
@@ -54,6 +54,21 @@ const fallback = (why: string) => {
   return json({ fallback: true })
 }
 
+const fail = (why: string): never => {
+  throw new Error(why)
+}
+
+const prune = async (env: GameEnv) => {
+  const day = new Date().toISOString().slice(0, 10)
+  if (pruned === day) return
+  const old = Date.now() - KEEP_DAYS * 86_400_000
+  try {
+    await env.DB.prepare('DELETE FROM game_cache WHERE created < ?').bind(old).run()
+    await env.DB.prepare('DELETE FROM game_results WHERE day < ?').bind(new Date(old).toISOString().slice(0, 10)).run()
+    pruned = day
+  } catch {}
+}
+
 const used = (env: GameEnv, col: 'step' | 'result', n = 1) =>
   env.DB.prepare(`INSERT INTO game_use (day, ${col}) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET ${col} = ${col} + ? RETURNING ${col} AS n`)
     .bind(new Date().toISOString().slice(0, 10), n, n)
@@ -62,6 +77,7 @@ const used = (env: GameEnv, col: 'step' | 'result', n = 1) =>
 
 const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }) => {
   const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'wave', 'past']))
+  ctx.waitUntil(prune(env))
   const rows = Array.isArray(b.past) && b.past.length < seq.length ? b.past : bad()
   const past: Past[] = rows.map((p, i) => {
     const a = list(p, 5)
@@ -76,18 +92,23 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
   if (!env.KEY) return fallback('no key')
   if ((await used(env, 'step', 2)) > DAILY_CAP) return fallback('cap spent')
   const ask = async () => {
+    const signal = AbortSignal.timeout(TIMEOUT)
     const res = await fetch(URL_AI, {
       method: 'POST',
       headers: { authorization: `Bearer ${env.KEY}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT),
-    })
-    if (!res.ok) throw new Error('liquid ' + res.status)
-    const a = ((await res.json()) as { answers?: Record<string, AiPick> }).answers ?? {}
-    return { ai: validate(keys(w), a.ai).choice, hit: validate(['hit', 'miss'], a.if_hit).probabilities.hit!, miss: validate(['hit', 'miss'], a.if_miss).probabilities.hit! }
+      signal,
+    }).catch(() => fail(signal.aborted ? 'timeout' : 'unreachable'))
+    if (!res.ok) fail('liquid ' + res.status)
+    try {
+      const a = ((await res.json()) as { answers?: Record<string, AiPick> }).answers ?? {}
+      return { ai: validate(keys(w), a.ai).choice, hit: validate(['hit', 'miss'], a.if_hit).probabilities.hit!, miss: validate(['hit', 'miss'], a.if_miss).probabilities.hit! }
+    } catch {
+      return fail('invalid answer')
+    }
   }
-  const pass = await Promise.all([ask(), ask()]).catch(() => null)
-  if (!pass) return fallback('model pass failed')
+  const pass = await Promise.all([ask(), ask()]).catch((e: Error) => e)
+  if (pass instanceof Error) return fallback(pass.message)
   const [x, y] = pass
   const out = {
     ai: x.ai === y.ai ? Number(x.ai.slice(1)) : null,
@@ -116,13 +137,7 @@ const result = async (b: Record<string, unknown>, env: GameEnv) => {
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
     .bind(new Date().toISOString().slice(0, 10), await edition(d), b.level, standard ? 0 : 1, JSON.stringify(waves))
     .run()
-  const day = new Date().toISOString().slice(0, 10)
-  if (pruned !== day) {
-    pruned = day
-    const old = Date.now() - KEEP_DAYS * 86_400_000
-    await env.DB.prepare('DELETE FROM game_cache WHERE created < ?').bind(old).run()
-    await env.DB.prepare('DELETE FROM game_results WHERE day < ?').bind(new Date(old).toISOString().slice(0, 10)).run()
-  }
+  await prune(env)
   return new Response(null, { status: 204 })
 }
 

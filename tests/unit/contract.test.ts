@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { aiPick, begin, estimate, shoot, upcoming, wave } from '../../src/game/engine.ts'
+import { MAX_MS, aiPick, asks, begin, forecast, shoot, upcoming, wave } from '../../src/game/engine.ts'
 import type { AiRun, Mode } from '../../src/game/engine.ts'
-import { asks, resultRequest, resultRow, stepRequest } from '../../src/game/net.ts'
+import { resultRequest, resultRow, stepRequest } from '../../src/game/net.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import run from '../../src/game/eval/ai-run.json'
 import { route } from '../../src/game/worker/route.ts'
@@ -50,7 +50,7 @@ const play = async (name: 'observations' | 'fixture', mode: Mode) => {
     g = shoot(d, g, g.decisions.length % 2, 2, live ? { hit: live.hit, miss: live.miss } : undefined)
     const x = g.decisions.at(-1)!
     x.ai = live ? live.ai : ai && aiPick(ai, d, g, g.decisions.length - 1)
-    const p = mode === 'adaptive' ? (live ? live[x.hit ? 'hit' : 'miss'] : estimate(d, { ...g, rule })) : 0
+    const p = mode === 'adaptive' ? forecast(d, { ...g, rule }, live ?? undefined) : 0
     waves.push(resultRow(d, x, p, live, true, { ms: 2345.6, dwell: wave(d, spec).symbols.map(() => 812), switches: 3 }))
   }
   return { body: resultRequest(v, 1, mode, waves), waves, g, asked }
@@ -70,8 +70,8 @@ describe('client bodies are accepted by the route', () => {
   it('a worst-case body stays under the byte limit', () => {
   const d = decks.observations!
   const x = { spec: d.levels[0]!.sequence[0]!, pick: 6, hit: true, anchor: true, secs: 9 }
-  const row = resultRow(d, x, 1, { ai: 6, hit: 1, miss: 1, cached: true }, true, { ms: 99_999, dwell: Array(7).fill(99_999), switches: 99 })
-  expect(JSON.stringify(resultRequest(0, 1, 'adaptive', Array(21).fill(row))).length).toBeLessThan(4096)
+  const row = resultRow(d, x, 1, { ai: 6, hit: 1, miss: 1, cached: true }, true, { ms: MAX_MS, dwell: Array(7).fill(MAX_MS), switches: 99 })
+  expect(JSON.stringify(resultRequest(0, 1, 'adaptive', Array(21).fill(row))).length).toBeLessThan(2048)
 })
 
 it('wave bodies are integers and the fixture sends no AI pick as -1', async () => {

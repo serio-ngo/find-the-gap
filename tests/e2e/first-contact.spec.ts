@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { begin, shoot } from '../../src/game/engine.ts'
-import { deck, displayed, expectEnd, open, play, playButton, rockNames, strings } from './helpers.ts'
+import { chartName, deck, displayed, expectEnd, open, play, playButton, rockNames, strings } from './helpers.ts'
 
 const l = strings.labels.en
 
@@ -21,7 +21,7 @@ for (const lang of ['en', 'pl'] as const)
     await expectEnd(page, after, lang)
     const certain = after.decisions.filter((d) => d.anchor)
     expect(certain).toHaveLength(4)
-    await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(/\S/)
+    await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(chartName(after, lang))
     await expect(page.locator('.ftg-table tbody tr').last().locator('td').first()).toHaveText(`${certain.filter((d) => d.hit).length}/4`)
     const hud = await page.locator('.ftg-hud').innerText()
     expect(hud).not.toContain('21/21')

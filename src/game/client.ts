@@ -1,8 +1,8 @@
 import { decks } from './levels/index.ts'
-import { aiPick, begin, estimate, upcoming, wave, shoot, score } from './engine.ts'
+import { aiPick, asks, begin, forecast, upcoming, wave, shoot, score } from './engine.ts'
 import type { AiRun, Game, Mode, Wave } from './engine.ts'
 import stored from './eval/ai-run.json'
-import { askStep, asks, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
+import { askStep, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
 import type { Step } from './net.ts'
 import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
@@ -121,7 +121,7 @@ const pick = async (i: number, w: Wave) => {
   g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
   const d = g.decisions.at(-1)!
   d.ai = got ? got.ai : ai && aiPick(ai, deck, g, g.decisions.length - 1)
-  const p = g.mode === 'adaptive' ? (got ? got[d.hit ? 'hit' : 'miss'] : estimate(deck, { ...g, rule })) : 0
+  const p = g.mode === 'adaptive' ? forecast(deck, { ...g, rule }, got ?? undefined) : 0
   waves.push(resultRow(deck, d, p, got, first, aimed))
   const switched = g.mode === 'adaptive' && g.rule !== rule
   $('.ftg-switch').hidden = !switched

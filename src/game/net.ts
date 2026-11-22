@@ -1,5 +1,5 @@
-import { MAX_MS, band, fixed } from './engine.ts'
-import type { Deck, Decision, Game, Mode, Spec } from './engine.ts'
+import { MAX_MS, band } from './engine.ts'
+import type { Deck, Decision, Mode, Spec } from './engine.ts'
 
 export type Step = { ai: number | null; hit: number; miss: number; cached: boolean }
 
@@ -30,14 +30,13 @@ export const stepRequest = (d: Deck, v: number, level: number, w: Spec, past: De
   past: past.map((x) => [ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, band(x.secs)]),
 })
 
-// Only the certain waves of an adaptive game are forecast live; research waves never reach the model.
-export const asks = (d: Deck, g: Game, i: number) => !fixed(d, g, i) && d.levels.find((l) => l.id === g.level)!.anchors.includes(i)
-
 export type Aim = { ms: number; dwell: number[]; switches: number }
 const ms = (x: number) => Math.min(MAX_MS, Math.max(0, Math.round(x)))
 
-// first: 1 when this device had not finished this level edition before, so the wave was a first exposure.
-// Then the reaction time (ms), the aim switches, whether the wave was certain, and the aim dwell (ms) on each rock in source order: aggregates only, never a pointer trace.
+// Row layout and scoring version: part of the edition, so stored rows never mix layouts.
+export const LAYOUT = 1
+
+// Columns after first (1 on a first exposure): reaction ms, aim switches, certain wave, aim dwell ms per rock in source order; aggregates only.
 export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, first: boolean, aim: Aim) => [
   ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, +x.hit, band(x.secs),
   typeof x.ai === 'number' ? x.ai : -1, u(p), live ? 1 : 0, +!!live?.cached, +first,

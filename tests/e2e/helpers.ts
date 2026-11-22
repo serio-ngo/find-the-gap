@@ -1,8 +1,10 @@
 import { expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { begin, shoot, upcoming, wave } from '../../src/game/engine.ts'
+import { aiPick, begin, report, shoot, upcoming, wave } from '../../src/game/engine.ts'
 import type { AiRun, Deck, Game, Mode } from '../../src/game/engine.ts'
 import { presentObjects } from '../../src/game/objects.ts'
+import { label } from '../../src/game/chart.ts'
+import type { Labels } from '../../src/game/chart.ts'
 import { describe } from '../../src/game/debrief.ts'
 import { decks } from '../../src/game/levels/index.ts'
 
@@ -30,6 +32,12 @@ export const displayed = (d: Deck, g: Game, i = g.decisions.length) =>
 export const rockNames = (d: Deck, g: Game, lang: Lang) => {
   const labels = strings.labels[lang]
   return displayed(d, g).map((o, k) => `${labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]!)}. ${describe(o.shape.facts, labels)}`)
+}
+
+// The chart's accessible name for a finished game, built from the same report and strings the page uses.
+export const chartName = (g: Game, lang: Lang = 'en') => {
+  const played = { ...g, decisions: g.decisions.map((d, i) => ({ ...d, ai: aiPick(run, deck, g, i) })) }
+  return label(report(deck, played), { ...strings.visible[lang], chart: strings.labels[lang].chart } as Labels)
 }
 
 export const open = (page: Page, lang: Lang = 'en', level = 1, query = '') => page.goto(urlPath(lang, level, query))

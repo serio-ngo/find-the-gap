@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { aiPick, report, wave } from '../../src/game/engine.ts'
-import { deck, displayed, expectEnd, open, play, right, run, strings, wrong } from './helpers.ts'
+import { chartName, deck, displayed, expectEnd, open, play, right, run, strings, wrong } from './helpers.ts'
 
 for (const lang of ['en', 'pl'] as const)
   test(`the end screen sets you against the AI and chance, by typical and atypical gap, in ${lang}`, async ({ page }) => {
@@ -36,7 +36,7 @@ test('the debrief scores certain waves only, links their runs and keeps research
   const scored = g.decisions.flatMap((d, i) => (d.anchor ? [{ d, ai: aiPick(run, deck, g, i) }] : []))
   const aiPlayed = scored.filter(({ ai }) => typeof ai === 'number')
   const aiHits = aiPlayed.filter(({ d, ai }) => wave(deck, d.spec).answers.includes(ai!)).length
-  await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(/\S/)
+  await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(chartName(g))
   await expect(page.locator('.ftg-table tbody tr').last().locator('td')).toHaveText([`0/${scored.length}`, `${aiHits}/${aiPlayed.length}`, /^\d+%$/])
   const replay = page.locator('.ftg-replay')
   await replay.locator(':scope > summary').click()

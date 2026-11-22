@@ -150,13 +150,19 @@ describe('engine', () => {
     expect(seeds.every((x) => x >= 1000 && x < 1003)).toBe(true)
   })
 
-  it('every real level plays 20 distinct adaptive seeds', () => {
+  it('every real level plays 20 distinct adaptive seeds and never repeats a gap rock while its pool offers a new one', () => {
     const d = decks.observations!
+    const gap = (s: Spec) => { const w = wave(d, s); return w.ids![w.answers[0]!]! }
     for (const l of d.levels.slice(0, 3)) {
       let g = begin(d, l.id, 'adaptive')
       const seeds = new Set<number>()
+      const played = new Set<string>()
       for (let i = 0; i < 20; i++) {
-        seeds.add(upcoming(d, g)!.seed)
+        const offered = pool(d, g.rule, g.step).some((s) => !seeds.has(s.seed) && !played.has(gap(s)))
+        const s = upcoming(d, g)!
+        if (offered) expect(played.has(gap(s)), `level ${l.id} wave ${i}`).toBe(false)
+        seeds.add(s.seed)
+        played.add(gap(s))
         g = shoot(d, g, 0)
       }
       expect(seeds.size, `level ${l.id}`).toBe(20)

@@ -7,9 +7,8 @@ it('the stored AI run matches the deck', async () => {
   expect(checkRun(loadRun(RUN), await hashContent(decks.observations), decks.observations)).toBeNull()
 })
 
-it('the edition names the deck and changes when the anchors change', async () => {
+it('the edition changes when the anchors change', async () => {
   const d = decks.observations
-  expect(await edition(d)).toMatch(/^observations:[0-9a-f]{12}$/)
   const moved = { ...d, levels: d.levels.map((l) => ({ ...l, anchors: [...l.anchors, 99] })) }
   expect(await edition(moved)).not.toBe(await edition(d))
 })

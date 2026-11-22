@@ -53,13 +53,14 @@ const fixedFrom = (d: Deck, level: number) => {
 }
 
 export const upcoming = (d: Deck, g: Game): Spec | null => {
-  const sequence = d.levels.find((l) => l.id === g.level)!.sequence
   const i = g.decisions.length
-  if (g.mode === 'standard' || i >= fixedFrom(d, g.level)) return sequence[i] ?? null
+  if (g.mode === 'standard' || i >= fixedFrom(d, g.level)) return d.levels.find((l) => l.id === g.level)!.sequence[i] ?? null
   const all = pool(d, g.rule, g.step)
   const free = all.filter((s) => !g.decisions.some((x) => x.spec.seed === s.seed))
+  const gap = (s: Spec) => { const w = wave(d, s); return w.ids?.[w.answers[0]!] }
+  const fresh = free.filter((s) => !g.decisions.some((x) => gap(x.spec) === gap(s)))
   // shortcut: a game longer than the pool repeats seeds, so keep the pool at least as long as the adaptive waves
-  const from = free.length ? free : all
+  const from = fresh.length ? fresh : free.length ? free : all
   return from[Math.floor(rng(g.level * 100 + i)() * from.length)]!
 }
 
@@ -67,6 +68,9 @@ export const estimate = (d: Deck, g: Game): number => {
   const last = g.decisions.filter((x) => x.spec.rule === g.rule).slice(-d.policy.window)
   return round05((last.filter((x) => x.hit).length + 1) / (last.length + 2))
 }
+
+export const forecast = (d: Deck, g: Game, live?: { hit: number; miss: number }) =>
+  live ? live[g.decisions.at(-1)!.hit ? 'hit' : 'miss'] : estimate(d, { ...g, decisions: g.decisions.filter((x) => x.anchor) })
 
 export const advance = (d: Deck, s: { rule: string; step: number; streak: number }, p: number) => {
   const up = p >= d.policy.high
@@ -91,9 +95,12 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   // adaptive play moves its parameters only after a certain wave, so a research wave's truth never shows in the next wave
   if (g.mode === 'standard' || !anchor) return next
   // shortcut: the live AI forecast still sees research picks, as a fuzzy aggregate; filter its history if that proves readable
-  const { rule, step, streak } = advance(d, g, live ? live[hit ? 'hit' : 'miss'] : estimate(d, { ...next, decisions: next.decisions.filter((x) => x.anchor) }))
+  const { rule, step, streak } = advance(d, g, forecast(d, next, live))
   return { ...next, rule, step, streak }
 }
+
+// Only certain waves of an adaptive game are forecast live.
+export const asks = (d: Deck, g: Game, i: number) => !fixed(d, g, i) && d.levels.find((l) => l.id === g.level)!.anchors.includes(i)
 
 export const score = (g: Game) =>
   g.decisions.reduce((t, x) => (x.anchor && x.hit ? t + 100 + Math.max(0, Math.round(100 - 10 * x.secs)) : t), 0)

@@ -1,4 +1,4 @@
-import { chart, esc, spread, table } from './chart.ts'
+import { chart, esc, of, spread, table } from './chart.ts'
 import { report, score, wave } from './engine.ts'
 import type { Deck, Game } from './engine.ts'
 import { colors, paintObject } from './gen.ts'
@@ -110,12 +110,9 @@ export const showResult = (root: HTMLElement, deck: Deck, g: Game, edition: stri
   }))
   const r = report(deck, g)
   const labels = { ...v, chart: l.chart }
-  const figure = root.querySelector('.ftg-chart')
-  if (figure) figure.innerHTML = chart(r, labels)
-  const why = root.querySelector('.ftg-why')
-  if (why) why.textContent = v.explain
+  $('.ftg-chart').innerHTML = chart(r, labels)
+  $('.ftg-why').textContent = v.explain
   $('.ftg-table').innerHTML = table(r, labels)
-  const of = (hits: number, n: number) => (n ? `${hits}/${n}` : '—')
   const url = root.dataset.url!
   const text = resultText({ deck: v.title, level: g.level, score: sc, you: of(r.all.you, r.all.n), ai: of(r.all.ai, r.all.aiN), names: { score: v.score, you: v.you, ai: v.ai }, url })
   const net = links(text, url)
