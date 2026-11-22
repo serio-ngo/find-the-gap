@@ -25,6 +25,7 @@ export const aimTracker = () => {
       switches = 0
       since = now
     },
-    read: (i: number) => ({ dwell: dwell[i] ?? 0, switches }),
+    // order[display index] = source rock; the dwell comes back in source order
+    read: (order: number[]) => ({ dwell: order.map((_, s) => dwell[order.indexOf(s)] ?? 0), switches }),
   }
 }

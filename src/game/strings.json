@@ -12,7 +12,9 @@
       "chance": "Los",
       "typical": "Typowe",
       "atypical": "Nietypowe",
-      "all": "Razem"
+      "all": "Razem",
+      "explain": "tylko pewne fale: 100 za trafienie plus do 100 za szybkość",
+      "research": "{n} fal badawczych · mediana {median} · {range}"
     },
     "en": {
       "title": "Find the Gap",
@@ -26,7 +28,9 @@
       "chance": "Chance",
       "typical": "Typical",
       "atypical": "Atypical",
-      "all": "All"
+      "all": "All",
+      "explain": "certain waves only: 100 per hit plus up to 100 for speed",
+      "research": "{n} research waves · median {median} · {range}"
     }
   },
   "labels": {
@@ -67,6 +71,7 @@
       "contribute": "Wyślij ten wynik do Serio (badania)",
       "unseen": "Nowe przebiegi, niewidziane w poprzednich falach",
       "noai": "Brak stabilnego wyboru AI",
+      "chart": "przedział 95%",
       "reported": "zgłoszony",
       "tested": "testowany",
       "passed": "zaliczone",
@@ -120,6 +125,7 @@
       "contribute": "Send this result to Serio (research)",
       "unseen": "New runs, not seen in earlier waves",
       "noai": "No stable AI pick",
+      "chart": "95% interval",
       "reported": "reported",
       "tested": "tested",
       "passed": "passed",

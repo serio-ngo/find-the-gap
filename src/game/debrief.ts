@@ -1,5 +1,6 @@
+import { chart, esc, spread, table } from './chart.ts'
 import { report, score, wave } from './engine.ts'
-import type { Deck, Game, Tally } from './engine.ts'
+import type { Deck, Game } from './engine.ts'
 import { colors, paintObject } from './gen.ts'
 import type { Facts } from './gen.ts'
 import type { presentObjects } from './objects.ts'
@@ -10,7 +11,6 @@ type Strings = typeof import('./strings.json')
 export type Text = { v: Strings['visible']['en']; l: Strings['labels']['en'] & Record<string, string | undefined> }
 export type Rounds = ReturnType<typeof presentObjects>[]
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
 const link = (url: string, label: string) => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`
 let download = ''
 
@@ -67,27 +67,23 @@ export const showReplay = (root: HTMLElement, deck: Deck, g: Game, rounds: Round
       ${a ? `<span>${esc(v.ai)} ${choice(ap)} ${mark(ahit)}</span>` : ''}
       <span>${esc(seconds)}</span>${tags}
     </summary><ul class="ftg-sources" aria-label="${esc(l.sources)}"></ul></details></li>`
-    // a research wave keeps what was under it hidden: no verdict, no sources, only the pick and its time
-    const hidden = `<li class="ftg-decision"><div class="ftg-quiet"><span>${esc(v.you)} ${target + 1}.</span> <span>${esc(seconds)}</span></div></li>`
-    return { hit: d.anchor ? d.hit : null, ahit: d.anchor ? ahit : null, scored: d.anchor, html: d.anchor ? html : hidden, refs, exhibit }
+    return { anchor: d.anchor, secs: d.secs, html, refs, exhibit }
   })
-  const strip = (name: string, hits: (boolean | null)[]) => {
-    const played = hits.filter((h) => h !== null)
-    return `<div><span>${esc(name)} <strong>${played.filter(Boolean).length}/${played.length}</strong></span> <span>${hits.map(mark).join(' ')}</span></div>`
-  }
-  const scored = rows.filter((r) => r.scored)
-  root.querySelector('.ftg-duel')!.innerHTML = strip(v.you, scored.map((r) => r.hit)) + (scored.some((r) => r.ahit !== null) ? strip(v.ai, scored.map((r) => r.ahit)) : '')
-  root.querySelector('.ftg-decisions')!.innerHTML = rows.map((r) => r.html).join('')
+  const scored = rows.filter((r) => r.anchor)
+  const research = spread(rows.filter((r) => !r.anchor).map((r) => r.secs))
+  const sec = new Intl.NumberFormat(root.dataset.lang, { style: 'unit', unit: 'second', maximumFractionDigits: 1 })
+  const line = research.n ? `<li class="ftg-research">${esc(v.research.replace('{n}', String(research.n)).replace('{median}', sec.format(research.median)).replace('{range}', `${sec.format(research.min)}–${sec.format(research.max)}`))}</li>` : ''
+  root.querySelector('.ftg-decisions')!.innerHTML = scored.map((r) => r.html).join('') + line
   root.querySelectorAll<HTMLElement>('.ftg-decision').forEach((li, i) => {
     const entry = li.querySelector<HTMLDetailsElement>(':scope > details')
     if (!entry) return
     entry.ontoggle = () => {
       if (!entry.open) return
-      entry.querySelector('.ftg-sources')!.innerHTML = rows[i]!.refs()
+      entry.querySelector('.ftg-sources')!.innerHTML = scored[i]!.refs()
       entry.querySelectorAll<HTMLDetailsElement>('.ftg-object-evidence').forEach((object, p) => {
         object.ontoggle = () => {
           if (!object.open) return
-          object.insertAdjacentHTML('beforeend', rows[i]!.exhibit(p))
+          object.insertAdjacentHTML('beforeend', scored[i]!.exhibit(p))
           object.ontoggle = null
         }
       })
@@ -96,7 +92,7 @@ export const showReplay = (root: HTMLElement, deck: Deck, g: Game, rounds: Round
   })
 }
 
-// One table: you, the AI and blind guessing on the same scored waves, split by how common the gap's pattern is in the deck.
+// Chart and table: you, the AI and blind guessing on the same scored waves, split by how common the gap's pattern is in the deck.
 export const showResult = (root: HTMLElement, deck: Deck, g: Game, edition: string, { v, l }: Text) => {
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!
   const sc = score(g)
@@ -113,12 +109,13 @@ export const showResult = (root: HTMLElement, deck: Deck, g: Game, edition: stri
     return li
   }))
   const r = report(deck, g)
-  const num = new Intl.NumberFormat(root.dataset.lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  const labels = { ...v, chart: l.chart }
+  const figure = root.querySelector('.ftg-chart')
+  if (figure) figure.innerHTML = chart(r, labels)
+  const why = root.querySelector('.ftg-why')
+  if (why) why.textContent = v.explain
+  $('.ftg-table').innerHTML = table(r, labels)
   const of = (hits: number, n: number) => (n ? `${hits}/${n}` : '—')
-  const row = (name: string, t: Tally) =>
-    `<tr><th scope="row">${esc(name)}</th><td>${of(t.you, t.n)}</td><td>${of(t.ai, t.aiN)}</td><td>${t.n ? num.format(t.chance) : '—'}</td></tr>`
-  $('.ftg-table').innerHTML = `<thead><tr><td></td><th scope="col">${esc(v.you)}</th><th scope="col">${esc(v.ai)}</th><th scope="col">${esc(v.chance)}</th></tr></thead>`
-    + `<tbody>${r.typical && r.atypical ? row(v.typical, r.typical) + row(v.atypical, r.atypical) : ''}${row(v.all, r.all)}</tbody>`
   const url = root.dataset.url!
   const text = resultText({ deck: v.title, level: g.level, score: sc, you: of(r.all.you, r.all.n), ai: of(r.all.ai, r.all.aiN), names: { score: v.score, you: v.you, ai: v.ai }, url })
   const net = links(text, url)
