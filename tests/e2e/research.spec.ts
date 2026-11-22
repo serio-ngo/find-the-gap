@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
+import { edition } from '../../src/game/eval/version.ts'
+import { decks } from '../../src/game/levels/index.ts'
 import { open, play, strings, type Lang } from './helpers.ts'
 
 // Mocks /api/game/*; returns the recorded request bodies.
@@ -73,7 +75,7 @@ test('adaptive mode uses /step answers when they arrive', async ({ page }) => {
   await open(page, 'en', 1, '?mode=adaptive')
   await play(page, { mode: 'adaptive', live }) // play() fails if the page shows a wave the live answers would not produce
   await expect.poll(() => results.length).toBe(1)
-  expect(steps.length).toBeGreaterThan(0)
+  expect((steps as { past: unknown[] }[]).map((s) => s.past.length)).toEqual([4, 9, 14, 19])
   expect(results[0].waves.some((w) => w[8] === 1)).toBe(true)
 })
 
@@ -121,8 +123,14 @@ test('aim data: moving between rocks is one switch, and paused time counts neith
   }
   await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
   await expect.poll(() => results.length).toBe(1)
-  const [ms, dwell, switches] = results[0]!.waves[0]!.slice(11)
+  const [ms, switches, , ...dwell] = results[0]!.waves[0]!.slice(11)
   expect(switches).toBe(1)
-  expect(dwell).toBeLessThanOrEqual(ms!)
+  expect(dwell.reduce((t, x) => t + x, 0)).toBeLessThanOrEqual(ms!)
   expect(ms).toBeLessThan(1500)
+})
+
+test('the page carries the edition of every deck', async ({ page }) => {
+  await open(page)
+  const shown = JSON.parse((await page.locator('.ftg').getAttribute('data-editions'))!)
+  expect(shown).toEqual(Object.fromEntries(await Promise.all(Object.values(decks).map(async (d) => [d.id, await edition(d)]))))
 })

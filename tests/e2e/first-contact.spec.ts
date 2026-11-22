@@ -21,8 +21,22 @@ for (const lang of ['en', 'pl'] as const)
     await expectEnd(page, after, lang)
     const certain = after.decisions.filter((d) => d.anchor)
     expect(certain).toHaveLength(4)
-    await expect(page.locator('.ftg-duel strong').first()).toHaveText(`${certain.filter((d) => d.hit).length}/4`)
+    await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(/\S/)
+    await expect(page.locator('.ftg-table tbody tr').last().locator('td').first()).toHaveText(`${certain.filter((d) => d.hit).length}/4`)
+    const hud = await page.locator('.ftg-hud').innerText()
+    expect(hud).not.toContain('21/21')
+    expect(hud).not.toContain(String(await expectEnd(page, after, lang)))
+    await expect(page.locator('.ftg-decision')).toHaveCount(4)
+    await expect(page.locator('.ftg-research')).toHaveCount(1)
+    await expect(page.locator('.ftg-score')).toBeFocused()
   })
+
+test('the end screen does not scroll sideways at 375 px', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 700 })
+  await open(page)
+  await expectEnd(page, await play(page), 'en')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+})
 
 test('pointer input on the canvas picks a rock', async ({ page }, info) => {
   await open(page)

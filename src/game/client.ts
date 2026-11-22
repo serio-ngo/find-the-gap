@@ -1,8 +1,8 @@
 import { decks } from './levels/index.ts'
-import { aiPick, begin, estimate, fixed, upcoming, wave, shoot, score } from './engine.ts'
+import { aiPick, begin, estimate, upcoming, wave, shoot, score } from './engine.ts'
 import type { AiRun, Game, Mode, Wave } from './engine.ts'
 import stored from './eval/ai-run.json'
-import { askStep, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
+import { askStep, asks, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
 import type { Step } from './net.ts'
 import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
@@ -99,7 +99,7 @@ const nextWave = () => {
   $('.ftg-hits').textContent = String(score(g))
   $('.ftg-wave').textContent = `${i + 1}/${total}`
   answer = null
-  if (api && !fixed(deck, g, i)) {
+  if (api && asks(deck, g, i)) {
     askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects && g.decisions.length === i) answer = a })
   }
   busy = false
@@ -117,7 +117,7 @@ const pick = async (i: number, w: Wave) => {
   const rule = g.rule
   const got = answer
   onAim(i)
-  const aimed = { ms: performance.now() - t0, ...aim.read(i) }
+  const aimed = { ms: performance.now() - t0, ...aim.read(objects.map((o) => o.sourceIndex)) }
   g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
   const d = g.decisions.at(-1)!
   d.ai = got ? got.ai : ai && aiPick(ai, deck, g, g.decisions.length - 1)
@@ -159,7 +159,6 @@ const end = () => {
   field.pause()
   fieldEl.hidden = true
   rocksEl.replaceChildren()
-  $('.ftg-hits').textContent = String(score(g))
   $('.ftg-end').hidden = false
   // the saved history keeps a research wave's truth out, like the screen does
   save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions.map(({ hit, ...d }) => (d.anchor ? { ...d, hit } : d)) })

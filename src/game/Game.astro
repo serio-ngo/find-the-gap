@@ -2,14 +2,13 @@
 import './game.css'
 import strings from './strings.json'
 import { decks } from './levels/index.ts'
-import { hashEdition } from './eval/version.ts'
+import { edition } from './eval/version.ts'
 
 interface Props { level: number; lang: 'pl' | 'en'; api?: string }
 const { level, lang, api } = Astro.props
 const v = strings.visible[lang]
 const l = strings.labels[lang]
-const files = import.meta.glob<string>(['./*.ts', './Game.astro', './game.css', './strings.json', './levels/**/*.{ts,json}'], { query: '?raw', import: 'default', eager: true })
-const editions = Object.fromEntries(Object.values(decks).map((deck) => [deck.id, hashEdition(deck, files)]))
+const editions = Object.fromEntries(await Promise.all(Object.values(decks).map(async (deck) => [deck.id, await edition(deck)])))
 const path = `${lang === 'en' ? '/en' : ''}/find-the-gap`
 const total = decks.observations.levels.find((x) => x.id === level)?.sequence.length ?? 0
 const paths = {
@@ -42,7 +41,8 @@ const networks = ['x', 'bluesky', 'linkedin', 'facebook'] as const
   <div class="ftg-sr" role="status" aria-live="polite"></div>
   <section class="ftg-end" role="region" aria-label={`${v.title} ${v.level} ${level}`} hidden>
     <h2 class="ftg-score" tabindex="-1"></h2>
-    <div class="ftg-duel"></div>
+    <p class="ftg-why"></p>
+    <figure class="ftg-chart"></figure>
     <table class="ftg-table"></table>
     <ol class="ftg-top" aria-label={l.top}></ol>
     <details class="ftg-replay">
