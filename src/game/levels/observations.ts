@@ -1,4 +1,4 @@
-import { rng } from '../engine.ts'
+import { ANCHOR_POOL, rng } from '../engine.ts'
 import type { ChoiceRecord, Deck, Rule, Wave } from '../engine.ts'
 import type { Signs } from '../gen.ts'
 import { rows } from './rows.ts'
@@ -88,13 +88,18 @@ const turn = <T>(gaps: T[], i: number) => {
   return queue[0]!
 }
 
+const shown = Object.fromEntries(order.map((rule, k) => {
+  const gaps = shuffle(rng(k + 7), scored.filter((x) => x.rule === rule && x.gap))
+  return [rule, CERTAIN.map((i) => turn(gaps, i))]
+}))
+
 const wave = (rule: string, step: number, seed: number) => {
   const from = rows.filter((x) => x.rule === rule && x.research === unseen(seed))
-  // gaps take turns, so consecutive seeds show every gap run before any repeats
-  const gaps = shuffle(rng(order.indexOf(rule) + 7), from.filter((x) => x.gap))
-  const gap = seed < UNSEEN ? turn(gaps, seed % 100) : gaps[seed % gaps.length]!
+  const certain = shown[rule]!
+  const gap = seed >= ANCHOR_POOL ? certain[seed % certain.length] : seed < UNSEEN ? certain[CERTAIN.indexOf(seed % 100)] : undefined
   const r = rng(seed)
-  const choice = shuffle(r, [gap, ...controls(r, from.filter((x) => !x.gap), gap, counts[step - 1]! - 1, step)])
+  const n = counts[step - 1]!
+  const choice = gap ? shuffle(r, [gap, ...controls(r, from.filter((x) => !x.gap), gap, n - 1, step)]) : shuffle(r, from.filter((x) => !certain.includes(x))).slice(0, n)
   return { symbols: choice.map(clue), answers: choice.flatMap((x, i) => (x.gap ? [i] : [])), ids: choice.map((x) => x.id) }
 }
 

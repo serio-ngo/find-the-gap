@@ -18,7 +18,7 @@ export const jobsFor = (d: Deck): Job[] =>
   d.levels.flatMap(({ id, sequence, anchors }) => {
     const played = sequence.map((spec, i): Decision => {
       const w = wave(d, spec)
-      return { spec, pick: w.answers[0] ?? 0, hit: true, anchor: anchors.includes(i), secs: 5 }
+      return { spec, pick: w.answers[0] ?? 0, hit: w.answers.length > 0, anchor: anchors.includes(i), secs: 5 }
     })
     return sequence.map((_, index) => ({ level: id, index, past: played.slice(0, index) }))
   })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  advance, aiBody, aiPick, band, begin, canonical, estimate, pool, report, rng, score, shoot, stepBody, upcoming, wave,
+  ANCHOR_POOL, advance, aiBody, aiPick, band, begin, canonical, estimate, pool, report, rng, score, shoot, stepBody, upcoming, wave,
 } from '../../src/game/engine.ts'
 import type { AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
@@ -139,7 +139,7 @@ describe('engine', () => {
     expect(s.decisions.map((_, i) => aiPick(run, deck, s, i))).toEqual(run.standard[1])
   })
 
-  it('adaptive draws unseen pool seeds, and falls back to the whole pool once all are used', () => {
+  it('adaptive draws unseen pool seeds, certain waves from their own pool, and falls back to the whole pool once all are used', () => {
     let g = begin(deck, 1, 'adaptive')
     const seeds = []
     for (let i = 0; i < 10; i++) {
@@ -147,25 +147,31 @@ describe('engine', () => {
       g = shoot(deck, g, 0)
     }
     expect(new Set(seeds.slice(0, 3)).size).toBe(3)
-    expect(seeds.every((x) => x >= 1000 && x < 1003)).toBe(true)
+    expect(seeds.map((x) => x - (x % 1000))).toEqual([1000, 1000, 1000, ANCHOR_POOL, ANCHOR_POOL, 1000, 1000, 1000, 1000, 1000])
+    expect(seeds.every((x) => x % 1000 < 3)).toBe(true)
   })
 
-  it('every real level plays 20 distinct adaptive seeds and never repeats a gap rock while its pool offers a new one', () => {
+  it('every real level plays 20 distinct adaptive seeds, one gap on each certain wave, and never shows a revealed gap again', () => {
     const d = decks.observations!
-    const gap = (s: Spec) => { const w = wave(d, s); return w.ids![w.answers[0]!]! }
-    for (const l of d.levels.slice(0, 3)) {
-      let g = begin(d, l.id, 'adaptive')
-      const seeds = new Set<number>()
-      const played = new Set<string>()
-      for (let i = 0; i < 20; i++) {
-        const offered = pool(d, g.rule, g.step).some((s) => !seeds.has(s.seed) && !played.has(gap(s)))
-        const s = upcoming(d, g)!
-        if (offered) expect(played.has(gap(s)), `level ${l.id} wave ${i}`).toBe(false)
-        seeds.add(s.seed)
-        played.add(gap(s))
-        g = shoot(d, g, 0)
+    for (const l of d.levels) {
+      for (const pick of [() => 0, (s: Spec) => wave(d, s).answers[0] ?? 0]) {
+        let g = begin(d, l.id, 'adaptive')
+        const seeds = new Set<number>()
+        const revealed: string[] = []
+        for (let i = 0; i < 20; i++) {
+          const s = upcoming(d, g)!
+          const w = wave(d, s)
+          const gaps = w.answers.map((k) => w.ids![k]!)
+          expect(gaps.filter((x) => revealed.includes(x)), `level ${l.id} wave ${i}`).toEqual([])
+          if (l.anchors.includes(i)) {
+            expect([s.seed >= ANCHOR_POOL, gaps.length], `level ${l.id} wave ${i}`).toEqual([true, 1])
+            revealed.push(gaps[0]!)
+          }
+          seeds.add(s.seed)
+          g = shoot(d, g, pick(s))
+        }
+        expect(seeds.size, `level ${l.id}`).toBe(20)
       }
-      expect(seeds.size, `level ${l.id}`).toBe(20)
     }
   })
 

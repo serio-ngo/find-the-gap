@@ -53,14 +53,17 @@ export const summarize = async (rows: { version: string; level: number; mode: nu
       const rule = d.rules[r!]?.id
       if (!rule) continue
       const w = wave(d, { rule, step: step!, seed: seed! })
-      const right = w.answers[0]!
-      const gap = gapRow(w)
-      const aiHit = ai === -1 ? null : ai === right
-      add(byRule, rule, pick === right, aiHit)
-      add(byPattern, `${rule} ${typicality(gap) >= ATYPICAL ? 'typical' : 'atypical'}`, pick === right, aiHit)
-      add(byGap, gap.id, pick === right, aiHit)
-      add(kind, certain ? 'certain' : 'research', pick === right, aiHit)
-      if (ms !== undefined) aim[pick === right ? 'hit' : 'miss'].push([ms, dwell[right]!, mean(dwell.filter((_, k) => k !== right)), switches!])
+      const hit = w.answers.includes(pick!)
+      const aiHit = ai === -1 ? null : w.answers.includes(ai!)
+      add(byRule, rule, hit, aiHit)
+      add(kind, certain ? 'certain' : 'research', hit, aiHit)
+      if (w.answers.length === 1) {
+        const right = w.answers[0]!
+        const gap = gapRow(w)
+        add(byPattern, `${rule} ${typicality(gap) >= ATYPICAL ? 'typical' : 'atypical'}`, hit, aiHit)
+        add(byGap, gap.id, hit, aiHit)
+        if (ms !== undefined) aim[hit ? 'hit' : 'miss'].push([ms, dwell[right]!, mean(dwell.filter((_, k) => k !== right)), switches!])
+      }
       // other players' choices only where everyone saw the same wave for the first time
       if (row.mode === 0 && first === 1) {
         const k = `${row.level}:${rule}:${step}:${seed}`

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { wave } from '../../src/game/engine.ts'
+import type { Spec } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { summarize } from '../../scripts/results.ts'
 import { edition } from '../../src/game/eval/version.ts'
@@ -7,7 +8,7 @@ import { wilson } from '../../src/game/stats.ts'
 
 it('reads only results of the current deck edition and splits human and AI hits by rule, pattern and gap case', async () => {
   const d = decks.observations!
-  const spec = d.levels[0]!.sequence[0]!
+  const spec = d.levels[0]!.sequence.find((s, i) => !d.levels[0]!.anchors.includes(i) && wave(d, s).answers.length === 1)!
   const w = wave(d, spec)
   const right = w.answers[0]!
   const row = (pick: number, ai: number, first: number, ms: number) => [0, spec.step, spec.seed, pick, +(pick === right), 1, ai, 0, 0, 0, first, ms, 1, 0, ...w.symbols.map((_, k) => (k === right ? ms / 2 : ms / 10))]
@@ -25,9 +26,24 @@ it('reads only results of the current deck edition and splits human and AI hits 
   expect(out.peers).toEqual([{ wave: `1:odd_revision:${spec.step}:${spec.seed}`, n: 2, enough: false }])
 })
 
+it('scores a research wave by any of its gaps and keeps waves without exactly one gap out of the gap tables', async () => {
+  const d = decks.observations!
+  const specs = d.levels.flatMap((l) => l.sequence)
+  const none = specs.find((s) => wave(d, s).answers.length === 0)!
+  const many = specs.find((s) => wave(d, s).answers.length > 1)!
+  const row = (s: Spec, pick: number) => {
+    const w = wave(d, s)
+    return [d.rules.findIndex((r) => r.id === s.rule), s.step, s.seed, pick, +w.answers.includes(pick), 1, -1, 0, 0, 0, 1, 1000, 0, 0, ...w.symbols.map(() => 0)]
+  }
+  const waves = JSON.stringify([row(none, 0), row(many, wave(d, many).answers[1]!)])
+  const out = await summarize([{ version: await edition(d), level: 1, mode: 0, waves }])
+  expect(out.waves).toEqual({ research: { shown: 2, human: 0.5, ai: null } })
+  expect([out.patterns, out.hardest, out.aim.hit.n + out.aim.miss.n, out.peers.length]).toEqual([{}, [], 0, 2])
+})
+
 it('counts a wave as certain from the row flag', async () => {
   const d = decks.observations!
-  const spec = d.levels[0]!.sequence[0]!
+  const spec = d.levels[0]!.sequence[4]!
   const w = wave(d, spec)
   const waves = JSON.stringify([[0, spec.step, spec.seed, w.answers[0], 1, 1, -1, 0, 0, 0, 1, 1000, 0, 1, ...w.symbols.map(() => 0)]])
   expect((await summarize([{ version: await edition(d), level: 1, mode: 0, waves }])).waves).toEqual({ certain: { shown: 1, human: 1, ai: null } })

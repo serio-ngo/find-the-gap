@@ -35,12 +35,12 @@ describe('context channels do not give the gap away', () => {
     console.table(table)
   }, 60_000)
 
-  it('no level lets an observer find the gap by the one rock whose signs are unique', () => {
+  it('no level lets an observer find the gap of a certain wave by the one rock whose signs are unique', () => {
     const table: Record<string, string>[] = []
     observations.levels.forEach((l, k) => {
       const waves = [
-        ...l.sequence.slice(0, 20).map((s) => wave(observations, s)),
-        ...[1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step).map((s) => wave(observations, s))),
+        ...l.anchors.map((i) => wave(observations, l.sequence[i]!)),
+        ...[1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step, true).map((s) => wave(observations, s))),
       ].map((w) => ({ sigs: observations.choiceRecords!(w).map((c) => JSON.stringify(c.signs)), gap: w.answers[0]! }))
       const score = (w: { sigs: string[] }, gap: number) => {
         const once = w.sigs.filter((x) => w.sigs.filter((y) => y === x).length === 1)

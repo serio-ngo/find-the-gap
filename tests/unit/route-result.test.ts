@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { wave } from '../../src/game/engine.ts'
+import { pool, wave } from '../../src/game/engine.ts'
+import type { Spec } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { edition } from '../../src/game/eval/version.ts'
 import { FIXTURE, fakeEnv, send } from './route-env.ts'
@@ -46,15 +47,36 @@ describe('result', () => {
     const d = decks.observations
     const seq = d.levels[0]!.sequence
     const rows = (last: unknown, hit: number) => seq.map((s, i) => {
-      const right = wave(d, s).answers[0]!
-      return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, i === seq.length - 1 ? last : right, i === seq.length - 1 ? hit : 1, 1, -1, 0, 0, 0, 1, 600_000, 99, +d.levels[0]!.anchors.includes(i), ...wave(d, s).symbols.map(() => 600_000)]
+      const w = wave(d, s)
+      const pick = w.answers[0] ?? 0
+      return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, i === seq.length - 1 ? last : pick, i === seq.length - 1 ? hit : +w.answers.includes(pick), 1, -1, 0, 0, 0, 1, 600_000, 99, +d.levels[0]!.anchors.includes(i), ...w.symbols.map(() => 600_000)]
     })
-    const right = wave(d, seq.at(-1)!).answers[0]!
+    const tail = wave(d, seq.at(-1)!)
     const send0 = (last: unknown, hit: number) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(last, hit) }, env)
     expect((await send0('x', 0)).status).toBe(400)
     expect((await send0(99, 0)).status).toBe(400)
-    expect((await send0(right, 0)).status).toBe(400)
-    expect((await send0(right, 1)).status).toBe(204)
-    expect((await send0((right + 1) % 4, 0)).status).toBe(204)
+    for (const pick of tail.symbols.keys()) {
+      const hit = +tail.answers.includes(pick)
+      expect((await send0(pick, 1 - hit)).status).toBe(400)
+      expect((await send0(pick, hit)).status).toBe(204)
+    }
+  })
+
+  it('rejects an adaptive certain wave from outside the certain pool, and a research wave from inside it', async () => {
+    const { env } = fakeEnv()
+    const d = decks.observations
+    const l = d.levels[0]!
+    const row = (s: Spec, i: number) => {
+      const w = wave(d, s)
+      const pick = w.answers[0] ?? 0
+      return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, pick, +w.answers.includes(pick), 1, -1, 0, 0, 0, 1, 1000, 0, +l.anchors.includes(i), ...w.symbols.map(() => 0)]
+    }
+    const research = pool(d, l.start.rule, 1)
+    const certain = pool(d, l.start.rule, 1, true)
+    const send1 = (specs: Spec[]) => send('/api/game/result', { v: 0, level: 1, mode: 1, waves: specs.map(row) }, env)
+    expect((await send1([...research.slice(0, 4), certain[0]!])).status).toBe(204)
+    expect((await send1([...research.slice(0, 4), research[4]!])).status).toBe(400)
+    expect((await send1([...research.slice(0, 4), l.sequence[0]!])).status).toBe(400)
+    expect((await send1([certain[0]!])).status).toBe(400)
   })
 })
