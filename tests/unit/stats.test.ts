@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearSaves, exportSaves, load, save } from '../../src/game/stats.ts'
+import { clearSaves, exportSaves, load, save, wilson } from '../../src/game/stats.ts'
 
 const fake = (init: Record<string, string> = {}) => {
   const m = new Map(Object.entries(init))
@@ -57,5 +57,11 @@ describe('stats', () => {
   })
   it('ignores corrupt data', () => {
     expect(load('a', 1, fake({ 'ftg:a:1': '{' }))).toBeNull()
+  })
+
+  it('gives a 95% Wilson interval', () => {
+    const [lo, hi] = wilson(6, 100)
+    expect(lo).toBeCloseTo(0.0278, 3)
+    expect(hi).toBeCloseTo(0.1247, 3)
   })
 })

@@ -2,14 +2,14 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { MODEL, band, canonical, content, stepBody, wave } from '../src/game/engine.ts'
 import type { AiRun, Deck, Decision } from '../src/game/engine.ts'
-import { digest } from '../src/game/eval/version.ts'
+import { sha256 } from '../src/game/eval/version.ts'
 import { decks } from '../src/game/levels/index.ts'
 import { stepRequest } from '../src/game/net.ts'
 
 export const RUN = fileURLToPath(new URL('../src/game/eval/ai-run.json', import.meta.url))
 
-export const hashContent = (d: Deck): string =>
-  digest(canonical([content(d), jobsFor(d).map(({ level, index, past }) => stepBody(d, wave(d, d.levels.find((l) => l.id === level)!.sequence[index]!),
+export const hashContent = (d: Deck): Promise<string> =>
+  sha256(canonical([content(d), jobsFor(d).map(({ level, index, past }) => stepBody(d, wave(d, d.levels.find((l) => l.id === level)!.sequence[index]!),
     past.map((x) => ({ w: wave(d, x.spec), hit: x.hit, tempo: band(x.secs) }))))]))
 
 export type Job = { level: number; index: number; past: Decision[] }
@@ -72,7 +72,7 @@ const main = async () => {
     const spec = d.levels.find((l) => l.id === level)!.sequence[index]!
     ;(standard[level] ??= [])[index] = await ask(api, stepRequest(d, v, level, spec, past))
   }
-  const run: AiRun = { hash: hashContent(d), model: MODEL, date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }), standard }
+  const run: AiRun = { hash: await hashContent(d), model: MODEL, date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }), standard }
   writeFileSync(RUN, JSON.stringify(run, null, 2) + '\n')
   const picks = Object.values(standard).flat()
   console.log(`waves ${picks.length}, stable ${picks.filter((p) => p !== null).length}`)

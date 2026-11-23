@@ -1,5 +1,6 @@
-import { MAX_MS, URL_AI, canonical, content, keys, round05, stepBody, validate, wave } from '../engine.ts'
+import { MAX_MS, URL_AI, canonical, keys, round05, stepBody, validate, wave } from '../engine.ts'
 import type { AiPick, Deck, Past, Spec } from '../engine.ts'
+import { edition, sha256 } from '../eval/version.ts'
 import { decks } from '../levels/index.ts'
 
 export type GameEnv = {
@@ -47,18 +48,26 @@ const hitOf = (d: Deck, s: Spec, pick: number) => {
   return { w, hit: w.answers.includes(int(pick, w.symbols.length - 1)) }
 }
 
-const sha256 = async (s: string) =>
-  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((x) => x.toString(16).padStart(2, '0')).join('')
-
-// Stored results name the exact deck content they were scored against, so a later deck never re-reads them.
-const editions = new Map<Deck, Promise<string>>()
-export const edition = (d: Deck) => {
-  if (!editions.has(d)) editions.set(d, sha256(canonical(content(d))).then((h) => `${d.id}:${h.slice(0, 12)}`))
-  return editions.get(d)!
+const json = (o: unknown) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
+const fallback = (why: string) => {
+  console.error('step fallback: ' + why)
+  return json({ fallback: true })
 }
 
-const json = (o: unknown) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
-const FALLBACK = { fallback: true }
+const fail = (why: string): never => {
+  throw new Error(why)
+}
+
+const prune = async (env: GameEnv) => {
+  const day = new Date().toISOString().slice(0, 10)
+  if (pruned === day) return
+  const old = Date.now() - KEEP_DAYS * 86_400_000
+  try {
+    await env.DB.prepare('DELETE FROM game_cache WHERE created < ?').bind(old).run()
+    await env.DB.prepare('DELETE FROM game_results WHERE day < ?').bind(new Date(old).toISOString().slice(0, 10)).run()
+    pruned = day
+  } catch {}
+}
 
 const used = (env: GameEnv, col: 'step' | 'result', n = 1) =>
   env.DB.prepare(`INSERT INTO game_use (day, ${col}) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET ${col} = ${col} + ? RETURNING ${col} AS n`)
@@ -68,6 +77,7 @@ const used = (env: GameEnv, col: 'step' | 'result', n = 1) =>
 
 const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }) => {
   const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'wave', 'past']))
+  ctx.waitUntil(prune(env))
   const rows = Array.isArray(b.past) && b.past.length < seq.length ? b.past : bad()
   const past: Past[] = rows.map((p, i) => {
     const a = list(p, 5)
@@ -79,21 +89,26 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
   const key = await sha256(canonical(body))
   const hit = await env.DB.prepare('SELECT body FROM game_cache WHERE key = ?').bind(key).first<{ body: string }>()
   if (hit) return json({ ...JSON.parse(hit.body), cached: true })
-  if (!env.KEY) return json(FALLBACK)
-  if ((await used(env, 'step', 2)) > DAILY_CAP) return json(FALLBACK)
+  if (!env.KEY) return fallback('no key')
+  if ((await used(env, 'step', 2)) > DAILY_CAP) return fallback('cap spent')
   const ask = async () => {
+    const signal = AbortSignal.timeout(TIMEOUT)
     const res = await fetch(URL_AI, {
       method: 'POST',
       headers: { authorization: `Bearer ${env.KEY}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT),
-    })
-    if (!res.ok) bad()
-    const a = ((await res.json()) as { answers?: Record<string, AiPick> }).answers ?? {}
-    return { ai: validate(keys(w), a.ai).choice, hit: validate(['hit', 'miss'], a.if_hit).probabilities.hit!, miss: validate(['hit', 'miss'], a.if_miss).probabilities.hit! }
+      signal,
+    }).catch(() => fail(signal.aborted ? 'timeout' : 'unreachable'))
+    if (!res.ok) fail('liquid ' + res.status)
+    try {
+      const a = ((await res.json()) as { answers?: Record<string, AiPick> }).answers ?? {}
+      return { ai: validate(keys(w), a.ai).choice, hit: validate(['hit', 'miss'], a.if_hit).probabilities.hit!, miss: validate(['hit', 'miss'], a.if_miss).probabilities.hit! }
+    } catch {
+      return fail(signal.aborted ? 'timeout' : 'invalid answer')
+    }
   }
-  const pass = await Promise.all([ask(), ask()]).catch(() => null)
-  if (!pass) return json(FALLBACK)
+  const pass = await Promise.all([ask(), ask()]).catch((e: Error) => e)
+  if (pass instanceof Error) return fallback(pass.message)
   const [x, y] = pass
   const out = {
     ai: x.ai === y.ai ? Number(x.ai.slice(1)) : null,
@@ -107,25 +122,22 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
 }
 
 const result = async (b: Record<string, unknown>, env: GameEnv) => {
-  const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'waves']))
+  const { d, level, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'waves']))
   const rows = Array.isArray(b.waves) && b.waves.length <= seq.length ? b.waves : bad()
   const waves = rows.map((r, i) => {
-    const a = list(r, 14)
+    const a = Array.isArray(r) ? r : bad()
     const s = spec(d, standard, seq, i, a)
     const { w, hit } = hitOf(d, s, a[3] as number)
-    if (a[4] !== +hit) bad()
+    list(a, 14 + w.symbols.length)
+    if (a[4] !== +hit || a[13] !== +level.anchors.includes(i)) bad()
     const n = w.symbols.length - 1
-    return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 1), int(a[9], 1), int(a[10], 1), int(a[11], MAX_MS), int(a[12], MAX_MS), int(a[13], 99)]
+    return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 1), int(a[9], 1), int(a[10], 1), int(a[11], MAX_MS), int(a[12], 99), a[13], ...a.slice(14).map((x) => int(x, MAX_MS))]
   })
   if ((await used(env, 'result')) > RESULT_CAP) return new Response(null, { status: 204 })
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
     .bind(new Date().toISOString().slice(0, 10), await edition(d), b.level, standard ? 0 : 1, JSON.stringify(waves))
     .run()
-  const day = new Date().toISOString().slice(0, 10)
-  if (pruned !== day) {
-    pruned = day
-    await env.DB.prepare('DELETE FROM game_results WHERE day < ?').bind(new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString().slice(0, 10)).run()
-  }
+  await prune(env)
   return new Response(null, { status: 204 })
 }
 
@@ -167,6 +179,6 @@ export const route = async (req: Request, env: GameEnv, ctx: { waitUntil(p: Prom
     return await handler(body as Record<string, unknown>, env, ctx)
   } catch (e) {
     if (e instanceof Bad) return new Response(null, { status: 400 })
-    return handler === step ? json(FALLBACK) : new Response(null, { status: 503 })
+    return handler === step ? fallback('error') : new Response(null, { status: 503 })
   }
 }

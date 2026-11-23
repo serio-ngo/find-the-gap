@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { rng } from '../../src/game/engine.ts'
-import { CHANNELS, level as levelOf } from '../../src/game/levels/observations.ts'
+import { pool, rng, wave } from '../../src/game/engine.ts'
+import { CHANNELS, level as levelOf, observations } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 
 const H = (xs: string[]) => {
@@ -34,4 +34,26 @@ describe('context channels do not give the gap away', () => {
     }
     console.table(table)
   }, 60_000)
+
+  it('no level lets an observer find the gap by the one rock whose signs are unique', () => {
+    const table: Record<string, string>[] = []
+    observations.levels.forEach((l, k) => {
+      const waves = [
+        ...l.sequence.slice(0, 20).map((s) => wave(observations, s)),
+        ...[1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step).map((s) => wave(observations, s))),
+      ].map((w) => ({ sigs: observations.choiceRecords!(w).map((c) => JSON.stringify(c.signs)), gap: w.answers[0]! }))
+      const score = (w: { sigs: string[] }, gap: number) => {
+        const once = w.sigs.filter((x) => w.sigs.filter((y) => y === x).length === 1)
+        return once.length === 0 ? 1 / w.sigs.length : once.includes(w.sigs[gap]!) ? 1 / once.length : 0
+      }
+      const seen = waves.reduce((s, w) => s + score(w, w.gap), 0)
+      const r = rng(7)
+      const draws = 2000
+      const above = Array.from({ length: draws }, () => waves.reduce((s, w) => s + score(w, Math.floor(r() * w.sigs.length)), 0)).filter((x) => x >= seen).length
+      const p = (above + 1) / (draws + 1)
+      table.push({ level: String(k + 1), waves: String(waves.length), share: (seen / waves.length).toFixed(3), p: p.toFixed(3) })
+      expect(p >= 0.05, `level ${k + 1} hit share ${(seen / waves.length).toFixed(3)} p ${p.toFixed(3)}`).toBe(true)
+    })
+    console.table(table)
+  }, 120_000)
 })

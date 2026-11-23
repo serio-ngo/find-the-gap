@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { canonical, content, wave } from '../src/game/engine.ts'
-import type { Deck } from '../src/game/engine.ts'
-import { digest } from '../src/game/eval/version.ts'
+import { wave } from '../src/game/engine.ts'
+import { wilson } from '../src/game/stats.ts'
+import { edition } from '../src/game/eval/version.ts'
 import { decks } from '../src/game/levels/index.ts'
 import { ATYPICAL, gapRow, pattern, rowOf, typicality } from '../src/game/levels/observations.ts'
 import type { Row } from '../src/game/levels/observations.ts'
@@ -35,23 +35,12 @@ const median = (xs: number[]) => {
   return s.length ? (s[(s.length - 1) >> 1]! + s[s.length >> 1]!) / 2 : null
 }
 
-// 95% Wilson interval for k of n
-export const wilson = (k: number, n: number): [number, number] => {
-  const z = 1.96
-  const p = k / n
-  const d = 1 + (z * z) / n
-  const c = (p + (z * z) / (2 * n)) / d
-  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d
-  return [Math.max(0, c - h), Math.min(1, c + h)]
-}
-
-// The same id the Worker writes into `version`.
-export const edition = (d: Deck) => `${d.id}:${digest(canonical(content(d))).slice(0, 12)}`
+const mean = (xs: number[]) => (xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : 0)
 const ENOUGH = 20
 
-export const summarize = (rows: { version: string; level: number; mode: number; waves: string }[]) => {
+export const summarize = async (rows: { version: string; level: number; mode: number; waves: string }[]) => {
   const d = decks.observations
-  const current = edition(d)
+  const current = await edition(d)
   const mine = rows.filter((r) => r.version === current)
   const byRule = new Map<string, Stat>()
   const byPattern = new Map<string, Stat>()
@@ -60,8 +49,7 @@ export const summarize = (rows: { version: string; level: number; mode: number; 
   const kind = new Map<string, Stat>()
   const aim: Record<'hit' | 'miss', number[][]> = { hit: [], miss: [] }
   for (const row of mine) {
-    const anchors = d.levels.find((l) => l.id === row.level)?.anchors ?? []
-    for (const [i, [r, step, seed, pick, , , ai, , , , first, ms, dwell, switches]] of (JSON.parse(row.waves) as number[][]).entries()) {
+    for (const [r, step, seed, pick, , , ai, , , , first, ms, switches, certain, ...dwell] of JSON.parse(row.waves) as number[][]) {
       const rule = d.rules[r!]?.id
       if (!rule) continue
       const w = wave(d, { rule, step: step!, seed: seed! })
@@ -71,8 +59,8 @@ export const summarize = (rows: { version: string; level: number; mode: number; 
       add(byRule, rule, pick === right, aiHit)
       add(byPattern, `${rule} ${typicality(gap) >= ATYPICAL ? 'typical' : 'atypical'}`, pick === right, aiHit)
       add(byGap, gap.id, pick === right, aiHit)
-      add(kind, anchors.includes(i) ? 'certain' : 'research', pick === right, aiHit)
-      if (ms !== undefined) aim[pick === right ? 'hit' : 'miss'].push([ms, dwell!, switches!])
+      add(kind, certain ? 'certain' : 'research', pick === right, aiHit)
+      if (ms !== undefined) aim[pick === right ? 'hit' : 'miss'].push([ms, dwell[right]!, mean(dwell.filter((_, k) => k !== right)), switches!])
       // other players' choices only where everyone saw the same wave for the first time
       if (row.mode === 0 && first === 1) {
         const k = `${row.level}:${rule}:${step}:${seed}`
@@ -89,7 +77,7 @@ export const summarize = (rows: { version: string; level: number; mode: number; 
     rules: Object.fromEntries([...byRule].map(([k, s]) => [k, rate(s)])),
     // certain waves showed a verdict; research waves never did, so their accuracy is the unprompted one
     waves: Object.fromEntries([...kind].map(([k, s]) => [k, rate(s)])),
-    aim: Object.fromEntries(Object.entries(aim).map(([k, xs]) => [k, { n: xs.length, ms: median(xs.map((x) => x[0]!)), dwell: median(xs.map((x) => x[1]!)), switches: median(xs.map((x) => x[2]!)) }])),
+    aim: Object.fromEntries(Object.entries(aim).map(([k, xs]) => [k, { n: xs.length, ms: median(xs.map((x) => x[0]!)), gap: median(xs.map((x) => x[1]!)), others: median(xs.map((x) => x[2]!)), switches: median(xs.map((x) => x[3]!)) }])),
     patterns: Object.fromEntries([...byPattern].map(([k, s]) => [k, rate(s)])),
     hardest: [...byGap].map(([id, s]) => ({ id, ...params(rowOf(id)), typicality: typicality(rowOf(id)), ...rate(s) }))
       .sort((a, b) => a.human - b.human).slice(0, 10),
@@ -102,5 +90,5 @@ export const summarize = (rows: { version: string; level: number; mode: number; 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const out = JSON.parse(readFileSync(0, 'utf8')) as { results: { version: string; level: number; mode: number; waves: string }[] }[]
-  console.log(JSON.stringify(summarize(out.flatMap((o) => o.results)), null, 2))
+  console.log(JSON.stringify(await summarize(out.flatMap((o) => o.results)), null, 2))
 }

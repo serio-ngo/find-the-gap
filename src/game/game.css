@@ -37,7 +37,8 @@
 .ftg-rocks { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .ftg-rock { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 .ftg-end { display: grid; gap: 0.75rem; padding: 1rem; }
-.ftg-score { font-family: var(--display); font-size: clamp(48px, 9vw, 96px); font-weight: 600; line-height: 1; }
+.ftg-score { font-family: var(--display); font-size: clamp(48px, 9vw, 96px); font-weight: 600; line-height: 1; margin: 0; }
+.ftg-why { margin: 0; }
 .ftg-table { border-collapse: collapse; font-family: var(--mono); font-variant-numeric: tabular-nums; justify-self: start; }
 .ftg-table th, .ftg-table td { padding: 0.25rem 0.75rem; text-align: end; border-bottom: 1px solid var(--line); }
 .ftg-table th[scope="row"] { text-align: start; font-weight: 400; color: var(--muted); }
@@ -45,8 +46,15 @@
 .ftg-top { font-family: var(--mono); margin: 0; padding-left: 1.5rem; }
 .ftg-top li { padding-left: 0.5rem; }
 .ftg-top [aria-current], .ftg-top li[aria-current] { border-left: 3px solid var(--ftg-brick); font-weight: 700; }
-.ftg-duel { display: grid; gap: 0.25rem; font-family: var(--mono); }
-.ftg-duel > div { display: flex; gap: 1rem; align-items: baseline; }
+.ftg-chart { width: 100%; max-width: 32rem; height: auto; margin: 0; }
+.ftg-chart-svg { width: 100%; height: auto; display: block; font-family: var(--mono); }
+.ftg-chart-t { font-size: 11px; fill: var(--fg); }
+.ftg-chart-you { stroke: var(--ftg-brick); fill: var(--ftg-brick); }
+.ftg-chart-ai { stroke: var(--ftg-ink2); fill: var(--ftg-ink2); }
+.ftg-chart-grid { stroke: var(--line); stroke-width: 1; opacity: 0.35; }
+.ftg-chart-chance { stroke: var(--line); fill: none; }
+.ftg-research { list-style: none; margin-inline-start: -1.25rem; padding: 0.75rem 0; color: var(--muted); }
+.ftg[data-phase="end"] .ftg-stat { display: none; }
 .ftg-replay > summary { display: grid; place-items: center; width: 44px; height: 44px; border: 1.5px solid var(--line); cursor: pointer; list-style: none; }
 .ftg-replay > summary::-webkit-details-marker { display: none; }
 .ftg-replay[open] > summary { background: var(--ftg-brick); color: var(--ftg-paper); border-color: var(--ftg-brick); }

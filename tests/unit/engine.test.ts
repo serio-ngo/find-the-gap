@@ -3,6 +3,7 @@ import {
   advance, aiBody, aiPick, band, begin, canonical, estimate, pool, report, rng, score, shoot, stepBody, upcoming, wave,
 } from '../../src/game/engine.ts'
 import type { AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
+import { decks } from '../../src/game/levels/index.ts'
 import { replay } from '../replay.ts'
 
 const policy = { high: 0.8, low: 0.55, window: 4, confirm: 2 }
@@ -138,12 +139,33 @@ describe('engine', () => {
     expect(s.decisions.map((_, i) => aiPick(run, deck, s, i))).toEqual(run.standard[1])
   })
 
-  it('adaptive never repeats the previous seed', () => {
+  it('adaptive draws unseen pool seeds, and falls back to the whole pool once all are used', () => {
     let g = begin(deck, 1, 'adaptive')
+    const seeds = []
     for (let i = 0; i < 10; i++) {
-      const spec = upcoming(deck, g)!
-      expect(spec.seed).not.toBe(g.decisions.at(-1)?.spec.seed)
+      seeds.push(upcoming(deck, g)!.seed)
       g = shoot(deck, g, 0)
+    }
+    expect(new Set(seeds.slice(0, 3)).size).toBe(3)
+    expect(seeds.every((x) => x >= 1000 && x < 1003)).toBe(true)
+  })
+
+  it('every real level plays 20 distinct adaptive seeds and never repeats a gap rock while its pool offers a new one', () => {
+    const d = decks.observations!
+    const gap = (s: Spec) => { const w = wave(d, s); return w.ids![w.answers[0]!]! }
+    for (const l of d.levels.slice(0, 3)) {
+      let g = begin(d, l.id, 'adaptive')
+      const seeds = new Set<number>()
+      const played = new Set<string>()
+      for (let i = 0; i < 20; i++) {
+        const offered = pool(d, g.rule, g.step).some((s) => !seeds.has(s.seed) && !played.has(gap(s)))
+        const s = upcoming(d, g)!
+        if (offered) expect(played.has(gap(s)), `level ${l.id} wave ${i}`).toBe(false)
+        seeds.add(s.seed)
+        played.add(gap(s))
+        g = shoot(d, g, 0)
+      }
+      expect(seeds.size, `level ${l.id}`).toBe(20)
     }
   })
 
@@ -157,14 +179,16 @@ describe('engine', () => {
     expect(report(typed, g).atypical).toEqual({ you: 1, ai: 0, aiN: 0, chance: 1 / 3, n: 1 })
   })
 
-  it('aiBody holds rocks and history but never the current answers', () => {
-    const w: Wave = { rule: 'a', step: 1, seed: 1, symbols: ['sym-cur-0', 'sym-cur-1'], answers: [4242] }
-    const h: Wave = { rule: 'a', step: 1, seed: 2, symbols: ['sym-his-0', 'sym-his-1'], answers: [4141] }
-    const text = JSON.stringify(aiBody(deck, w, [h]))
-    expect(text).toContain('sym-cur-0')
-    expect(text).toContain('sym-his-0')
-    expect(text).toContain('4141')
-    expect(text).not.toContain('4242')
+  it('aiBody and stepBody carry symbols only: no rule, no answers, no rule id, no answer values', () => {
+    const w: Wave = { rule: 'rule-id-77', step: 1, seed: 1, symbols: ['sym-cur-0', 'sym-cur-1'], answers: [4242] }
+    const h: Wave = { rule: 'rule-id-77', step: 1, seed: 2, symbols: ['sym-his-0', 'sym-his-1'], answers: [4141] }
+    const keysOf = (v: unknown): string[] => (v && typeof v === 'object' ? Object.entries(v).flatMap(([k, x]) => [k, ...keysOf(x)]) : [])
+    for (const body of [aiBody(deck, w, [h]), stepBody(deck, w, [{ w: h, hit: true, tempo: 1 }])]) {
+      const text = JSON.stringify(body)
+      expect(keysOf(body).filter((k) => k === 'rule' || k === 'answers')).toEqual([])
+      for (const gone of ['rule-id-77', '4242', '4141']) expect(text).not.toContain(gone)
+      for (const kept of ['sym-cur-0', 'sym-his-0']) expect(text).toContain(kept)
+    }
     expect((aiBody(deck, w, []) as { state: { history: unknown[] } }).state.history).toEqual([])
   })
 
