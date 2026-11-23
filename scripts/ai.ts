@@ -70,7 +70,7 @@ const main = async () => {
   const standard: AiRun['standard'] = {}
   for (const { level, index, past } of jobsFor(d)) {
     const spec = d.levels.find((l) => l.id === level)!.sequence[index]!
-    ;(standard[level] ??= [])[index] = await ask(api, stepRequest(d, v, level, spec, past))
+    ;(standard[level] ??= [])[index] = await ask(api, { ...stepRequest(d, v, level, spec, past), mode: 0 })
   }
   const run: AiRun = { hash: await hashContent(d), model: MODEL, date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }), standard }
   writeFileSync(RUN, JSON.stringify(run, null, 2) + '\n')
