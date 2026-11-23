@@ -180,7 +180,12 @@ export const validate = (ks: string[], answer: AiPick | undefined): AiPick => {
   return { choice: answer.choice, probabilities: Object.fromEntries(ks.map((k) => [k, Math.round(p[k]! * 1000) / 1000])) }
 }
 
-export const content = (d: Deck): unknown => ({
+const drawn = (d: Deck, s: Spec, records: boolean) => {
+  const w = wave(d, s)
+  return records ? { ...w, records: d.choiceRecords?.(w) } : w
+}
+
+export const content = (d: Deck, records = false): unknown => ({
   id: d.id,
   model: MODEL,
   history: HISTORY,
@@ -188,9 +193,9 @@ export const content = (d: Deck): unknown => ({
   poolSize: d.poolSize,
   policy: d.policy,
   question: d.question,
-  levels: d.levels.map((l) => ({ id: l.id, start: l.start, anchors: l.anchors, waves: l.sequence.map((s) => wave(d, s)) })),
+  levels: d.levels.map((l) => ({ id: l.id, start: l.start, anchors: l.anchors, waves: l.sequence.map((s) => drawn(d, s, records)) })),
   pool: d.rules.flatMap((r) =>
-    Array.from({ length: d.steps }, (_, i) => [...pool(d, r.id, i + 1), ...pool(d, r.id, i + 1, true)].map((s) => wave(d, s))).flat(),
+    Array.from({ length: d.steps }, (_, i) => [...pool(d, r.id, i + 1), ...pool(d, r.id, i + 1, true)].map((s) => drawn(d, s, records))).flat(),
   ),
 })
 
