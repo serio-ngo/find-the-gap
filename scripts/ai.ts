@@ -18,7 +18,7 @@ export const jobsFor = (d: Deck): Job[] =>
   d.levels.flatMap(({ id, sequence, anchors }) => {
     const played = sequence.map((spec, i): Decision => {
       const w = wave(d, spec)
-      return { spec, pick: w.answers[0] ?? 0, hit: true, anchor: anchors.includes(i), secs: 5 }
+      return { spec, pick: w.answers[0] ?? 0, hit: w.answers.length > 0, anchor: anchors.includes(i), secs: 5 }
     })
     return sequence.map((_, index) => ({ level: id, index, past: played.slice(0, index) }))
   })
@@ -70,7 +70,7 @@ const main = async () => {
   const standard: AiRun['standard'] = {}
   for (const { level, index, past } of jobsFor(d)) {
     const spec = d.levels.find((l) => l.id === level)!.sequence[index]!
-    ;(standard[level] ??= [])[index] = await ask(api, stepRequest(d, v, level, spec, past))
+    ;(standard[level] ??= [])[index] = await ask(api, { ...stepRequest(d, v, level, spec, past), mode: 0 })
   }
   const run: AiRun = { hash: await hashContent(d), model: MODEL, date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }), standard }
   writeFileSync(RUN, JSON.stringify(run, null, 2) + '\n')

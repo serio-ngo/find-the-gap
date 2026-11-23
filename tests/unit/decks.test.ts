@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import curation from '../../scripts/deck/curation.json'
 import { pool, score, wave } from '../../src/game/engine.ts'
+import type { Spec } from '../../src/game/engine.ts'
 import { replay } from '../replay.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { ATYPICAL, clue, gapOf, pattern, rowOf, typicality, unseen } from '../../src/game/levels/observations.ts'
@@ -9,8 +10,8 @@ import { staleRepos, toRows } from '../../scripts/make-deck.ts'
 
 const { observations, fixture } = decks
 const specs = [
-  ...observations.levels.flatMap((l) => l.sequence),
-  ...observations.rules.flatMap((r) => [1, 2, 3, 4, 5].flatMap((step) => pool(observations, r.id, step))),
+  ...observations.levels.flatMap((l) => l.sequence.map((s, i) => ({ s, certain: l.anchors.includes(i) }))),
+  ...observations.rules.flatMap((r) => [1, 2, 3, 4, 5].flatMap((step) => [false, true].flatMap((certain) => pool(observations, r.id, step, certain).map((s) => ({ s, certain }))))),
 ]
 
 describe('observation deck', () => {
@@ -48,9 +49,9 @@ describe('observation deck', () => {
   it('never repeats the gap of an anchor wave in a later non-anchor wave', () => {
     for (const l of observations.levels) {
       expect(rows.filter((r) => r.rule === l.start.rule && r.gap && !r.research).length, `level ${l.id} scored gaps`).toBeGreaterThan(l.anchors.length)
-      const gaps = l.sequence.slice(0, 20).map((s) => { const w = wave(observations, s); return w.ids![w.answers[0]!] })
+      const gaps = l.sequence.slice(0, 20).map((s) => { const w = wave(observations, s); return w.answers.map((k) => w.ids![k]!) })
       gaps.forEach((g, i) => {
-        if (l.anchors.includes(i)) expect(gaps.findIndex((x, j) => j > i && x === g && !l.anchors.includes(j)), `level ${l.id} wave ${i}`).toBe(-1)
+        if (l.anchors.includes(i)) expect(gaps.findIndex((x, j) => j > i && x.includes(g[0]!) && !l.anchors.includes(j)), `level ${l.id} wave ${i}`).toBe(-1)
       })
     }
   })
@@ -74,34 +75,41 @@ describe('observation deck', () => {
     }
   })
 
-  it('gives every wave exactly 4, 5, 6, 6 or 7 distinct runs by step and exactly one gap', () => {
-    for (const s of specs) {
+  it('gives every wave exactly 4, 5, 6, 6 or 7 distinct runs by step, exactly one gap on a certain wave and any number on a research wave', () => {
+    const research = new Set<number>()
+    for (const { s, certain } of specs) {
       const w = wave(observations, s)
       const picked = w.ids!.map(rowOf)
       expect(w.symbols).toEqual(picked.map(clue))
       expect(w.symbols).toHaveLength([4, 5, 6, 6, 7][s.step - 1]!)
       expect(new Set(picked.map((r) => r.run)).size).toBe(picked.length)
-      expect(w.answers).toHaveLength(1)
+      if (certain) expect(w.answers).toHaveLength(1)
+      else research.add(w.answers.length)
       expect(w.answers).toEqual(picked.flatMap((r, i) => (r.gap ? [i] : [])))
       expect(picked.every((r) => r.rule === s.rule && r.research === unseen(s.seed))).toBe(true)
       expect(wave(observations, s)).toEqual(w)
     }
+    expect([Math.min(...research), Math.max(...research) > 1]).toEqual([0, true])
   })
 
-  it('mixes more control patterns at higher steps', () => {
+  it('mixes more control patterns at higher steps on certain waves', () => {
     const level = observations.levels[1]!
-    const kinds = level.sequence.slice(0, 20).map((s) => {
+    const kinds = (s: Spec) => {
       const w = wave(observations, s)
       return new Set(w.ids!.filter((_, i) => !w.answers.includes(i)).map((id) => pattern(rowOf(id)))).size
-    })
-    expect(kinds).toEqual([1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5])
+    }
+    expect(level.anchors.map((i) => kinds(level.sequence[i]!))).toEqual([2, 3, 4, 5])
+    expect([1, 2, 3, 4, 5].map((step) => new Set(pool(observations, level.start.rule, step, true).map(kinds)))).toEqual([1, 2, 3, 4, 5].map((step) => new Set([step])))
   })
 
-  it('shows every scored gap run of a level before repeating one', () => {
+  it('reveals four different gap runs per level, the same in fixed and adaptive play, and never draws them on a research wave', () => {
     for (const l of observations.levels) {
-      const gaps = l.sequence.slice(0, 20).map((s) => wave(observations, s)).map((w) => w.ids![w.answers[0]!])
-      const all = rows.filter((r) => r.rule === l.start.rule && r.gap && !r.research).length
-      expect(new Set(gaps.slice(0, Math.min(20, all))).size).toBe(Math.min(20, all))
+      const gapOfWave = (s: Spec) => { const w = wave(observations, s); return w.ids![w.answers[0]!]! }
+      const shown = l.anchors.map((i) => gapOfWave(l.sequence[i]!))
+      expect(new Set(shown).size).toBe(l.anchors.length)
+      expect(new Set([1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step, true)).map(gapOfWave))).toEqual(new Set(shown))
+      const research = [...l.sequence.filter((_, i) => !l.anchors.includes(i)), ...[1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step))]
+      expect(research.flatMap((s) => wave(observations, s).ids!.filter((id) => shown.includes(id)))).toEqual([])
     }
   })
 
@@ -121,7 +129,7 @@ describe('observation deck', () => {
       const share = missing.filter((x) => x.values.join() === r.values.join()).length / missing.length
       expect(typicality(r)).toBe(share)
     }
-    expect(observations.typical!(wave(observations, observations.levels[0]!.sequence[0]!))).toBe(true)
+    expect(observations.typical!(wave(observations, observations.levels[0]!.sequence[4]!))).toBe(true)
     expect(typicality(rows.find((r) => r.rule === 'pair' && r.gap && !r.research && r.values.join() === 't1,t1,t3,t4')!)).toBeLessThan(ATYPICAL)
   })
 })

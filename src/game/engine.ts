@@ -39,8 +39,10 @@ export const keys = (w: Wave) => w.symbols.map((_, i) => `r${i}`)
 
 export const wave = (d: Deck, s: Spec): Wave => ({ ...s, ...d.rules.find((r) => r.id === s.rule)!.make(s.step, s.seed) })
 
-export const pool = (d: Deck, rule: string, step: number): Spec[] =>
-  Array.from({ length: d.poolSize }, (_, i) => ({ rule, step, seed: 1000 + i }))
+export const ANCHOR_POOL = 2000
+
+export const pool = (d: Deck, rule: string, step: number, anchor = false): Spec[] =>
+  Array.from({ length: d.poolSize }, (_, i) => ({ rule, step, seed: (anchor ? ANCHOR_POOL : 1000) + i }))
 
 export const begin = (d: Deck, level: number, mode: Mode): Game => {
   const { rule, step } = d.levels.find((l) => l.id === level)!.start
@@ -54,11 +56,13 @@ const fixedFrom = (d: Deck, level: number) => {
 
 export const upcoming = (d: Deck, g: Game): Spec | null => {
   const i = g.decisions.length
-  if (g.mode === 'standard' || i >= fixedFrom(d, g.level)) return d.levels.find((l) => l.id === g.level)!.sequence[i] ?? null
-  const all = pool(d, g.rule, g.step)
+  const level = d.levels.find((l) => l.id === g.level)!
+  if (g.mode === 'standard' || i >= fixedFrom(d, g.level)) return level.sequence[i] ?? null
+  const anchor = level.anchors.includes(i)
+  const all = pool(d, g.rule, g.step, anchor)
   const free = all.filter((s) => !g.decisions.some((x) => x.spec.seed === s.seed))
   const gap = (s: Spec) => { const w = wave(d, s); return w.ids?.[w.answers[0]!] }
-  const fresh = free.filter((s) => !g.decisions.some((x) => gap(x.spec) === gap(s)))
+  const fresh = anchor ? free.filter((s) => !g.decisions.some((x) => x.anchor && gap(x.spec) === gap(s))) : free
   const from = fresh.length ? fresh : free.length ? free : all
   return from[Math.floor(rng(g.level * 100 + i)() * from.length)]!
 }
@@ -186,7 +190,7 @@ export const content = (d: Deck): unknown => ({
   question: d.question,
   levels: d.levels.map((l) => ({ id: l.id, start: l.start, anchors: l.anchors, waves: l.sequence.map((s) => wave(d, s)) })),
   pool: d.rules.flatMap((r) =>
-    Array.from({ length: d.steps }, (_, i) => pool(d, r.id, i + 1).map((s) => wave(d, s))).flat(),
+    Array.from({ length: d.steps }, (_, i) => [...pool(d, r.id, i + 1), ...pool(d, r.id, i + 1, true)].map((s) => wave(d, s))).flat(),
   ),
 })
 

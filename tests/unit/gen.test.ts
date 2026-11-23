@@ -112,13 +112,16 @@ describe('the board carries the evidence', () => {
     const tally = d.levels.map((l) => {
       let eye = 0
       let model = 0
+      let waves = 0
       l.sequence.forEach((s, i) => {
         const w = wave(d, s)
+        if (w.answers.length !== 1) return
+        waves++
         const objects = presentObjects(d, w)
         eye += +w.answers.includes(objects[look(objects.map((o) => o.shape))]!.sourceIndex)
         model += +w.answers.includes(ai[l.id]![i] as number)
       })
-      return { level: l.id, waves: l.sequence.length, eye, model }
+      return { level: l.id, waves, eye, model }
     })
     console.table(tally)
     for (const t of tally) {

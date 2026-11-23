@@ -1,5 +1,5 @@
-import { MAX_MS, URL_AI, canonical, keys, round05, stepBody, validate, wave } from '../engine.ts'
-import type { AiPick, Deck, Past, Spec } from '../engine.ts'
+import { MAX_MS, URL_AI, canonical, keys, pool, round05, stepBody, validate, wave } from '../engine.ts'
+import type { AiPick, Deck, Level, Past, Spec } from '../engine.ts'
 import { edition, sha256 } from '../eval/version.ts'
 import { decks } from '../levels/index.ts'
 
@@ -14,7 +14,6 @@ export type GameEnv = {
 const DAILY_CAP = 1000
 const MAX_BYTES = 2048
 const RESULT_CAP = 5000
-const POOL_FROM = 1000
 const TIMEOUT = 1500
 const KEEP_DAYS = 365
 let pruned = ''
@@ -28,12 +27,13 @@ const list = (x: unknown, n: number): unknown[] => (Array.isArray(x) && x.length
 const exact = (x: unknown, ks: string[]): Record<string, unknown> =>
   x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).sort().join() === [...ks].sort().join() ? (x as Record<string, unknown>) : bad()
 
-const spec = (d: Deck, standard: boolean, seq: Spec[], pos: number, a: unknown[]): Spec => {
+const spec = (d: Deck, level: Level, standard: boolean, pos: number, a: unknown[]): Spec => {
   const [r, step, seed] = [int(a[0], d.rules.length - 1), int(a[1], 1e6), int(a[2], 1e9)]
   const s = { rule: d.rules[r]!.id, step, seed }
   const same = (q: Spec) => q.rule === s.rule && q.step === s.step && q.seed === s.seed
-  const inPool = step >= 1 && step <= d.steps && seed >= POOL_FROM && seed < POOL_FROM + d.poolSize
-  return (standard ? seq[pos] && same(seq[pos]) : inPool || seq.some(same)) ? s : bad()
+  const seq = level.sequence
+  const inPool = step >= 1 && step <= d.steps && pool(d, s.rule, step, level.anchors.includes(pos)).some(same)
+  return (standard || pos >= seq.length - (level.tail ?? 0) ? seq[pos] && same(seq[pos]) : inPool) ? s : bad()
 }
 
 const context = (b: Record<string, unknown>) => {
@@ -76,15 +76,15 @@ const used = (env: GameEnv, col: 'step' | 'result', n = 1) =>
     .then((r) => r?.n ?? Infinity)
 
 const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }) => {
-  const { d, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'wave', 'past']))
+  const { d, level, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'wave', 'past']))
   ctx.waitUntil(prune(env))
   const rows = Array.isArray(b.past) && b.past.length < seq.length ? b.past : bad()
   const past: Past[] = rows.map((p, i) => {
     const a = list(p, 5)
-    const { w, hit } = hitOf(d, spec(d, standard, seq, i, a), a[3] as number)
+    const { w, hit } = hitOf(d, spec(d, level, standard, i, a), a[3] as number)
     return { w, hit, tempo: int(a[4], 2) as 0 | 1 | 2 }
   })
-  const w = wave(d, spec(d, standard, seq, past.length, list(b.wave, 3)))
+  const w = wave(d, spec(d, level, standard, past.length, list(b.wave, 3)))
   const body = stepBody(d, w, past)
   const key = await sha256(canonical(body))
   const hit = await env.DB.prepare('SELECT body FROM game_cache WHERE key = ?').bind(key).first<{ body: string }>()
@@ -126,7 +126,7 @@ const result = async (b: Record<string, unknown>, env: GameEnv) => {
   const rows = Array.isArray(b.waves) && b.waves.length <= seq.length ? b.waves : bad()
   const waves = rows.map((r, i) => {
     const a = Array.isArray(r) ? r : bad()
-    const s = spec(d, standard, seq, i, a)
+    const s = spec(d, level, standard, i, a)
     const { w, hit } = hitOf(d, s, a[3] as number)
     list(a, 14 + w.symbols.length)
     if (a[4] !== +hit || a[13] !== +level.anchors.includes(i)) bad()
