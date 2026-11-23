@@ -35,18 +35,23 @@ const picks = [0, 1, 2, 0, 1, 0, 2, 1, 0, 1, 0]
 
 describe('engine', () => {
   it('advance moves the step by the thresholds and clamps it', () => {
-    expect(advance(deck, { rule: 'a', step: 1, streak: 0 }, 0.8)).toMatchObject({ rule: 'a', step: 2, switched: false })
-    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.55)).toMatchObject({ step: 2, switched: false })
-    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.54)).toMatchObject({ step: 1, switched: false })
-    expect(advance(deck, { rule: 'a', step: 3, streak: 0 }, 0.9)).toMatchObject({ step: 3, streak: 1, switched: false })
-    expect(advance(deck, { rule: 'a', step: 1, streak: 0 }, 0.3)).toMatchObject({ step: 1, streak: 1, switched: false })
+    expect(advance(deck, { rule: 'a', step: 1, streak: 0 }, 0.8, true)).toMatchObject({ rule: 'a', step: 2, switched: false })
+    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.55, false)).toMatchObject({ step: 2, switched: false })
+    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.54, false)).toMatchObject({ step: 1, switched: false })
+    expect(advance(deck, { rule: 'a', step: 3, streak: 0 }, 0.9, true)).toMatchObject({ step: 3, streak: 1, switched: false })
+    expect(advance(deck, { rule: 'a', step: 1, streak: 0 }, 0.3, false)).toMatchObject({ step: 1, streak: 1, switched: false })
+  })
+
+  it('advance holds the step when the verdict contradicts the forecast', () => {
+    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.9, false)).toMatchObject({ step: 2, switched: false })
+    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.1, true)).toMatchObject({ step: 2, switched: false })
   })
 
   it('advance switches rule after two confirming waves at a limit', () => {
-    expect(advance(deck, { rule: 'b', step: 3, streak: 1 }, 0.9)).toMatchObject({ rule: 'c', step: 2, streak: 0, switched: true })
-    expect(advance(deck, { rule: 'b', step: 1, streak: 1 }, 0.3)).toMatchObject({ rule: 'a', step: 1, streak: 0, switched: true })
-    expect(advance(deck, { rule: 'c', step: 3, streak: 1 }, 0.9)).toMatchObject({ rule: 'c', step: 3 })
-    expect(advance(deck, { rule: 'a', step: 1, streak: 1 }, 0.3)).toMatchObject({ rule: 'a', step: 1 })
+    expect(advance(deck, { rule: 'b', step: 3, streak: 1 }, 0.9, true)).toMatchObject({ rule: 'c', step: 2, streak: 0, switched: true })
+    expect(advance(deck, { rule: 'b', step: 1, streak: 1 }, 0.3, false)).toMatchObject({ rule: 'a', step: 1, streak: 0, switched: true })
+    expect(advance(deck, { rule: 'c', step: 3, streak: 1 }, 0.9, true)).toMatchObject({ rule: 'c', step: 3 })
+    expect(advance(deck, { rule: 'a', step: 1, streak: 1 }, 0.3, false)).toMatchObject({ rule: 'a', step: 1 })
   })
 
   it('estimate uses the last four waves of the current rule', () => {
@@ -78,19 +83,33 @@ describe('engine', () => {
     expect(shoot(deck, g, 0, 0, { hit: 0.1, miss: 0.1 }).step).toBe(2)
   })
 
-  it('shoot with live moves the step by the float on a certain wave; without it the result is the estimate', () => {
+  it('shoot with live steps up on a hit, down on a miss and holds when the verdict contradicts the forecast; without it the result is the estimate', () => {
     const start = { ...begin(deck, 1, 'adaptive'), step: 2 }
     const g = [0, 0, 0].reduce((acc, p) => shoot(deck, acc, p), start)
     expect(g.step).toBe(2)
-    for (const pick of [0, 1]) {
-      const up = shoot(deck, g, pick, 0, { hit: 0.9, miss: 0.9 })
-      const down = shoot(deck, g, pick, 0, { hit: 0.1, miss: 0.1 })
-      const split = shoot(deck, g, pick, 0, { hit: 0.9, miss: 0.1 })
-      expect([up.step, down.step]).toEqual([3, 1])
-      expect(split.step).toBe(split.decisions[3]!.hit ? 3 : 1)
-      const next = { ...g, decisions: split.decisions }
-      expect(shoot(deck, g, pick).step).toBe(advance(deck, g, estimate(deck, { ...next, decisions: next.decisions.filter((x) => x.anchor) })).step)
+    const right = wave(deck, upcoming(deck, g)!).answers[0]!
+    const wrong = (right + 1) % 3
+    expect(shoot(deck, g, right, 0, { hit: 0.9, miss: 0.9 }).step).toBe(3)
+    expect(shoot(deck, g, wrong, 0, { hit: 0.1, miss: 0.1 }).step).toBe(1)
+    expect(shoot(deck, g, wrong, 0, { hit: 0.9, miss: 0.9 }).step).toBe(2)
+    for (const pick of [right, wrong]) {
+      const next = shoot(deck, g, pick)
+      expect(next.step).toBe(advance(deck, g, estimate(deck, { ...next, decisions: next.decisions.filter((x) => x.anchor) }), next.decisions[3]!.hit).step)
     }
+  })
+
+  it('a 4/4 game with the forecasts of a real production game steps up and never down', () => {
+    const d = decks.observations!
+    let g = begin(d, 1, 'adaptive')
+    const steps: number[] = []
+    for (let i = 0; upcoming(d, g); i++) {
+      const spec = upcoming(d, g)!
+      const certain = d.levels[0]!.anchors.includes(i)
+      g = shoot(d, g, wave(d, spec).answers[0] ?? 0, 0, certain ? { hit: [0.55, 0.6, 0.7, 0.6][d.levels[0]!.anchors.indexOf(i)]!, miss: 0.5 } : undefined)
+      if (certain) steps.push(g.step)
+    }
+    expect(Math.max(...steps)).toBeGreaterThan(1)
+    expect(steps.every((x, i) => x >= (steps[i - 1] ?? 1))).toBe(true)
   })
 
   it('band edges', () => {

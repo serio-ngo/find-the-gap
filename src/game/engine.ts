@@ -75,9 +75,9 @@ export const estimate = (d: Deck, g: Game): number => {
 export const forecast = (d: Deck, g: Game, live?: { hit: number; miss: number }) =>
   live ? live[g.decisions.at(-1)!.hit ? 'hit' : 'miss'] : estimate(d, { ...g, decisions: g.decisions.filter((x) => x.anchor) })
 
-export const advance = (d: Deck, s: { rule: string; step: number; streak: number }, p: number) => {
-  const up = p >= d.policy.high
-  const down = p < d.policy.low
+export const advance = (d: Deck, s: { rule: string; step: number; streak: number }, p: number, hit: boolean) => {
+  const up = hit && p >= d.policy.high
+  const down = !hit && p < d.policy.low
   const streak = (up && s.step === d.steps) || (down && s.step === 1) ? s.streak + 1 : 0
   if (streak >= d.policy.confirm) {
     const next = d.rules[d.rules.findIndex((r) => r.id === s.rule) + (up ? 1 : -1)]
@@ -98,7 +98,7 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   // adaptive play moves its parameters only after a certain wave, so a research wave's truth never shows in the next wave
   if (g.mode === 'standard' || !anchor) return next
   // shortcut: the live AI forecast still sees research picks, as a fuzzy aggregate; filter its history if that proves readable
-  const { rule, step, streak } = advance(d, g, forecast(d, next, live))
+  const { rule, step, streak } = advance(d, g, forecast(d, next, live), hit)
   return { ...next, rule, step, streak }
 }
 

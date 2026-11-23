@@ -151,7 +151,7 @@ const study = () => { try { return localStorage.getItem('ftg:study') === '1' } c
 const contribute = () => {
   if (!api || sent || !study()) return
   sent = true
-  sendResult(api, resultRequest(deckIdx, level, g.mode, waves))
+  sendResult(api, resultRequest(deckIdx, level, g.mode, waves, edition))
 }
 
 const end = () => {

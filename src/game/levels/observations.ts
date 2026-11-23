@@ -110,7 +110,7 @@ export const gapRow = (w: Wave) => rowOf(w.ids![w.answers[0]!]!)
 export const observations: Deck = {
   id: 'observations',
   steps: 5,
-  policy: { high: 0.8, low: 0.55, window: 4, confirm: 2 },
+  policy: { high: 0.6, low: 0.5, window: 4, confirm: 2 },
   rules: order.map((id): Rule => ({ id, make: (step, seed) => wave(id, step, seed) })),
   choiceRecords: (w): ChoiceRecord[] => w.ids!.map((id) => {
     const r = byId.get(id)!

@@ -122,7 +122,9 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
 }
 
 const result = async (b: Record<string, unknown>, env: GameEnv) => {
-  const { d, level, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'waves']))
+  const { d, level, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'waves', 'edition']))
+  const version = await edition(d)
+  if (b.edition !== version) bad()
   const rows = Array.isArray(b.waves) && b.waves.length <= seq.length ? b.waves : bad()
   const waves = rows.map((r, i) => {
     const a = Array.isArray(r) ? r : bad()
@@ -135,7 +137,7 @@ const result = async (b: Record<string, unknown>, env: GameEnv) => {
   })
   if ((await used(env, 'result')) > RESULT_CAP) return new Response(null, { status: 204 })
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
-    .bind(new Date().toISOString().slice(0, 10), await edition(d), b.level, standard ? 0 : 1, JSON.stringify(waves))
+    .bind(new Date().toISOString().slice(0, 10), version, b.level, standard ? 0 : 1, JSON.stringify(waves))
     .run()
   await prune(env)
   return new Response(null, { status: 204 })

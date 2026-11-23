@@ -39,4 +39,4 @@ export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, fi
   ms(aim.ms), Math.min(99, aim.switches), +x.anchor, ...aim.dwell.map(ms),
 ]
 
-export const resultRequest = (v: number, level: number, mode: Mode, waves: number[][]) => ({ v, level, mode: mode === 'adaptive' ? 1 : 0, waves })
+export const resultRequest = (v: number, level: number, mode: Mode, waves: number[][], edition: string) => ({ v, level, mode: mode === 'adaptive' ? 1 : 0, waves, edition })

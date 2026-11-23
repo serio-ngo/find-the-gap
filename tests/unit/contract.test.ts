@@ -4,6 +4,7 @@ import type { AiRun, Mode } from '../../src/game/engine.ts'
 import { resultRequest, resultRow, stepRequest } from '../../src/game/net.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import run from '../../src/game/eval/ai-run.json'
+import { edition } from '../../src/game/eval/version.ts'
 import { route } from '../../src/game/worker/route.ts'
 import type { GameEnv } from '../../src/game/worker/route.ts'
 
@@ -53,7 +54,7 @@ const play = async (name: 'observations' | 'fixture', mode: Mode) => {
     const p = mode === 'adaptive' ? forecast(d, { ...g, rule }, live ?? undefined) : 0
     waves.push(resultRow(d, x, p, live, true, { ms: 2345.6, dwell: wave(d, spec).symbols.map(() => 812), switches: 3 }))
   }
-  return { body: resultRequest(v, 1, mode, waves), waves, g, asked }
+  return { body: resultRequest(v, 1, mode, waves, await edition(d)), waves, g, asked }
 }
 
 describe('client bodies are accepted by the route', () => {
@@ -67,11 +68,11 @@ describe('client bodies are accepted by the route', () => {
     expect((await send('/api/game/result', { ...body, waves: lie })).status).toBe(400)
   })
 
-  it('a worst-case body stays under the byte limit', () => {
+  it('a worst-case body stays under the byte limit', async () => {
   const d = decks.observations!
   const x = { spec: d.levels[0]!.sequence[0]!, pick: 6, hit: true, anchor: true, secs: 9 }
   const row = resultRow(d, x, 1, { ai: 6, hit: 1, miss: 1, cached: true }, true, { ms: MAX_MS, dwell: Array(7).fill(MAX_MS), switches: 99 })
-  expect(JSON.stringify(resultRequest(0, 1, 'adaptive', Array(21).fill(row))).length).toBeLessThan(2048)
+  expect(JSON.stringify(resultRequest(0, 1, 'adaptive', Array(21).fill(row), await edition(d))).length).toBeLessThan(2048)
 })
 
 it('wave bodies are integers and the fixture sends no AI pick as -1', async () => {

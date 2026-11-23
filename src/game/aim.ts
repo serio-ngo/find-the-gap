@@ -21,6 +21,7 @@ export const aimTracker = () => {
     },
     reset(now: number) {
       dwell = []
+      aimed = -1
       last = -1
       switches = 0
       since = now
