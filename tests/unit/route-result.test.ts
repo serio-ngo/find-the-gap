@@ -62,7 +62,7 @@ describe('result', () => {
     }
   })
 
-  it('rejects an adaptive certain wave from outside the certain pool, and a research wave from inside it', async () => {
+  it('rejects an adaptive certain wave from outside the certain pool, and a research wave from inside it or from the fixed sequence', async () => {
     const { env } = fakeEnv()
     const d = decks.observations
     const l = d.levels[0]!
@@ -78,5 +78,6 @@ describe('result', () => {
     expect((await send1([...research.slice(0, 4), research[4]!])).status).toBe(400)
     expect((await send1([...research.slice(0, 4), l.sequence[0]!])).status).toBe(400)
     expect((await send1([certain[0]!])).status).toBe(400)
+    expect((await send1([l.sequence[4]!])).status).toBe(400)
   })
 })

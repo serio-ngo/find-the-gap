@@ -32,9 +32,8 @@ const spec = (d: Deck, level: Level, standard: boolean, pos: number, a: unknown[
   const s = { rule: d.rules[r]!.id, step, seed }
   const same = (q: Spec) => q.rule === s.rule && q.step === s.step && q.seed === s.seed
   const seq = level.sequence
-  const anchor = level.anchors.includes(pos)
-  const inPool = step >= 1 && step <= d.steps && pool(d, s.rule, step, anchor).some(same)
-  return (standard ? seq[pos] && same(seq[pos]) : inPool || (!anchor && seq.some(same))) ? s : bad()
+  const inPool = step >= 1 && step <= d.steps && pool(d, s.rule, step, level.anchors.includes(pos)).some(same)
+  return (standard || pos >= seq.length - (level.tail ?? 0) ? seq[pos] && same(seq[pos]) : inPool) ? s : bad()
 }
 
 const context = (b: Record<string, unknown>) => {
