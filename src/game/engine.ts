@@ -180,10 +180,7 @@ export const validate = (ks: string[], answer: AiPick | undefined): AiPick => {
   return { choice: answer.choice, probabilities: Object.fromEntries(ks.map((k) => [k, Math.round(p[k]! * 1000) / 1000])) }
 }
 
-const drawn = (d: Deck, s: Spec, records: boolean) => {
-  const w = wave(d, s)
-  return records ? { ...w, records: d.choiceRecords?.(w) } : w
-}
+const drawn = (d: Deck, s: Spec, records: boolean) => { const w = wave(d, s); return records ? { ...w, records: d.choiceRecords?.(w) } : w }
 
 export const content = (d: Deck, records = false): unknown => ({
   id: d.id,
