@@ -5,9 +5,11 @@ import { decks } from '../../src/game/levels/index.ts'
 import { edition } from '../../src/game/eval/version.ts'
 import { FIXTURE, fakeEnv, send } from './route-env.ts'
 
+const fixtureEdition = await edition(decks.fixture!)
+
 describe('result', () => {
   const row = (pick: number, hit: number) => [0, 1, 0, pick, hit, 1, 0, 12, 0, 0, 1, 2345, 3, 0, ...Array(wave(decks.fixture!, { rule: decks.fixture!.rules[0]!.id, step: 1, seed: 0 }).symbols.length).fill(812)]
-  const body = (waves: number[][]) => ({ v: FIXTURE, level: 1, mode: 0, waves })
+  const body = (waves: number[][], ed = fixtureEdition) => ({ v: FIXTURE, level: 1, mode: 0, waves, edition: ed })
 
   it('stores one row under the exact deck edition with the day only, and rejects a lying hit', async () => {
     const { env, results } = fakeEnv()
@@ -33,6 +35,18 @@ describe('result', () => {
     expect(results).toHaveLength(2)
   })
 
+  it('stores a result of the current edition and rejects a missing or another edition without storing', async () => {
+    const { env, results } = fakeEnv()
+    const d = decks.fixture
+    const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
+    expect((await send('/api/game/result', body([row(pick, 1)]), env)).status).toBe(204)
+    expect(results.map((r) => r[1])).toEqual([fixtureEdition])
+    const { edition: _, ...bare } = body([row(pick, 1)])
+    expect((await send('/api/game/result', bare, env)).status).toBe(400)
+    expect((await send('/api/game/result', body([row(pick, 1)], 'observations:000000000000'), env)).status).toBe(400)
+    expect(results).toHaveLength(1)
+  })
+
   it('204 without inserting past the daily result cap', async () => {
     const { env, results, use } = fakeEnv()
     use.result = 5000
@@ -52,7 +66,8 @@ describe('result', () => {
       return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, i === seq.length - 1 ? last : pick, i === seq.length - 1 ? hit : +w.answers.includes(pick), 1, -1, 0, 0, 0, 1, 600_000, 99, +d.levels[0]!.anchors.includes(i), ...w.symbols.map(() => 600_000)]
     })
     const tail = wave(d, seq.at(-1)!)
-    const send0 = (last: unknown, hit: number) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(last, hit) }, env)
+    const ed = await edition(d)
+    const send0 = (last: unknown, hit: number) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(last, hit), edition: ed }, env)
     expect((await send0('x', 0)).status).toBe(400)
     expect((await send0(99, 0)).status).toBe(400)
     for (const pick of tail.symbols.keys()) {
@@ -73,7 +88,8 @@ describe('result', () => {
     }
     const research = pool(d, l.start.rule, 1)
     const certain = pool(d, l.start.rule, 1, true)
-    const send1 = (specs: Spec[]) => send('/api/game/result', { v: 0, level: 1, mode: 1, waves: specs.map(row) }, env)
+    const observationsEdition = await edition(d)
+    const send1 = (specs: Spec[]) => send('/api/game/result', { v: 0, level: 1, mode: 1, waves: specs.map(row), edition: observationsEdition }, env)
     expect((await send1([...research.slice(0, 4), certain[0]!])).status).toBe(204)
     expect((await send1([...research.slice(0, 4), research[4]!])).status).toBe(400)
     expect((await send1([...research.slice(0, 4), l.sequence[0]!])).status).toBe(400)
