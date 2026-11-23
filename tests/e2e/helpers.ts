@@ -34,7 +34,6 @@ export const rockNames = (d: Deck, g: Game, lang: Lang) => {
   return displayed(d, g).map((o, k) => `${labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]!)}. ${describe(o.shape.facts, labels)}`)
 }
 
-// The chart's accessible name for a finished game, built from the same report and strings the page uses.
 export const chartName = (g: Game, lang: Lang = 'en') => {
   const played = { ...g, decisions: g.decisions.map((d, i) => ({ ...d, ai: aiPick(run, deck, g, i) })) }
   return label(report(deck, played), { ...strings.visible[lang], chart: strings.labels[lang].chart } as Labels)

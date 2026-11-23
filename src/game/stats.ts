@@ -28,7 +28,6 @@ export const clearSaves = (s = ls()) => {
   try { for (const k of ftg(s!)) s!.removeItem(k) } catch {}
 }
 
-// 95% Wilson interval for k of n
 export const wilson = (k: number, n: number): [number, number] => {
   const z = 1.96
   const p = k / n

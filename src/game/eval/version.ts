@@ -4,7 +4,6 @@ import type { Deck } from '../engine.ts'
 export const sha256 = async (s: string) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((x) => x.toString(16).padStart(2, '0')).join('')
 
-// Stored results name the deck content and row layout they were scored against, so rows never mix.
 export const LAYOUT = 1
 const editions = new Map<Deck, Promise<string>>()
 export const edition = (d: Deck) => {

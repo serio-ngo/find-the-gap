@@ -59,7 +59,6 @@ export const upcoming = (d: Deck, g: Game): Spec | null => {
   const free = all.filter((s) => !g.decisions.some((x) => x.spec.seed === s.seed))
   const gap = (s: Spec) => { const w = wave(d, s); return w.ids?.[w.answers[0]!] }
   const fresh = free.filter((s) => !g.decisions.some((x) => gap(x.spec) === gap(s)))
-  // shortcut: a game longer than the pool repeats seeds, so keep the pool at least as long as the adaptive waves
   const from = fresh.length ? fresh : free.length ? free : all
   return from[Math.floor(rng(g.level * 100 + i)() * from.length)]!
 }
@@ -99,7 +98,6 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   return { ...next, rule, step, streak }
 }
 
-// Only certain waves of an adaptive game are forecast live.
 export const asks = (d: Deck, g: Game, i: number) => !fixed(d, g, i) && d.levels.find((l) => l.id === g.level)!.anchors.includes(i)
 
 export const score = (g: Game) =>

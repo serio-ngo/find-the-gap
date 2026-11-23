@@ -8,7 +8,6 @@ const KEEP = 365 * DAY
 const d = decks.fixture!
 const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
 const result = { v: FIXTURE, level: 1, mode: 0, waves: [[0, 1, 0, pick, 1, 1, 0, 12, 0, 0, 1, 2345, 3, 0, ...wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).symbols.map(() => 812)]] }
-// the prune day is module state, so each test lives on its own day
 const on = (n: number) => vi.useFakeTimers({ toFake: ['Date'], now: Date.UTC(2031, 0, n) })
 afterEach(() => {
   vi.useRealTimers()

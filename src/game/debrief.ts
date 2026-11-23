@@ -92,7 +92,6 @@ export const showReplay = (root: HTMLElement, deck: Deck, g: Game, rounds: Round
   })
 }
 
-// Chart and table: you, the AI and blind guessing on the same scored waves, split by how common the gap's pattern is in the deck.
 export const showResult = (root: HTMLElement, deck: Deck, g: Game, edition: string, { v, l }: Text) => {
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!
   const sc = score(g)

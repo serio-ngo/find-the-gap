@@ -33,7 +33,6 @@ export const label = (r: Report, l: Labels) => {
   return `${rows.map((x) => `${x.name} ${x.hits}/${x.n}, ${l.chart} ${x.lo}–${x.hi}%`).join('; ')}; ${l.chance.toLowerCase()} ${chance}%`
 }
 
-// Your and the AI's hit rate with its 95% Wilson interval, against the chance rate as a vertical line.
 export const chart = (r: Report, l: Labels) => {
   if (!r.all.n) return ''
   const { chance, rows } = stats(r, l)
@@ -53,7 +52,6 @@ export const chart = (r: Report, l: Labels) => {
     + `<text class="ftg-chart-t" x="${x(chance / 100)}" y="12" text-anchor="${chance > 60 ? 'end' : 'start'}">${esc(`${l.chance} ${chance}%`)}</text>${body}</svg>`
 }
 
-// Typical and atypical rows only when both have waves; chance as a rate.
 export const table = (r: Report, l: Labels) => {
   const row = (name: string, t: Tally) =>
     `<tr><th scope="row">${esc(name)}</th><td>${of(t.you, t.n)}</td><td>${of(t.ai, t.aiN)}</td><td>${t.n ? `${pct(t.chance / t.n)}%` : '—'}</td></tr>`
