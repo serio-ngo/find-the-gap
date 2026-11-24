@@ -10,7 +10,6 @@ const H = (xs: string[]) => {
 }
 const MI = (a: string[], b: string[]) => H(a) + H(b) - H(a.map((x, i) => `${x}|${b[i]}`))
 const shuffle = (r: () => number, xs: string[]) => xs.map((x) => [r(), x] as const).sort((p, q) => p[0] - q[0]).map((p) => p[1])
-// Adjusted mutual information between a drawn channel and the gap flag, with a permutation p-value.
 const leak = (a: string[], g: string[], perms = 1000) => {
   const mi = MI(a, g)
   const r = rng(7)

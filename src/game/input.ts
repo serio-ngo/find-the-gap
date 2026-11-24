@@ -23,7 +23,6 @@ export const bindInput = (
     e.preventDefault()
   }
 
-  // Hover or press aims; releasing on the rock that was pressed fires. Sliding off before release cancels the shot.
   const at = (e: PointerEvent) => {
     const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
     return [e.clientX - box.left, e.clientY - box.top] as const

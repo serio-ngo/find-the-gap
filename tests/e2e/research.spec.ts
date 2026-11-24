@@ -3,7 +3,6 @@ import { edition } from '../../src/game/eval/version.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { open, play, strings, type Lang } from './helpers.ts'
 
-// Mocks /api/game/*; returns the recorded request bodies.
 async function mock(page: Page, step: (r: import('@playwright/test').Route) => unknown = (r) => r.fulfill({ json: { fallback: true } })) {
   const results: { waves: number[][] }[] = []
   const steps: unknown[] = []
@@ -30,7 +29,7 @@ test('nothing is sent until the toggle is on, then once per game', async ({ page
   await page.waitForLoadState('networkidle')
   expect(results).toHaveLength(0)
 
-  await study(page).click() // the game just finished is sent
+  await study(page).click()
   await expect(study(page)).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => results.length).toBe(1)
   expect(results[0].waves.length).toBeGreaterThan(0)
@@ -73,7 +72,7 @@ test('adaptive mode uses /step answers when they arrive', async ({ page }) => {
   const live = { hit: 0.9, miss: 0.1 }
   const { results, steps } = await mock(page, (r) => r.fulfill({ json: { ai: 0, ...live, cached: false } }))
   await open(page, 'en', 1, '?mode=adaptive')
-  await play(page, { mode: 'adaptive', live }) // play() fails if the page shows a wave the live answers would not produce
+  await play(page, { mode: 'adaptive', live })
   await expect.poll(() => results.length).toBe(1)
   expect((steps as { past: unknown[] }[]).map((s) => s.past.length)).toEqual([4, 9, 14, 19])
   expect(results[0].waves.some((w) => w[8] === 1)).toBe(true)
@@ -98,7 +97,6 @@ test('aim data: moving between rocks is one switch, and paused time counts neith
   await page.locator('.ftg-play').click()
   const box = (await page.locator('canvas').boundingBox())!
   const n = await page.locator('[data-rock]').count()
-  // the game's grid: the column count with the largest cells
   const h = box.height - 64 - 8
   const cell = (c: number) => Math.min(box.width / c, h / Math.ceil(n / c))
   const cols = Array.from({ length: n }, (_, i) => i + 1).reduce((b, c) => (cell(c) > cell(b) ? c : b))
