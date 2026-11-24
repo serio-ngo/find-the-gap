@@ -1,12 +1,9 @@
 # AGENTS.md
 
-Rules for every contributor and coding agent. This repository is public and open source.
-
-- Requirements: `VISION.md`, the owner's words. Never edit or reword it. No other documents.
-- Public only: the game and public evidence. No secret, personal data, private repository, issue, archive, host config or internal process.
+- Rules for every contributor and coding agent; this repository is public and open source. Requirements: `VISION.md`, the owner's words; never edit or reword it, and add no other documents. Public only: the game and public evidence; no secret, personal data, private repository, issue, archive, host config or internal process.
+- Research first: the game is a research instrument. Every research pick is data, analysed against what was drawn and the run's values; hits, scores and the human, AI and chance comparison exist only on the four certain waves of a level. Never drop or defer anything that loses research picks. Every rock's evidence comes from its record values only; the answer never steers how a rock is drawn.
+- Levels are built only in local sessions and are deterministic: a pinned archive commit, a freshness check, named automatic drops plus a committed curation list, byte-identical regeneration and the wave gates (context leak, gap reuse). The owner filters bad data by hand; a reorder or re-seed states that the edition changes.
+- Proof is data and simulation: implement a requested change, never avoid it, and keep core play, the AI comparison, `npm test`, `npm run typecheck` and `npm run e2e` working. A change that alters play keeps one test through a public entry point; prove a visual change with real output, not a mock. A simulation the owner asked for is a deliverable: repair and retarget it when it breaks, and keep one maintained copy.
 - Read the code a change touches first. The smallest complete diff wins: change a value or a branch before adding a function, a function before a file. Never drop a feature, check or test to cut lines.
-- Every rock's evidence comes from its record values only; the answer never steers how a rock is drawn.
-- A change that alters play keeps one test through a public entry point (`npm test`, `npm run typecheck`); prove a visual change with real output, not a mock.
-- Code, names and messages in English; product copy stays in its own language (`strings.json`). No comments in code beyond a one-line why.
-- Work on a branch and open a pull request into `main`; a person reviews and merges. Answer every review finding before asking for a merge.
-- Workflow: [serio-focus](https://github.com/serio-ngo/serio-focus).
+- Code, names and messages in English; product copy stays in its own language (`strings.json`). No comments in code, tests or scripts.
+- Work on a branch; push it and open its pull request into `main` at once. A person reviews and merges; answer every review finding before asking for a merge. Workflow: [serio-focus](https://github.com/serio-ngo/serio-focus).

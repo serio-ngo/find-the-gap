@@ -1,11 +1,9 @@
 import { LIGHT, TAU, add, at, colors, ellipse, len, plate, wire } from './geom.ts'
 import type { Family, Part, Pt, Signs } from './geom.ts'
 
-// A palette colour moved toward another by 1 - k: the step's context strength fades context into what lies behind it.
 const mix = (a: string, b: string, k: number) =>
   `#${[1, 3, 5].map((i) => Math.round(parseInt(colors[a]!.slice(i, i + 2), 16) * k + parseInt(colors[b]!.slice(i, i + 2), 16) * (1 - k)).toString(16).padStart(2, '0')).join('')}`
 
-// Halo: one segment per lock plus one, centred on 12 o'clock; each segment lights its middle by the pass share.
 export function halo(sg: Signs, k: number, parts: Part[]) {
   const n = 1 + sg.locks
   const span = TAU / n - (n > 1 ? 0.24 : 0)
@@ -23,7 +21,6 @@ export function halo(sg: Signs, k: number, parts: Part[]) {
   }
 }
 
-// Craters: review findings since the previous gate, on fixed mirrored spots.
 const SPOTS: Pt[][] = [[], [[0, -0.36]], [[-0.3, -0.26], [0.3, -0.26]]]
 export function craters(sg: Signs, family: Family, k: number, parts: Part[]) {
   for (const c of SPOTS[sg.impacts]!) {
@@ -37,7 +34,6 @@ export function craters(sg: Signs, family: Family, k: number, parts: Part[]) {
   }
 }
 
-// Alien: colour = tests job, eyes = agent commits since the previous gate (plus one), size grows with them.
 export function alien(sg: Signs, family: Family, k: number, parts: Part[]) {
   const r = 0.2 + 0.015 * sg.agent
   const y = 0.1

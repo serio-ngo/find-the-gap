@@ -6,7 +6,6 @@ import type { State } from './field.ts'
 
 const turn = (a: number, b: number, k: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k
 
-// The rock breaks along its own outline into wedges and dust. Seeded by the slot, never by the answer: every pick shatters alike.
 const shatter = (s: State, to: number) => {
   const t = s.ts[to]!
   const { x, y } = pos(s, t)
@@ -41,7 +40,6 @@ export const update = (s: State) => {
   const k = s.calm ? 0.08 : 0.16
   s.sx += (s.tx - s.sx) * k
   s.sy += (s.ty - s.sy) * k
-  // the nose follows the locked rock, else the pointer target
   const goal = s.shot ? pos(s, s.ts[s.shot.to]!) : s.aim >= 0 && s.ts[s.aim] ? pos(s, s.ts[s.aim]!) : null
   const heading = goal ? Math.atan2(goal.x - s.sx, s.sy - goal.y) : Math.max(-0.5, Math.min(0.5, (s.tx - s.sx) * 0.02))
   s.angle = s.calm ? heading : turn(s.angle, heading, 0.25)

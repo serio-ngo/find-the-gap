@@ -33,7 +33,6 @@ const modeBtn = $<HTMLButtonElement>('.ftg-mode')
 const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
-// Aim behaviour for research: how long the lock rested on each rock this wave, and how often it moved to another rock.
 const aim = aimTracker()
 const onAim = (i: number) => aim.lock(i, root.dataset.phase === 'paused' ? pausedAt : performance.now(), root.dataset.phase === 'play')
 const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches, onAim })
@@ -80,7 +79,6 @@ const setPause = (p: boolean) => {
   else field.resume()
 }
 
-// The whole wave, evidence and context, is on screen and in every accessible name before the clock starts; one pick ends the wave.
 const nextWave = () => {
   const spec = upcoming(deck, g)
   if (!spec) return end()
@@ -104,7 +102,6 @@ const nextWave = () => {
   }
   busy = false
   rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
-  // the automatic first focus is not the player's aim
   field.lock(-1)
   t0 = performance.now()
   aim.reset(t0)
@@ -160,7 +157,6 @@ const end = () => {
   fieldEl.hidden = true
   rocksEl.replaceChildren()
   $('.ftg-end').hidden = false
-  // the saved history keeps a research wave's truth out, like the screen does
   save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions.map(({ hit, ...d }) => (d.anchor ? { ...d, hit } : d)) })
   refreshDownload(root)
   showResult(root, deck, g, edition, text)

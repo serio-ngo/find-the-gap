@@ -3,7 +3,6 @@ import type { ChoiceRecord, Deck, Rule, Wave } from '../engine.ts'
 import type { Signs } from '../gen.ts'
 import { rows } from './rows.ts'
 
-// The pull request when the gate ran; null where the archive has no snapshot of it.
 export type Context = { locks: number | null; impacts: number | null; agent: number | null; job: string | null; share: number | null }
 export type Row = { id: string; rule: string; roles: string[]; values: string[]; gap: boolean; research: boolean; run: string; context: Context | null }
 
@@ -13,7 +12,6 @@ export const gapOf: Record<string, (values: string[]) => boolean> = {
   pair: (v) => new Set(v).size < v.length,
 }
 
-// Each context channel at the level it is drawn; a run without a snapshot draws nothing.
 export const level = {
   locks: (c: Context | null) => Math.min(3, c?.locks ?? 0),
   job: (c: Context | null) => (c?.job === 'success' ? 2 : c?.job ? 1 : 0),
@@ -22,26 +20,21 @@ export const level = {
   agent: (c: Context | null) => Math.min(3, c?.agent ?? 0),
 }
 export type Channel = keyof typeof level
-// Channels drawn per level; tests/unit/leak.test.ts keeps out any that gives the gap away.
 export const CHANNELS: Record<string, Channel[]> = {
   odd_revision: ['job', 'share', 'impacts'],
   missing_link: ['locks', 'share', 'impacts', 'agent'],
   pair: ['job', 'share'],
 }
 
-// A channel the level does not draw shows at its resting level, so a rock never carries a channel that gives its gap away.
 export const signs = (r: Row): Signs | null =>
   r.context && (Object.fromEntries(Object.entries(level).map(([k, f]) => [k, CHANNELS[r.rule]!.includes(k as Channel) ? f(r.context) : 0])) as Signs)
 
 const order = ['odd_revision', 'missing_link', 'pair']
-// Only waves 5, 10, 15 and 20 are certain: the player sees a verdict there and nowhere else. The rest is research.
 export const CERTAIN = [4, 9, 14, 19]
 const counts = [4, 5, 6, 6, 7]
 const WAVES = 20
-// Seeds 900 to 999 draw runs that no scored wave of the deck uses.
 export const UNSEEN = 900
 export const unseen = (seed: number) => seed >= UNSEEN && seed < UNSEEN + 100
-// A gap pattern seen in fewer than a quarter of its rule's gap runs is atypical.
 export const ATYPICAL = 0.25
 
 for (const r of rows) {
@@ -50,12 +43,10 @@ for (const r of rows) {
 
 export const clue = (r: Row) => r.roles.map((role, i) => `${role} ${r.values[i]}`).join(' · ')
 
-// What the player sees, as a signature: equal or different commits, otherwise the values in role order.
 export const pattern = (r: Row) => (r.rule === 'odd_revision' ? (r.values[0] === r.values[1] ? 'same' : 'differ') : r.values.join(','))
 
 const scored = rows.filter((r) => !r.research)
 
-// Share of the rule's scored runs with the same gap flag that show this pattern.
 export const typicality = (r: Row) => {
   const peers = scored.filter((x) => x.rule === r.rule && x.gap === r.gap)
   return peers.filter((x) => pattern(x) === pattern(r)).length / peers.length
@@ -63,10 +54,8 @@ export const typicality = (r: Row) => {
 
 const shuffle = <T>(r: () => number, a: T[]) => a.map((x) => [r(), x] as const).sort((p, q) => p[0] - q[0]).map((p) => p[1])
 
-// A control that shares a surface feature with gaps: a failed result looks like trouble, a matching criteria count hides the gap.
 const lookalike = (x: Row, gap: Row) => (x.rule === 'missing_link' ? x.values.includes('failed') : x.rule === 'pair' && x.values.length === gap.values.length)
 
-// Step k mixes k control patterns. Steps 1 and 2 keep look-alikes out, steps 4 and 5 bring them in first.
 const controls = (r: () => number, from: Row[], gap: Row, n: number, step: number) => {
   const groups = new Map<string, Row[]>()
   for (const x of shuffle(r, from)) groups.set(pattern(x), [...(groups.get(pattern(x)) ?? []), x])
@@ -118,7 +107,6 @@ export const observations: Deck = {
   }),
   typical: (w) => typicality(gapRow(w)) >= ATYPICAL,
   poolSize: 20,
-  // the AI gets the task the players get: no rule is named
   question: 'Each rock is one public gate run, given by its recorded values. Which rock does not fit with the others? Pick one.',
   levels: order.map((rule, k) => ({
     id: k + 1,

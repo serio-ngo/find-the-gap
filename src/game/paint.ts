@@ -92,7 +92,6 @@ export const draw = (s: State) => {
   s.ts.forEach((t, i) => {
     const q = pos(s, t)
     if (shot && shot.to === i && shot.phase === 2) {
-      // calm mode fades the rock; otherwise its shards carry it away
       if (s.calm) put(t, q.x, q.y, 1, Math.max(0, 1 - 2 * p))
       return
     }

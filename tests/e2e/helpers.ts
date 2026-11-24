@@ -28,7 +28,6 @@ export const wrong = (d: Deck, g: Game) => {
 export const displayed = (d: Deck, g: Game, i = g.decisions.length) =>
   presentObjects(d, wave(d, g.decisions[i]?.spec ?? upcoming(d, g)!))
 
-// Each twin's accessible name: its number and mineral, then what is drawn on it, in the page language.
 export const rockNames = (d: Deck, g: Game, lang: Lang) => {
   const labels = strings.labels[lang]
   return displayed(d, g).map((o, k) => `${labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]!)}. ${describe(o.shape.facts, labels)}`)
@@ -64,13 +63,12 @@ export async function play(page: Page, o: Options = {}) {
     const objects = displayed(d, g)
     const slot = objects.findIndex((o) => o.sourceIndex === i)
     const names = rockNames(d, g, lang)
-    // the page must show exactly the wave the engine replay expects, evidence included (this is what proves the adaptive path)
     await expect.poll(() => page.locator('.ftg-rocks button').evaluateAll((bs) => bs.map((b) => b.ariaLabel))).toEqual(names)
     const before = await page.locator('.ftg-wave').textContent()
     if (by === 'keys') {
       for (let k = 0; k < slot; k++) await page.keyboard.press('ArrowRight')
       await page.keyboard.press(slot % 2 ? 'Enter' : 'Space')
-    } else await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click') // targets are drawn on canvas; the twin buttons are invisible
+    } else await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click')
     g = shoot(d, g, i, 0, live)
     await page.waitForFunction(
       (b) => document.querySelector('.ftg')!.getAttribute('data-phase') === 'end' || document.querySelector('.ftg-wave')!.textContent !== b,
@@ -80,7 +78,6 @@ export async function play(page: Page, o: Options = {}) {
   return g
 }
 
-// Timing varies, so the shown score lies between 100 and 200 per anchor hit. Returns the shown score.
 export async function expectEnd(page: Page, g: Game, lang: Lang = 'en') {
   await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
   const h = g.decisions.filter((d) => d.anchor && d.hit).length

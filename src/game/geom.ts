@@ -1,14 +1,10 @@
-// Palette, the part type and the plane helpers every drawn element shares.
 export type Pt = [number, number]
-// fill and stroke name a palette colour or carry a #hex mixed for the level's context strength
 export type Part = { points: Pt[]; fill?: string; stroke?: string; width: number; crystal?: true }
-// Context at the gate, as drawn levels: locks 0-3, job 0 none / 1 failed / 2 passed, share 0-4 quarters, impacts 0-2, agent 0-3.
 export type Signs = { locks: number; job: number; share: number; impacts: number; agent: number }
 
 const base = {
   void: '#141c23', shadow: '#283541', frame: '#576776', armor: '#aeb9bc', light: '#f3f1de',
   glass: '#3f7f8a', signal: '#a6e8e1', copper: '#e0ac70', ember: '#9b4f2f', violet: '#b79cf0', rose: '#f08fb0', lime: '#c6e87a', dull: '#4a5157',
-  // context hues: never an evidence hue, so a halo or an alien is never read as a crystal
   halo0: '#2e4166', halo1: '#3f63b0', halo2: '#a9c6ff', alien0: '#7d6a1c', alien1: '#f2d45c', alienDim0: '#55503f', alienDim1: '#bdb595',
 }
 const minerals = {
