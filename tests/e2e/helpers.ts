@@ -16,8 +16,8 @@ export const strings = JSON.parse(readFileSync('src/game/strings.json', 'utf8'))
   labels: Record<Lang, Record<string, string>>
 }
 
-export const urlPath = (lang: Lang, level = 1, query = '') => `${lang === 'en' ? '/en' : ''}/find-the-gap/${level}/${query}`
-export const levelUrl = (lang: Lang, level = 1) => `https://serio.org.pl${lang === 'en' ? '/en' : ''}/find-the-gap/${level}`
+export const urlPath = (lang: Lang, level = 1, query = '') => `${lang === 'en' ? '/en' : ''}/game/${level}/${query}`
+export const levelUrl = (lang: Lang, level = 1) => `https://serio.org.pl${lang === 'en' ? '/en' : ''}/game/${level}`
 
 export const right = (d: Deck, g: Game) => wave(d, upcoming(d, g)!).answers[0] ?? 0
 export const wrong = (d: Deck, g: Game) => {
