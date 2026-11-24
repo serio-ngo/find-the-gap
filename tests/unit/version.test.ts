@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { Wave } from '../../src/game/engine.ts'
+import type { ChoiceRecord, Wave } from '../../src/game/engine.ts'
 import { RUN, checkRun, hashContent, loadRun } from '../../scripts/ai.ts'
 import { edition } from '../../src/game/eval/version.ts'
 import { decks } from '../../src/game/levels/index.ts'
@@ -18,4 +18,11 @@ it('the edition changes when what a rock shows changes', async () => {
   const d = decks.observations
   const relinked = { ...d, choiceRecords: (w: Wave) => d.choiceRecords!(w).map((r) => ({ ...r, url: `${r.url}#moved` })) }
   expect(await edition(relinked)).not.toBe(await edition(d))
+})
+
+it('the edition changes when a drawn context sign changes', async () => {
+  const d = decks.observations
+  const bump = (r: ChoiceRecord) => ({ ...r, signs: r.signs ? { ...r.signs, locks: r.signs.locks + 1 } : { locks: 1, job: 0, share: 0, impacts: 0, agent: 0 } })
+  const resigned = { ...d, choiceRecords: (w: Wave) => d.choiceRecords!(w).map((r, i) => (i ? r : bump(r))) }
+  expect(await edition(resigned)).not.toBe(await edition(d))
 })
