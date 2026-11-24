@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copy, links, resultText, share } from '../../src/game/share.ts'
 
-const url = 'https://serio.org.pl/find-the-gap/3'
+const url = 'https://serio.org.pl/game/3'
 const base = { deck: 'Find the Gap', level: 3, score: 7, you: '15/21', ai: '19/20', names: { score: 'Score', you: 'You', ai: 'AI' }, url }
 
 afterEach(() => vi.unstubAllGlobals())

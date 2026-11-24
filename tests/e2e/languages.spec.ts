@@ -50,7 +50,7 @@ for (const lang of ['pl', 'en'] as const)
     expect(await unnamed(page)).toEqual([])
   })
 
-for (const [lang, url] of [['pl', '/find-the-gap/1/'], ['en', '/en/find-the-gap/1/']] as const)
+for (const [lang, url] of [['pl', '/game/1/'], ['en', '/en/game/1/']] as const)
   test(`the ${lang} page declares its language and uses only its own strings`, async ({ page }) => {
     await page.goto(url)
     await expect(page.locator('html')).toHaveAttribute('lang', lang)

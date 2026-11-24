@@ -100,7 +100,7 @@ const nextWave = () => {
   $('.ftg-wave').textContent = `${i + 1}/${total}`
   answer = null
   if (api && asks(deck, g, i)) {
-    askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (rounds[i] === objects && g.decisions.length === i) answer = a })
+    askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (!a) { const down = root.querySelector<HTMLElement>('.ftg-down'); if (down?.hidden) { down.hidden = false; live.textContent = down.textContent!.trim() } } if (rounds[i] === objects && g.decisions.length === i) answer = a })
   }
   busy = false
   rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })

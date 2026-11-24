@@ -1,9 +1,9 @@
 {
-  "observations": "382b828dc95cf38c22e6e7b167886c3991c6f440",
+  "observations": "64ece261c89059b7201060aaa8868a75c9dc8b66",
   "taken": {
-    "lifecycle-sandbox": "2026-11-22T16:15:41Z",
-    "serio-focus": "2026-11-22T16:25:56Z"
+    "lifecycle-sandbox": "2026-11-24T16:53:35Z",
+    "serio-focus": "2026-11-24T16:52:12Z"
   },
-  "rows": 169,
+  "rows": 181,
   "excluded": 6
 }
