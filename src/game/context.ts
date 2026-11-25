@@ -1,8 +1,24 @@
-import { LIGHT, add, colors, ellipse, len, plate, wire } from './geom.ts'
+import { LIGHT, TAU, add, at, colors, ellipse, len, plate, wire } from './geom.ts'
 import type { Family, Part, Pt, Signs } from './geom.ts'
 
 const mix = (a: string, b: string, k: number) =>
   `#${[1, 3, 5].map((i) => Math.round(parseInt(colors[a]!.slice(i, i + 2), 16) * k + parseInt(colors[b]!.slice(i, i + 2), 16) * (1 - k)).toString(16).padStart(2, '0')).join('')}`
+
+export function halo(sg: Signs, k: number, parts: Part[]) {
+  const n = Math.max(1, sg.criteria)
+  const span = TAU / n - (n > 1 ? 0.24 : 0)
+  const arc = (c: number): Pt[] => {
+    const m = Math.max(6, Math.ceil((64 * span) / TAU))
+    return Array.from({ length: m + 1 }, (_, i) => at(c - span / 2 + (i * span) / m, 0.86))
+  }
+  for (let i = 0; i < n; i++) {
+    const c = arc(-Math.PI / 2 + (i * TAU) / n)
+    parts.push(wire(c, mix('halo0', 'void', k), 0.035))
+    if (!sg.many) continue
+    parts.push(wire(c, mix('halo1', 'void', k), 0.085))
+    parts.push(wire(c, mix('halo2', 'void', k), 0.032))
+  }
+}
 
 const SPOTS: Pt[][] = [[], [[0, -0.36]], [[-0.3, -0.26], [0.3, -0.26]]]
 export function craters(sg: Signs, family: Family, k: number, parts: Part[]) {

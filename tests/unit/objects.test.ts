@@ -13,7 +13,8 @@ it('draws every wave the same way each time, never from the answer, and the same
     for (const spec of specs) {
       const w = wave(deck, spec)
       const objects = objectsFor(deck, w)
-      expect(objects.map(({ clue }) => clue)).toEqual(w.symbols)
+      expect(objects.map(({ id }) => id)).toEqual(w.ids ?? objects.map(({ id }) => id))
+      expect(objects).toHaveLength(w.symbols.length)
       expect(objectsFor(deck, wave(deck, spec))).toEqual(objects)
       const otherAnswers = objects.flatMap((_, index) => (w.answers.includes(index) ? [] : [index]))
       expect(objectsFor(deck, { ...w, answers: otherAnswers })).toEqual(objects)

@@ -1,14 +1,15 @@
 import { rng } from './engine.ts'
 import type { ChoiceRecord } from './engine.ts'
-import { alien, craters } from './context.ts'
+import { alien, craters, halo } from './context.ts'
 import { LIGHT, REACH, TAU, add, at, dot, hash, len, mirror, plate, sub, unit, wire } from './geom.ts'
 import type { Family, Part, Pt } from './geom.ts'
 
 export { colors, hash } from './geom.ts'
 export type { Family, Part, Pt, Signs } from './geom.ts'
 
-export type Facts = { crystals: number; symmetric: boolean; signs: boolean; craters: number; bright: boolean }
-export type Shape = { family: Family; outline: Pt[]; body: Part[]; over: Part[]; marks: Part[]; facts: Facts }
+export type Half = { crystals: number; tint: string; reach: number }
+export type Facts = { crystals: number; sides: Half[]; symmetric: boolean; signs: boolean; arcs: number; lit: boolean; craters: number; bright: boolean }
+export type Shape = { family: Family; outline: Pt[]; under: Part[]; body: Part[]; over: Part[]; marks: Part[]; facts: Facts }
 
 const slot = (i: number, n: number) => -Math.PI / 2 + (i * TAU) / n
 const digits = (v: string) => [...(v.length > 7 ? hash(v).toString(16) : v).padEnd(7, '0').slice(0, 7)].map((c) => {
@@ -109,15 +110,17 @@ const radial = (out: Pt[], i: number, n: number) => {
   return { rim, dir, root: add(rim, dir, -0.06) }
 }
 
-function druse(v: string, right: boolean, vent: number, out: Pt[], marks: Part[]) {
+function druse(v: string, right: boolean, vent: number, out: Pt[], marks: Part[]): Half {
   const d = digits(v)
   const n = 2 + (d[0]! % 3)
   const tint = ['passed', 'violet', 'lime', 'rose'][d[6]! % 4]!
+  const length = (j: number) => 0.16 + 0.014 * d[j + 1]! + (j === n - 1 ? 0.006 * d[5]! : 0)
   for (let j = 0; j < n; j++) {
     const a = vent + (j - (n - 1) / 2) * 0.32
     const dir = at(right ? a : Math.PI - a, 1)
-    crystal(add(rimAt(out, right ? a : Math.PI - a), dir, -0.07), dir, 0.16 + 0.014 * d[j + 1]! + (j === n - 1 ? 0.006 * d[5]! : 0), 0.03 + 0.003 * d[(j + 3) % 7]!, tint, marks, right ? 1 : -1)
+    crystal(add(rimAt(out, right ? a : Math.PI - a), dir, -0.07), dir, length(j), 0.03 + 0.003 * d[(j + 3) % 7]!, tint, marks, right ? 1 : -1)
   }
+  return { crystals: n, tint: (tints[tint] ?? tints.passed!)[0], reach: Math.round(Math.max(...Array.from({ length: n }, (_, j) => length(j))) * 100) }
 }
 
 export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, family: Family, strength = 1): Shape {
@@ -126,32 +129,38 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, f
   const seed = `${record.rule}:${v.join(',')}`
   const { outline, body } = rock(family, record.rule, mirrored ? `c:${v[1]}` : seed, mirrored ? `c:${v[0]}` : seed)
   const marks: Part[] = []
+  const sides: Half[] = []
   if (mirrored) {
     const vent = -0.35 + ((hash(record.rule) % 100) / 100) * 0.7
-    druse(v[0] ?? '', false, vent, outline, marks)
-    druse(v[1] ?? '', true, vent, outline, marks)
+    sides.push(druse(v[0] ?? '', false, vent, outline, marks), druse(v[1] ?? '', true, vent, outline, marks))
   } else {
     const k = hash(v.join(''))
     const n = 1 + (k % 5)
     for (let i = 0; i < n; i++) crystal(radial(outline, i, n).root, radial(outline, i, n).dir, 0.26, 0.045, ['passed', 'violet', 'lime'][k % 3]!, marks)
   }
+  const under: Part[] = []
   const over: Part[] = []
   const sg = record.signs
   if (sg) {
+    halo(sg, strength, under)
     craters(sg, family, strength, over)
     alien(sg, family, strength, over)
   }
   const facts: Facts = {
     crystals: marks.filter((m) => m.crystal).length,
+    sides,
     symmetric: !mirrored || v[0] === v[1],
     signs: !!sg,
+    arcs: sg ? Math.max(1, sg.criteria) : 0,
+    lit: !!sg?.many,
     craters: sg?.impacts ?? 0,
     bright: sg?.job === 2,
   }
-  return { family, outline, body, over, marks, facts }
+  return { family, outline, under, body, over, marks, facts }
 }
 
 export function paintObject(s: Shape, draw: (part: Part) => void) {
+  s.under.forEach(draw)
   s.body.forEach(draw)
   s.over.forEach(draw)
   s.marks.forEach(draw)

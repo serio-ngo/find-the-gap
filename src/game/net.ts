@@ -39,4 +39,18 @@ export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, fi
   ms(aim.ms), Math.min(99, aim.switches), +x.anchor, ...aim.dwell.map(ms),
 ]
 
+export const boardRequest = (v: number, level: number, mode: Mode, waves: number[][], edition: string, name: string, sent: boolean) => ({ ...resultRequest(v, level, mode, waves, edition), name, sent: +sent })
+
+export type Board = { top: [string, number][]; n: number; below: number; score: number }
+
+export const askBoard = async (api: string, body: unknown): Promise<Board | null> => {
+  try {
+    const r = await post(api, 'board', body, { signal: AbortSignal.timeout(5000) })
+    const a = await r.json()
+    return r.ok && Array.isArray(a?.top) && Number.isInteger(a.n) ? a : null
+  } catch {
+    return null
+  }
+}
+
 export const resultRequest = (v: number, level: number, mode: Mode, waves: number[][], edition: string) => ({ v, level, mode: mode === 'adaptive' ? 1 : 0, waves, edition })

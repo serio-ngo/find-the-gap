@@ -1,7 +1,7 @@
 import type { report } from './engine.ts'
 import { wilson } from './stats.ts'
 
-type Report = ReturnType<typeof report>
+type Report = Pick<ReturnType<typeof report>, 'all'>
 export type Labels = { you: string; ai: string; chance: string; chart: string }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)

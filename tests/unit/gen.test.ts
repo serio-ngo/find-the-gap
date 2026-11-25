@@ -50,7 +50,7 @@ describe('the board carries the evidence', () => {
     expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'ice')))).toBeGreaterThan(0.02)
   })
 
-  const full: Signs = { job: 2, impacts: 2 }
+  const full: Signs = { job: 2, impacts: 2, criteria: 4, many: 1 }
   it('craters and alien keep an equal-commit rock mirror-symmetric, and each follows its field', () => {
     const r = (signs: Signs | null) => shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'], signs }, 'iron')
     expect(lopsided(picture(r(full)))).toBe(0)
@@ -58,6 +58,18 @@ describe('the board carries the evidence', () => {
     expect(r({ ...full, job: 1 }).facts.bright).toBe(false)
     expect(r(null).over).toEqual([])
     expect(r({ ...full, impacts: 0 }).over.length).toBe(r(full).over.length - 6)
+    expect(r(null).under).toEqual([])
+    expect(r(full).facts).toMatchObject({ arcs: 4, lit: true })
+    expect(r({ ...full, criteria: 2 }).under.length).toBe(6)
+    expect(r({ ...full, many: 0 }).under.length).toBe(4)
+    expect(r({ ...full, many: 0 }).facts.lit).toBe(false)
+  })
+
+  it('each half reports the crystals drawn from its own commit', () => {
+    const [left, right] = shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'], signs: null }, 'iron').facts.sides
+    const same = shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'], signs: null }, 'iron').facts.sides
+    expect(same[0]).toEqual(same[1])
+    expect(left).not.toEqual(right)
   })
 
   it('context strength fades context colours, never evidence or what is drawn', () => {
@@ -67,6 +79,7 @@ describe('the board carries the evidence', () => {
     expect(a.body).toEqual(b.body)
     expect(a.facts).toEqual(b.facts)
     expect(a.over.map((p) => p.points)).toEqual(b.over.map((p) => p.points))
+    expect(a.under.map((p) => p.points)).toEqual(b.under.map((p) => p.points))
     expect(a.over.map((p) => p.fill)).not.toEqual(b.over.map((p) => p.fill))
   })
 

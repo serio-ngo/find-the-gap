@@ -3,7 +3,7 @@ import curation from '../../scripts/deck/curation.json'
 import { pool, wave } from '../../src/game/engine.ts'
 import type { Spec } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
-import { clue, gapOf, rowOf, unseen } from '../../src/game/levels/observations.ts'
+import { gapOf, rowOf, seen, unseen } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { staleRepos, toRows } from '../../scripts/make-deck.ts'
 
@@ -14,8 +14,13 @@ const specs = [
 ]
 
 describe('observation deck', () => {
+  it('splits the certain waves into typical and atypical gaps by their drawn signs', () => {
+    const l = observations.levels[0]!
+    expect(new Set(l.anchors.map((i) => observations.typical!(wave(observations, l.sequence[i]!)))).size).toBe(2)
+  })
+
   it('reads only public deck rows and names every row whose values contradict the archive flag', () => {
-    const context = { locks: 0, impacts: 0, agent: 0, job: 'failure', share: 0.5 }
+    const context = { locks: 0, impacts: 0, agent: 0, job: 'failure', share: 0.5, tests: 30, criteria: 4 }
     const line = (o: object) => JSON.stringify({
       id: 'x', relation: 'odd_revision', items: [{ role: 'reported', value: 'a' }, { role: 'tested', value: 'b' }], gap: true,
       links: { run: 'r' }, flags: { visibility: 'public', split: 'deck', labelled: true }, context, ...o,
@@ -65,7 +70,7 @@ describe('observation deck', () => {
     for (const { s, certain } of specs) {
       const w = wave(observations, s)
       const picked = w.ids!.map(rowOf)
-      expect(w.symbols).toEqual(picked.map(clue))
+      expect(w.symbols).toEqual(picked.map(seen))
       expect(w.symbols).toHaveLength([4, 5, 6, 6, 7][s.step - 1]!)
       expect(new Set(picked.map((r) => r.run)).size).toBe(picked.length)
       if (certain) expect(w.answers).toHaveLength(1)

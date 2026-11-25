@@ -15,13 +15,14 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('a result drops cache and result rows older than a year, once a day', async () => {
+it('a result drops cache, result and leaderboard rows older than a year, once a day', async () => {
   on(1)
   const { env, deleted } = fakeEnv()
   expect((await send('/api/game/result', result, env)).status).toBe(204)
-  expect(deleted).toEqual([Date.now() - KEEP, new Date(Date.now() - KEEP).toISOString().slice(0, 10)])
+  const day = new Date(Date.now() - KEEP).toISOString().slice(0, 10)
+  expect(deleted).toEqual([Date.now() - KEEP, day, day])
   await send('/api/game/result', result, env)
-  expect(deleted).toHaveLength(2)
+  expect(deleted).toHaveLength(3)
 })
 
 it('a failed prune still stores the result and is retried by the next request', async () => {
@@ -32,7 +33,7 @@ it('a failed prune still stores the result and is retried by the next request', 
   expect(results).toHaveLength(1)
   fail.delete = false
   await send('/api/game/result', result, env)
-  expect(deleted).toHaveLength(2)
+  expect(deleted).toHaveLength(3)
 })
 
 it('a step prunes the cache without any result upload', async () => {
@@ -40,5 +41,5 @@ it('a step prunes the cache without any result upload', async () => {
   const { env, deleted } = fakeEnv()
   stubFetch()
   await send('/api/game/step', stepReq, env)
-  expect(deleted).toHaveLength(2)
+  expect(deleted).toHaveLength(3)
 })

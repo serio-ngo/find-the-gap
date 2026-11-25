@@ -53,6 +53,16 @@
 .ftg-chart-chance { stroke: var(--line); fill: none; }
 .ftg[data-phase="end"] .ftg-stat, .ftg[data-phase="end"] .ftg-hud .ftg-items { display: none; }
 .ftg-share { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.ftg-norm { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.ftg-loot { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ftg-loot li { display: grid; gap: 2px; padding: 2px; background: var(--ftg-field); color: var(--ftg-ink3); }
+.ftg-loot span { display: grid; place-items: center; width: 28px; height: 28px; }
+.ftg-loot .ftg-ai { opacity: 0.7; }
+.ftg-loot .ftg-won { color: var(--ftg-field); background: var(--ftg-paper); outline: 2px solid var(--ftg-brick); outline-offset: -2px; opacity: 1; }
+.ftg-board { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.ftg-board label { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.ftg-board input { min-height: 44px; max-width: 14rem; padding: 0 0.5rem; font: inherit; }
+.ftg-top { flex: 1 0 100%; margin: 0; padding-left: 1.5rem; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .ftg a { color: var(--ftg-brick); }
 .ftg-privacy { display: inline-flex; align-items: center; min-height: 44px; }
 @media (prefers-reduced-motion: reduce) {

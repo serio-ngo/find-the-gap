@@ -137,7 +137,7 @@ describe('engine', () => {
   it('report compares you, the AI and chance on scored waves only', () => {
     const g = replay(deck, 1, 'standard', picks)
     g.decisions.forEach((d, i) => (d.ai = i === 3 ? 1 : i === 4 ? null : d.pick))
-    expect(report(deck, g)).toEqual({ all: { you: 2, ai: 0, aiN: 1, chance: 1 / 3 + 1 / 3, n: 2 } })
+    expect(report(deck, g)).toEqual({ all: { you: 2, ai: 0, aiN: 1, chance: 1 / 3 + 1 / 3, n: 2 }, typical: null, atypical: null })
   })
 
   it('aiBody and stepBody carry symbols only: no rule, no answers, no rule id, no answer values', () => {
