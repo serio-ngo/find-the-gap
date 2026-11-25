@@ -219,13 +219,17 @@ boardEl.onsubmit = async (e) => {
   if (!api || !name) return
   boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = true))
   const game = g
-  const b = await askBoard(api, boardRequest(deckIdx, level, g.mode, waves, edition, name, sent))
+  const was = sent
+  sent = true
+  const b = await askBoard(api, boardRequest(deckIdx, level, g.mode, waves, edition, name, was))
   if (g !== game) return
   if (!b) {
-    live.textContent = l.notSaved!
-    return boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = false))
+    sent = was
+    boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = false))
+    live.textContent = ''
+    setTimeout(() => (live.textContent = l.notSaved!), 50)
+    return (boardEl.elements.namedItem('nick') as HTMLInputElement).focus()
   }
-  sent = true
   showResult(root, deck, g, text, rounds)
   showBoard(b, name)
 }

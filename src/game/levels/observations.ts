@@ -11,14 +11,14 @@ export const gapOf: Record<string, (values: string[]) => boolean> = {
   odd_revision: (v) => v[0] !== v[1],
 }
 
-export const MANY = 56
 export const FULL = 5
+export const LOCKS = 1
 
 export const level = {
   job: (c: Context | null) => (c?.job === 'success' ? 2 : c?.job ? 1 : 0),
-  impacts: (c: Context | null) => Math.min(2, c?.impacts ?? 0),
+  impacts: (c: Context | null) => Math.min(1, c?.impacts ?? 0),
   full: (c: Context | null) => +((c?.criteria ?? 0) >= FULL),
-  many: (c: Context | null) => +((c?.tests ?? 0) > MANY),
+  relocked: (c: Context | null) => +((c?.locks ?? 0) > LOCKS),
 }
 
 export const signs = (r: Row): Signs | null => r.context && (Object.fromEntries(Object.entries(level).map(([k, f]) => [k, f(r.context)])) as Signs)

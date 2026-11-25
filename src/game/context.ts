@@ -14,7 +14,7 @@ export function halo(sg: Signs, k: number, parts: Part[]) {
   for (let i = 0; i < n; i++) {
     const c = arc(-Math.PI / 2 + (i * TAU) / n)
     parts.push(wire(c, mix('halo0', 'void', k), 0.035))
-    if (!sg.many) continue
+    if (!sg.relocked) continue
     parts.push(wire(c, mix('halo1', 'void', k), 0.085))
     parts.push(wire(c, mix('halo2', 'void', k), 0.032))
   }

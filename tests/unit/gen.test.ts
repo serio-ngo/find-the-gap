@@ -50,7 +50,7 @@ describe('the board carries the evidence', () => {
     expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'ice')))).toBeGreaterThan(0.02)
   })
 
-  const full: Signs = { job: 2, impacts: 2, full: 0, many: 1 }
+  const full: Signs = { job: 2, impacts: 2, full: 0, relocked: 1 }
   it('craters and alien keep an equal-commit rock mirror-symmetric, and each follows its field', () => {
     const r = (signs: Signs | null) => shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'], signs }, 'iron')
     expect(lopsided(picture(r(full)))).toBe(0)
@@ -62,8 +62,8 @@ describe('the board carries the evidence', () => {
     expect(r(full).facts).toMatchObject({ arcs: 3, lit: true })
     expect(r({ ...full, full: 1 }).facts.arcs).toBe(1)
     expect(r({ ...full, full: 1 }).under.length).toBe(3)
-    expect(r({ ...full, many: 0 }).under.length).toBe(3)
-    expect(r({ ...full, many: 0 }).facts.lit).toBe(false)
+    expect(r({ ...full, relocked: 0 }).under.length).toBe(3)
+    expect(r({ ...full, relocked: 0 }).facts.lit).toBe(false)
   })
 
   it('each half reports the crystals drawn from its own commit', () => {

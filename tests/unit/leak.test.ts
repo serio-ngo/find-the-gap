@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { pool, rng, wave } from '../../src/game/engine.ts'
 import type { Wave } from '../../src/game/engine.ts'
-import { FULL, MANY, level as levelOf, observations, signs } from '../../src/game/levels/observations.ts'
+import { FULL, LOCKS, level as levelOf, observations, signs } from '../../src/game/levels/observations.ts'
 import type { Row } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 
@@ -48,9 +48,10 @@ const odd = (key: (r: Row) => string) => {
   const above = Array.from({ length: 2000 }, () => ws.reduce((t, w) => t + score(w, Math.floor(r() * w.s.length)), 0)).filter((x) => x >= seen).length
   return (above + 1) / 2001
 }
-const encode = (full: number, many: number) => (r: Row) => ({ ...signs(r)!, full: +((r.context?.criteria ?? 0) >= full), many: +((r.context?.tests ?? 0) > many) })
+const encode = (full: number, field: 'locks' | 'tests' | 'share' | 'agent', t: number) => (r: Row) => ({ ...signs(r)!, full: +((r.context?.criteria ?? 0) >= full), relocked: +((r.context?.[field] ?? 0) > t) })
 const tuple = (e: (r: Row) => object) => (r: Row) => JSON.stringify(e(r))
 const channels = (e: (r: Row) => Record<string, number>) => [tuple(e), ...Object.keys(levelOf).map((k) => (r: Row) => String(e(r)[k]))]
+const mixed = (e: (r: Row) => Record<string, number>) => Object.keys(levelOf).every((k) => [...new Set(scored.map((r) => e(r)[k]))].every((v) => scored.some((r) => r.gap && e(r)[k] === v) && scored.some((r) => !r.gap && e(r)[k] === v)))
 const admissible = (x: ReturnType<typeof reader>) => x.certain <= CEILING && x.decided === 0
 
 describe('drawn signs correlate with the gap but never make an answer obvious', () => {
@@ -67,11 +68,16 @@ describe('drawn signs correlate with the gap but never make an answer obvious', 
     for (const p of ps) expect(p).toBeGreaterThanOrEqual(0.05)
   }, 120_000)
 
-  it('the halo thresholds are the most correlating pair that passes both readers', () => {
-    const chosen = reader(tuple(encode(FULL, MANY)))
-    const pairs = [...new Set(scored.map((r) => r.context!.criteria!))].flatMap((f) => [...new Set(scored.map((r) => r.context!.tests!)), Infinity].map((t) => ({ f, t, ...reader(tuple(encode(f, t))) })))
-    const better = pairs.filter((o) => o.nmi > chosen.nmi + 1e-9 && admissible(o))
-    for (const o of better) expect(channels(encode(o.f, o.t)).some((k) => odd(k) < 0.05), `criteria ${o.f}, tests ${o.t}`).toBe(true)
-    expect(chosen.nmi).toBeGreaterThan(reader((r) => JSON.stringify({ ...signs(r), many: 0, full: 0 })).nmi)
+  it('every drawn value appears on a gap and on a control, so no single sign says yes or no', () => {
+    expect(mixed((r) => signs(r)!)).toBe(true)
+  })
+
+  it('the halo thresholds are the most correlating choice that passes every rule', () => {
+    const chosen = reader(tuple(encode(FULL, 'locks', LOCKS)))
+    const fields = ['locks', 'tests', 'share', 'agent'] as const
+    const options = [...new Set(scored.map((r) => r.context!.criteria!))].flatMap((f) => fields.flatMap((field) => [...new Set(scored.map((r) => r.context![field]!))].map((t) => ({ f, field, t, e: encode(f, field, t) }))))
+    const better = options.map((o) => ({ ...o, ...reader(tuple(o.e)) })).filter((o) => o.nmi > chosen.nmi + 1e-9 && admissible(o) && mixed(o.e))
+    for (const o of better) expect(channels(o.e).some((k) => odd(k) < 0.05), `criteria ${o.f}, ${o.field} ${o.t}`).toBe(true)
+    expect(chosen.nmi).toBeGreaterThan(reader((r) => JSON.stringify({ ...signs(r), relocked: 0, full: 0 })).nmi)
   }, 300_000)
 })

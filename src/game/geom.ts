@@ -1,6 +1,6 @@
 export type Pt = [number, number]
 export type Part = { points: Pt[]; fill?: string; stroke?: string; width: number; crystal?: true }
-export type Signs = { job: number; impacts: number; full: number; many: number }
+export type Signs = { job: number; impacts: number; full: number; relocked: number }
 
 const base = {
   void: '#141c23', shadow: '#283541', frame: '#576776', armor: '#aeb9bc', light: '#f3f1de',
