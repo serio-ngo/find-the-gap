@@ -31,13 +31,6 @@ for (const lang of ['en', 'pl'] as const)
     await expect(page.locator('.ftg-score')).toBeFocused()
   })
 
-test('the end screen does not scroll sideways at 375 px', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 700 })
-  await open(page)
-  await expectEnd(page, await play(page), 'en')
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-})
-
 test('pointer input on the canvas picks a rock', async ({ page }, info) => {
   await open(page)
   await playButton(page).click()

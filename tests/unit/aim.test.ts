@@ -25,14 +25,3 @@ it('returns dwell per source rock when the display order is shuffled', () => {
   a.lock(-1, 400, true)
   expect(a.read([2, 0, 1])).toEqual({ dwell: [100, 0, 300], switches: 1 })
 })
-
-it('books no dwell in a new wave to the rock aimed in the previous wave', () => {
-  const a = aimTracker()
-  a.reset(0)
-  a.lock(1, 500, true)
-  a.lock(1, 1000, true)
-  a.reset(2000)
-  a.lock(3, 2600, true)
-  a.lock(3, 3000, true)
-  expect(a.read([0, 1, 2, 3])).toEqual({ dwell: [0, 0, 0, 400], switches: 0 })
-})

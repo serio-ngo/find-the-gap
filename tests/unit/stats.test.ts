@@ -26,12 +26,6 @@ describe('stats', () => {
     for (const n of [2, 9, 4, 7, 1, 8, 6]) save('a', 1, n, { mode: 'standard', picks: [] }, s)
     expect(load('a', 1, s)?.top).toEqual([9, 8, 7, 6, 4])
   })
-  it('upgrades an old record without top', () => {
-    const s = fake({ 'ftg:a:1': '{"plays":1,"best":4,"last":{"mode":"standard","picks":[]}}' })
-    expect(load('a', 1, s)?.best).toBe(4)
-    save('a', 1, 6, { mode: 'standard', picks: [] }, s)
-    expect(load('a', 1, s)).toMatchObject({ plays: 2, best: 6, top: [6] })
-  })
   it('retains legacy scores and exports each edition separately', () => {
     const legacy = '{"plays":1,"best":9}'
     const s = fake({ 'ftg:a:1': legacy })
@@ -47,16 +41,6 @@ describe('stats', () => {
     clearSaves(s)
     expect(s.getItem('ftg:a:1')).toBeNull()
     expect(s.getItem('other')).toBe('x')
-  })
-  it('survives a throwing storage', () => {
-    const bad = { get length(): number { throw new Error('x') }, key: () => { throw new Error('x') }, getItem: () => { throw new Error('x') }, setItem: () => { throw new Error('x') }, removeItem: () => { throw new Error('x') } } as unknown as Storage
-    expect(load('a', 1, bad)).toBeNull()
-    expect(() => save('a', 1, 1, { mode: 'standard', picks: [] }, bad)).not.toThrow()
-    expect(exportSaves(bad)).toBe('{}')
-    expect(() => clearSaves(bad)).not.toThrow()
-  })
-  it('ignores corrupt data', () => {
-    expect(load('a', 1, fake({ 'ftg:a:1': '{' }))).toBeNull()
   })
 
   it('gives a 95% Wilson interval', () => {

@@ -6,7 +6,6 @@ import { decks } from '../../src/game/levels/index.ts'
 import { CERTAIN, rowOf } from '../../src/game/levels/observations.ts'
 import { summarize } from '../../scripts/results.ts'
 import { edition } from '../../src/game/eval/version.ts'
-import { wilson } from '../../src/game/stats.ts'
 
 it('reads only results of the current deck edition and splits human and AI hits by rule, pattern and gap case', async () => {
   const d = decks.observations!
@@ -42,21 +41,6 @@ it('scores a research wave by any of its gaps and keeps waves without exactly on
   const out = await summarize([{ version: await edition(d), level: 1, mode: 0, waves }])
   expect([out.rules, out.patterns, out.hardest, out.aim.hit.n + out.aim.miss.n, out.peers.length]).toEqual([{}, {}, [], 0, 2])
   expect(out.research[d.rules[0]!.id].picks).toBe(2)
-})
-
-it('counts a wave as certain from the row flag', async () => {
-  const d = decks.observations!
-  const spec = d.levels[0]!.sequence[4]!
-  const w = wave(d, spec)
-  const waves = JSON.stringify([[0, spec.step, spec.seed, w.answers[0], 1, 1, -1, 0, 0, 0, 1, 1000, 0, 1, ...w.symbols.map(() => 0)]])
-  const out = await summarize([{ version: await edition(d), level: 1, mode: 0, waves }])
-  expect([out.certain, out.rules.odd_revision, out.research]).toEqual([{ shown: 1, human: 1, ai: null }, { shown: 1, human: 1, ai: null }, {}])
-})
-
-it('gives a 95% Wilson interval', () => {
-  const [lo, hi] = wilson(6, 100)
-  expect(lo).toBeCloseTo(0.0278, 3)
-  expect(hi).toBeCloseTo(0.1247, 3)
 })
 
 const round3 = (x: number) => Math.round(x * 1000) / 1000

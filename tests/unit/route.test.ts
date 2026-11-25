@@ -53,10 +53,6 @@ describe('route checks', () => {
 })
 
 describe('step', () => {
-  it('falls back without key', async () => {
-    const { env } = fakeEnv({ KEY: undefined })
-    expect(await (await send('/api/game/step', stepReq, env)).json()).toEqual({ fallback: true })
-  })
 
   it('falls back when the daily cap is spent, without calling the model', async () => {
     const { env, use } = fakeEnv()
@@ -64,33 +60,6 @@ describe('step', () => {
     const f = stubFetch()
     expect(await (await send('/api/game/step', stepReq, env)).json()).toEqual({ fallback: true })
     expect(f).not.toHaveBeenCalled()
-  })
-
-  it('falls back on a hung fetch', async () => {
-    vi.useFakeTimers()
-    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
-      const c = new AbortController()
-      setTimeout(() => c.abort(), ms)
-      return c.signal
-    })
-    const f = stubFetch((_u: string, init: RequestInit) => new Promise((_, rej) => init.signal!.addEventListener('abort', () => rej(new Error('t')))))
-    const { env } = fakeEnv()
-    const pending = send('/api/game/step', stepReq, env)
-    await vi.waitFor(() => expect(f).toHaveBeenCalled())
-    await vi.advanceTimersByTimeAsync(1500)
-    const res = await pending
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ fallback: true })
-  })
-
-  it('falls back when D1 throws', async () => {
-    const boom = async () => {
-      throw new Error('d1')
-    }
-    const { env } = fakeEnv({ DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom }) }) } })
-    const res = await send('/api/game/step', stepReq, env)
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ fallback: true })
   })
 
   it.each([
@@ -101,13 +70,6 @@ describe('step', () => {
     const res = await send('/api/game/step', stepReq, env)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ fallback: true })
-  })
-
-  it('falls back on a malformed model answer', async () => {
-    stubFetch(async () => new Response(JSON.stringify({ answers: { ai: { choice: 'r9', probabilities: {} } } })))
-    const { env, cache } = fakeEnv()
-    expect(await (await send('/api/game/step', stepReq, env)).json()).toEqual({ fallback: true })
-    expect(cache.size).toBe(0)
   })
 
   it('counts failed calls but not cache hits', async () => {

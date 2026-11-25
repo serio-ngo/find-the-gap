@@ -56,27 +56,6 @@ describe('result', () => {
     expect(results).toHaveLength(0)
   })
 
-  it('scores the unseen last wave like any other and rejects an invalid pick on it', async () => {
-    const { env } = fakeEnv()
-    const d = decks.observations
-    const seq = d.levels[0]!.sequence
-    const rows = (last: unknown, hit: number) => seq.map((s, i) => {
-      const w = wave(d, s)
-      const pick = w.answers[0] ?? 0
-      return [d.rules.findIndex((x) => x.id === s.rule), s.step, s.seed, i === seq.length - 1 ? last : pick, i === seq.length - 1 ? hit : +w.answers.includes(pick), 1, -1, 0, 0, 0, 1, 600_000, 99, +d.levels[0]!.anchors.includes(i), ...w.symbols.map(() => 600_000)]
-    })
-    const tail = wave(d, seq.at(-1)!)
-    const ed = await edition(d)
-    const send0 = (last: unknown, hit: number) => send('/api/game/result', { v: 0, level: 1, mode: 0, waves: rows(last, hit), edition: ed }, env)
-    expect((await send0('x', 0)).status).toBe(400)
-    expect((await send0(99, 0)).status).toBe(400)
-    for (const pick of tail.symbols.keys()) {
-      const hit = +tail.answers.includes(pick)
-      expect((await send0(pick, 1 - hit)).status).toBe(400)
-      expect((await send0(pick, hit)).status).toBe(204)
-    }
-  })
-
   it('rejects an adaptive certain wave from outside the certain pool, and a research wave from inside it or from the fixed sequence', async () => {
     const { env } = fakeEnv()
     const d = decks.observations

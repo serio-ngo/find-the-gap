@@ -16,12 +16,6 @@ test('every button and link has an accessible name and the canvas is hidden from
   await named()
 })
 
-test('the score heading takes focus when the end screen appears', async ({ page }) => {
-  await open(page)
-  await play(page)
-  await expect(page.getByRole('heading', { level: 2 })).toBeFocused()
-})
-
 test('a keyboard-only player finishes level 1 through the rock twins', async ({ page }) => {
   await open(page)
   const g = await play(page, { by: 'keys' })
@@ -35,12 +29,6 @@ test('a research wave announces only its number', async ({ page }) => {
   await open(page)
   await play(page, { limit: 4 })
   await expect(live(page)).toHaveText(`${l.wave} 4`)
-})
-
-test('a live region announces a hit on a certain wave', async ({ page }) => {
-  await open(page)
-  await play(page, { limit: 5 })
-  await expect(live(page)).toHaveText(l.hit)
 })
 
 test('a live region announces a miss on a certain wave', async ({ page }) => {

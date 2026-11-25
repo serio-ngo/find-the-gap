@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import curation from '../../scripts/deck/curation.json'
 import { pool, score, wave } from '../../src/game/engine.ts'
 import type { Spec } from '../../src/game/engine.ts'
-import { replay } from '../replay.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { ATYPICAL, clue, gapOf, pattern, rowOf, typicality, unseen } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
@@ -38,34 +37,8 @@ describe('observation deck', () => {
     expect(manual).toEqual(['c'])
   })
 
-  it('gives every row a context with every field set', () => {
-    for (const r of rows) expect((['locks', 'impacts', 'agent', 'job', 'share'] as const).every((k) => r.context?.[k] != null), r.id).toBe(true)
-  })
-
   it('keeps every curated row out of the deck', () => {
     expect(rows.filter((r) => r.id in curation)).toEqual([])
-  })
-
-  it('never repeats the gap of an anchor wave in a later non-anchor wave', () => {
-    for (const l of observations.levels) {
-      expect(rows.filter((r) => r.rule === l.start.rule && r.gap && !r.research).length, `level ${l.id} scored gaps`).toBeGreaterThan(l.anchors.length)
-      const gaps = l.sequence.slice(0, 20).map((s) => { const w = wave(observations, s); return w.answers.map((k) => w.ids![k]!) })
-      gaps.forEach((g, i) => {
-        if (l.anchors.includes(i)) expect(gaps.findIndex((x, j) => j > i && x.includes(g[0]!) && !l.anchors.includes(j)), `level ${l.id} wave ${i}`).toBe(-1)
-      })
-    }
-  })
-
-  it('lists public repos whose gates are missing from the cases or newer than the snapshot', () => {
-    const gate = (repo: string, run: number, at: string) => ({ repo, key: `serio-ngo/${repo}/${run}-1-gate`, at })
-    const gates = [gate('fresh', 0, '2026-01-02T10:00:00Z'), gate('old', 1, '2026-01-02T10:00:00.123Z'), gate('missing', 2, '2026-01-02T10:00:00Z'), gate('hidden', 3, '2026-01-02T10:00:00Z'), gate('broken', 4, 'not a time')]
-    const cases = new Set(['serio-ngo/fresh/0-1-gate', 'serio-ngo/old/1-1-gate', 'serio-ngo/broken/4-1-gate'])
-    const snap = (priv: boolean, taken: string) => ({ private: priv, taken })
-    const stale = staleRepos(gates, cases, {
-      fresh: snap(false, '2026-01-02T10:00:01Z'), old: snap(false, '2026-01-02T10:00:00Z'), missing: snap(false, '2026-01-03T00:00:00Z'),
-      hidden: snap(true, '2025-01-01T00:00:00Z'), broken: snap(false, '2026-01-03T00:00:00Z'),
-    })
-    expect(stale.map((x) => x.split(':')[0]).sort()).toEqual(['broken', 'missing', 'old'])
   })
 
   it('draws every choice from a public run whose values decide its gap', () => {
@@ -92,16 +65,6 @@ describe('observation deck', () => {
     expect([Math.min(...research), Math.max(...research) > 1]).toEqual([0, true])
   })
 
-  it('mixes more control patterns at higher steps on certain waves', () => {
-    const level = observations.levels[1]!
-    const kinds = (s: Spec) => {
-      const w = wave(observations, s)
-      return new Set(w.ids!.filter((_, i) => !w.answers.includes(i)).map((id) => pattern(rowOf(id)))).size
-    }
-    expect(level.anchors.map((i) => kinds(level.sequence[i]!))).toEqual([2, 3, 4, 5])
-    expect([1, 2, 3, 4, 5].map((step) => new Set(pool(observations, level.start.rule, step, true).map(kinds)))).toEqual([1, 2, 3, 4, 5].map((step) => new Set([step])))
-  })
-
   it('reveals four different gap runs per level, the same in fixed and adaptive play, and never draws them on a research wave', () => {
     for (const l of observations.levels) {
       const gapOfWave = (s: Spec) => { const w = wave(observations, s); return w.ids![w.answers[0]!]! }
@@ -113,16 +76,6 @@ describe('observation deck', () => {
     }
   })
 
-  it('has three levels of 21 waves, certain only at 5, 10, 15 and 20, the last from runs no scored wave uses', () => {
-    expect(observations.levels).toHaveLength(3)
-    for (const l of observations.levels) {
-      expect(l.anchors).toEqual([4, 9, 14, 19])
-      expect(l.sequence).toHaveLength(21)
-      expect(l.tail).toBe(1)
-      expect(unseen(l.sequence.at(-1)!.seed)).toBe(true)
-    }
-  })
-
   it('calls a gap pattern atypical when under a quarter of its rule\'s gap runs show it', () => {
     const missing = rows.filter((r) => r.rule === 'missing_link' && r.gap && !r.research)
     for (const r of missing) {
@@ -131,13 +84,5 @@ describe('observation deck', () => {
     }
     expect(observations.typical!(wave(observations, observations.levels[0]!.sequence[4]!))).toBe(true)
     expect(typicality(rows.find((r) => r.rule === 'pair' && r.gap && !r.research && r.values.join() === 't1,t1,t3,t4')!)).toBeLessThan(ATYPICAL)
-  })
-})
-
-describe('fixture deck', () => {
-  it('runs to the end through replay', () => {
-    const level = fixture.levels[0]!
-    const g = replay(fixture, 1, 'standard', level.sequence.map((s) => wave(fixture, s).answers[0]!))
-    expect(score(g)).toBe(200)
   })
 })

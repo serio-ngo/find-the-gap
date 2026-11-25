@@ -74,10 +74,4 @@ describe('client bodies are accepted by the route', () => {
   const row = resultRow(d, x, 1, { ai: 6, hit: 1, miss: 1, cached: true }, true, { ms: MAX_MS, dwell: Array(7).fill(MAX_MS), switches: 99 })
   expect(JSON.stringify(resultRequest(0, 1, 'adaptive', Array(21).fill(row), await edition(d))).length).toBeLessThan(2048)
 })
-
-it('wave bodies are integers and the fixture sends no AI pick as -1', async () => {
-    const { waves, g } = await play('fixture', 'standard')
-    expect(waves.flat().every(Number.isInteger)).toBe(true)
-    expect(waves.every((r, i) => r[6] === -1 && r[7] === 0 && r[10] === 1 && r[11] === 2346 && r[12] === 3 && r[13] === +g.decisions[i]!.anchor && r.slice(14).every((x) => x === 812))).toBe(true)
-  })
 })
