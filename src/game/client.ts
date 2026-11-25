@@ -169,9 +169,9 @@ const contribute = () => {
 }
 
 const showBoard = (b: Board, name: string) => {
-  const row = ([who, s]: [string, number], k?: number) => `<li${k ? ` value="${k}"` : ''}${who === name && s === b.score ? ' class="ftg-mine"' : ''}><span>${esc(who)}</span> <output>${s}</output></li>`
-  const listed = b.top.some(([who, s]) => who === name && s === b.score)
-  $('.ftg-top').innerHTML = b.top.map((x) => row(x)).join('') + (listed ? '' : row([name, b.score], b.n - b.below))
+  const mine = b.top.findIndex(([who, s]) => who === name && s === b.score)
+  const row = ([who, s]: [string, number], me: boolean, k?: number) => `<li${k ? ` value="${k}"` : ''}${me ? ' class="ftg-mine"' : ''}><span>${esc(who)}</span> <output>${s}</output></li>`
+  $('.ftg-top').innerHTML = b.top.map((x, i) => row(x, i === mine)).join('') + (mine < 0 ? row([name, b.score], true, b.n - b.below) : '')
   const better = l.better!.replace('{p}', String(Math.round((100 * b.below) / b.n)))
   $('.ftg-norm').ariaLabel += `. ${better}`
   live.textContent = better

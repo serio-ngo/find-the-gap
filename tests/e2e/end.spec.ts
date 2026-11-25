@@ -15,10 +15,11 @@ test('the end screen shows the loot of every wave, which picks were rewarded and
   await expect(loot.first().locator('.ftg-me')).toHaveAccessibleName(new RegExp(`^${strings.labels.en.wave} 1\. ${strings.labels.en.you}: `))
   await expect(page.locator('.ftg-norm')).toHaveText(/^[+-]\d+\.\dσ$/)
   await expect(page.locator('.ftg-norm')).toHaveAccessibleName(/^[+-]\d+\.\dσ from chance\. typical \d+\/\d+, atypical \d+\/\d+$/)
+  const nick = `Tester ${Date.now() % 1e6}`
   const board = page.getByRole('form', { name: strings.visible.en.board })
-  await board.getByLabel(strings.visible.en.nick).fill('Tester 7')
+  await board.getByLabel(strings.visible.en.nick).fill(nick)
   await board.getByRole('button', { name: strings.visible.en.save }).click()
-  await expect(page.locator('.ftg-top .ftg-mine')).toContainText('Tester 7')
+  await expect(page.locator('.ftg-top .ftg-mine')).toContainText(nick)
   await expect(page.locator('.ftg-top')).toBeFocused()
   await expect(page.locator('.ftg-norm')).toHaveAccessibleName(/\. better than \d+% of players$/)
 })
