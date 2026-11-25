@@ -8,8 +8,10 @@ import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
 import { aimTracker } from './aim.ts'
 import { bindInput } from './input.ts'
-import { load, save, clearSaves } from './stats.ts'
-import { describe, refreshDownload, showReplay, showResult } from './debrief.ts'
+import { load, save } from './stats.ts'
+import { describe, showResult } from './debrief.ts'
+import { collection, icon, itemOf } from './items.ts'
+import type { Item } from './items.ts'
 import type { Rounds, Text } from './debrief.ts'
 
 const root = document.querySelector<HTMLElement>('.ftg')!
@@ -48,6 +50,9 @@ let rounds: Rounds = []
 let answer: Step | null = null
 let waves: number[][] = []
 let sent = false
+let bag = new Map<Item, number>()
+
+const showBag = () => root.querySelectorAll('.ftg-items').forEach((e) => (e.innerHTML = collection(bag, l)))
 
 const phase = (p: string) => {
   root.dataset.phase = p
@@ -114,6 +119,15 @@ const pick = async (i: number, w: Wave) => {
   const rule = g.rule
   const got = answer
   onAim(i)
+  const item = itemOf(objects[i]!)
+  bag.set(item, (bag.get(item) ?? 0) + 1)
+  showBag()
+  const at = field.at(i)
+  const drop = Object.assign(document.createElement('span'), { className: 'ftg-drop', innerHTML: icon(item) })
+  drop.style.left = `${at.x}px`
+  drop.style.top = `${at.y}px`
+  fieldEl.append(drop)
+  setTimeout(() => drop.remove(), 1500)
   const aimed = { ms: performance.now() - t0, ...aim.read(objects.map((o) => o.sourceIndex)) }
   g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
   const d = g.decisions.at(-1)!
@@ -122,7 +136,7 @@ const pick = async (i: number, w: Wave) => {
   waves.push(resultRow(deck, d, p, got, first, aimed))
   const switched = g.mode === 'adaptive' && g.rule !== rule
   $('.ftg-switch').hidden = !switched
-  live.textContent = [d.anchor ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, switched ? l.switch : ''].filter(Boolean).join('. ')
+  live.textContent = [d.anchor ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, l.dropped.replace('{item}', l[item]), switched ? l.switch : ''].filter(Boolean).join('. ')
   const answers = d.anchor ? objects.flatMap((o, index) => w.answers.includes(o.sourceIndex) ? [index] : []) : undefined
   await field.shoot(i, d.anchor ? d.hit : null, answers)
   nextWave()
@@ -134,9 +148,10 @@ const start = () => {
   rounds = []
   waves = []
   sent = false
+  bag = new Map()
+  showBag()
   $('.ftg-switch').hidden = true
   $('.ftg-end').hidden = true
-  $<HTMLDetailsElement>('.ftg-replay').open = false
   fieldEl.hidden = false
   $('.ftg-start').hidden = true
   phase('play')
@@ -158,11 +173,9 @@ const end = () => {
   rocksEl.replaceChildren()
   $('.ftg-end').hidden = false
   save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions.map(({ hit, ...d }) => (d.anchor ? { ...d, hit } : d)) })
-  refreshDownload(root)
-  showResult(root, deck, g, edition, text)
-  showReplay(root, deck, g, rounds, text)
+  showResult(root, deck, g, text)
   contribute()
-  $('.ftg-score').focus()
+  $('.ftg-end').focus()
 }
 
 setCalm(motion.matches)
@@ -184,10 +197,5 @@ studyBtn.onclick = () => {
   try { localStorage.setItem('ftg:study', on ? '1' : '0') } catch {}
   studyBtn.setAttribute('aria-pressed', String(on))
   contribute()
-}
-$('.ftg-delete').onclick = () => {
-  clearSaves()
-  studyBtn.setAttribute('aria-pressed', 'false')
-  refreshDownload(root)
 }
 document.addEventListener('visibilitychange', () => document.hidden && setPause(true))

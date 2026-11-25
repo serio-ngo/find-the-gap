@@ -19,7 +19,7 @@ test('every button and link has an accessible name and the canvas is hidden from
 test('a keyboard-only player finishes level 1 through the rock twins', async ({ page }) => {
   await open(page)
   const g = await play(page, { by: 'keys' })
-  await expectEnd(page, g)
+  await expectEnd(page)
   expect(g.decisions).toHaveLength(deck.levels[0].sequence.length)
 })
 
@@ -28,19 +28,19 @@ const live = (page: import('@playwright/test').Page) => page.locator('.ftg-sr')
 test('a research wave announces only its number', async ({ page }) => {
   await open(page)
   await play(page, { limit: 4 })
-  await expect(live(page)).toHaveText(`${l.wave} 4`)
+  await expect(live(page)).toContainText(`${l.wave} 4`)
 })
 
 test('a live region announces a hit on a certain wave', async ({ page }) => {
   await open(page)
   await play(page, { limit: 5 })
-  await expect(live(page)).toHaveText(l.hit)
+  await expect(live(page)).toContainText(l.hit)
 })
 
 test('a live region announces a miss on a certain wave', async ({ page }) => {
   await open(page)
   await play(page, { limit: 5, pick: (g) => (g.decisions.length === 4 ? wrong(deck, g) : right(deck, g)) })
-  await expect(live(page)).toHaveText(l.miss)
+  await expect(live(page)).toContainText(l.miss)
 })
 
 test('choices are named by what is drawn, never by raw values, and a certain hit is announced', async ({ page }) => {
@@ -55,6 +55,6 @@ test('choices are named by what is drawn, never by raw values, and a certain hit
     expect.soft(names.join('\n')).not.toContain(bad)
     const slot = displayed(deck, g).findIndex((o) => o.sourceIndex === right(deck, g))
     await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click')
-    await expect(live(page)).toHaveText(strings.labels[lang].hit)
+    await expect(live(page)).toContainText(strings.labels[lang].hit)
   }
 })

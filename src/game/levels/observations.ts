@@ -21,9 +21,9 @@ export const level = {
 }
 export type Channel = keyof typeof level
 export const CHANNELS: Record<string, Channel[]> = {
-  odd_revision: ['job', 'share', 'impacts'],
-  missing_link: ['locks', 'share', 'impacts', 'agent'],
-  pair: ['job', 'share'],
+  odd_revision: ['job', 'impacts'],
+  missing_link: ['locks', 'impacts', 'agent'],
+  pair: ['job'],
 }
 
 export const signs = (r: Row): Signs | null =>

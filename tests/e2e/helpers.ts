@@ -78,13 +78,7 @@ export async function play(page: Page, o: Options = {}) {
   return g
 }
 
-export async function expectEnd(page: Page, g: Game, lang: Lang = 'en') {
-  await expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
-  const h = g.decisions.filter((d) => d.anchor && d.hit).length
-  const text = (await page.locator('.ftg-score').textContent())!
-  const m = text.match(new RegExp(`^${strings.visible[lang].score} (\\d+)$`))
-  expect(m, text).not.toBeNull()
-  expect(Number(m![1])).toBeGreaterThanOrEqual(100 * h)
-  expect(Number(m![1])).toBeLessThanOrEqual(200 * h)
-  return Number(m![1])
-}
+export const expectEnd = (page: Page) => expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
+
+export const collected = (page: Page, scope: string) =>
+  page.locator(`${scope} .ftg-count`).evaluateAll((counts) => counts.reduce((n, c) => n + Number(c.textContent), 0))
