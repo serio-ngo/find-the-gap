@@ -3,7 +3,7 @@ import curation from '../../scripts/deck/curation.json'
 import { pool, wave } from '../../src/game/engine.ts'
 import type { Spec } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
-import { ATYPICAL, clue, gapOf, rowOf, typicality, unseen } from '../../src/game/levels/observations.ts'
+import { clue, gapOf, rowOf, unseen } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { staleRepos, toRows } from '../../scripts/make-deck.ts'
 
@@ -88,23 +88,13 @@ describe('observation deck', () => {
     }
   })
 
-  it('has three levels of 21 waves, certain only at 5, 10, 15 and 20, the last from runs no scored wave uses', () => {
-    expect(observations.levels).toHaveLength(3)
+  it('has one odd revision level of 21 waves, certain only at 5, 10, 15 and 20, the last from runs no scored wave uses', () => {
+    expect(observations.levels.map((l) => l.start.rule)).toEqual(['odd_revision'])
     for (const l of observations.levels) {
       expect(l.anchors).toEqual([4, 9, 14, 19])
       expect(l.sequence).toHaveLength(21)
       expect(l.tail).toBe(1)
       expect(unseen(l.sequence.at(-1)!.seed)).toBe(true)
     }
-  })
-
-  it('calls a gap pattern atypical when under a quarter of its rule\'s gap runs show it', () => {
-    const missing = rows.filter((r) => r.rule === 'missing_link' && r.gap && !r.research)
-    for (const r of missing) {
-      const share = missing.filter((x) => x.values.join() === r.values.join()).length / missing.length
-      expect(typicality(r)).toBe(share)
-    }
-    expect(observations.typical!(wave(observations, observations.levels[0]!.sequence[4]!))).toBe(true)
-    expect(typicality(rows.find((r) => r.rule === 'pair' && r.gap && !r.research && r.values.join() === 't1,t1,t3,t4')!)).toBeLessThan(ATYPICAL)
   })
 })

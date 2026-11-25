@@ -134,14 +134,10 @@ describe('engine', () => {
     }
   })
 
-  it('report compares you, the AI and chance on scored waves only, split by typical and atypical patterns', () => {
+  it('report compares you, the AI and chance on scored waves only', () => {
     const g = replay(deck, 1, 'standard', picks)
-    expect(report(deck, g).typical).toBeNull()
     g.decisions.forEach((d, i) => (d.ai = i === 3 ? 1 : i === 4 ? null : d.pick))
-    expect(report(deck, g).all).toEqual({ you: 2, ai: 0, aiN: 1, chance: 1 / 3 + 1 / 3, n: 2 })
-    const typed = { ...deck, typical: (w: Wave) => w.seed === 4 }
-    expect(report(typed, g).typical).toEqual({ you: 1, ai: 0, aiN: 1, chance: 1 / 3, n: 1 })
-    expect(report(typed, g).atypical).toEqual({ you: 1, ai: 0, aiN: 0, chance: 1 / 3, n: 1 })
+    expect(report(deck, g)).toEqual({ all: { you: 2, ai: 0, aiN: 1, chance: 1 / 3 + 1 / 3, n: 2 } })
   })
 
   it('aiBody and stepBody carry symbols only: no rule, no answers, no rule id, no answer values', () => {

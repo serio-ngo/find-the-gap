@@ -1,14 +1,14 @@
 import { rng } from './engine.ts'
 import type { ChoiceRecord } from './engine.ts'
-import { alien, craters, halo } from './context.ts'
-import { LIGHT, REACH, TAU, add, at, dot, ellipse, hash, len, mirror, plate, sub, unit, wire } from './geom.ts'
+import { alien, craters } from './context.ts'
+import { LIGHT, REACH, TAU, add, at, dot, hash, len, mirror, plate, sub, unit, wire } from './geom.ts'
 import type { Family, Part, Pt } from './geom.ts'
 
 export { colors, hash } from './geom.ts'
 export type { Family, Part, Pt, Signs } from './geom.ts'
 
-export type Facts = { crystals: number; sockets: number; symmetric: boolean; segments: number; lit: number; craters: number; eyes: number; bright: boolean }
-export type Shape = { family: Family; outline: Pt[]; under: Part[]; body: Part[]; over: Part[]; marks: Part[]; facts: Facts }
+export type Facts = { crystals: number; symmetric: boolean; signs: boolean; craters: number; bright: boolean }
+export type Shape = { family: Family; outline: Pt[]; body: Part[]; over: Part[]; marks: Part[]; facts: Facts }
 
 const slot = (i: number, n: number) => -Math.PI / 2 + (i * TAU) / n
 const digits = (v: string) => [...(v.length > 7 ? hash(v).toString(16) : v).padEnd(7, '0').slice(0, 7)].map((c) => {
@@ -88,7 +88,7 @@ const rimAt = (out: Pt[], a: number): Pt => {
 }
 
 const tints: Record<string, [string, string, string]> = {
-  passed: ['signal', 'glass', 'signal'], failed: ['copper', 'ember', 'copper'],
+  passed: ['signal', 'glass', 'signal'],
   violet: ['violet', 'obsidian3', 'violet'], lime: ['lime', 'olivine3', 'lime'], rose: ['rose', 'iron3', 'rose'],
 }
 
@@ -97,20 +97,10 @@ function crystal(root: Pt, dir: Pt, length: number, w: number, tint: string, mar
   const reach = len(add(root, dir, length))
   const l = reach > REACH ? length - (reach - REACH) : length
   const shaft = add(root, dir, l * 0.78)
-  const failed = tint === 'failed'
-  const tip = add(add(root, dir, l), perp, failed ? w * 0.9 : 0)
+  const tip = add(root, dir, l)
   const [lit, shade, edge] = tints[tint] ?? tints.passed!
   marks.push({ ...plate([add(root, perp, w), add(shaft, perp, w), tip, root], lit, edge, 0.007), crystal: true })
   marks.push(plate([root, tip, add(shaft, perp, -w), add(root, perp, -w)], shade, edge, 0.007))
-  if (failed) marks.push(wire([add(shaft, perp, w), add(add(root, dir, l * 0.55), perp, -w * 0.6)], 'void', 0.014))
-}
-
-function socket(rim: Pt, dir: Pt, marks: Part[]) {
-  const c = add(rim, dir, -0.07)
-  const angle = Math.atan2(dir[1], dir[0]) + Math.PI / 2
-  marks.push(plate(ellipse(c, 0.095, 0.06, angle), 'light', 'light', 0.01))
-  marks.push(plate(ellipse(c, 0.07, 0.04, angle), 'void', 'void', 0.006))
-  marks.push(plate([add(c, [-dir[1], dir[0]], 0.03), add(c, dir, 0.045), add(c, [dir[1], -dir[0]], 0.03)], 'dull', 'shadow', 0.006))
 }
 
 const radial = (out: Pt[], i: number, n: number) => {
@@ -140,55 +130,28 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, f
     const vent = -0.35 + ((hash(record.rule) % 100) / 100) * 0.7
     druse(v[0] ?? '', false, vent, outline, marks)
     druse(v[1] ?? '', true, vent, outline, marks)
-  } else if (record.rule === 'missing_link') {
-    const r = rng(hash(`${seed}:druse`))
-    for (const [i, s] of v.entries()) {
-      const { rim, dir, root } = radial(outline, i, v.length)
-      if (s === 'missing') {
-        socket(rim, dir, marks)
-        continue
-      }
-      marks.push(plate(ellipse(root, 0.06, 0.04, slot(i, v.length) + Math.PI / 2, 9), `${family}0`, `${family}1`, 0.01))
-      for (const k of [-1, 1, 0]) crystal(add(root, [-dir[1], dir[0]], k * 0.035), at(slot(i, v.length) + k * (0.3 + 0.1 * r()), 1), (k ? 0.17 : 0.27) + 0.05 * r(), k ? 0.032 : 0.045, s, marks)
-    }
-  } else if (record.rule === 'pair') {
-    const home = v.map((t) => v.indexOf(t))
-    home.forEach((h, i) => {
-      if (h !== i) socket(radial(outline, i, v.length).rim, radial(outline, i, v.length).dir, marks)
-    })
-    for (const h of new Set(home)) {
-      const fan = home.filter((x) => x === h).length
-      const r = rng(hash(`${seed}:${h}`))
-      for (let j = 0; j < fan; j++) crystal(radial(outline, h, v.length).root, at(slot(h, v.length) + (j - (fan - 1) / 2) * 0.42 + (r() - 0.5) * 0.2, 1), 0.26 + 0.06 * r(), 0.05, 'passed', marks)
-    }
   } else {
     const k = hash(v.join(''))
     const n = 1 + (k % 5)
     for (let i = 0; i < n; i++) crystal(radial(outline, i, n).root, radial(outline, i, n).dir, 0.26, 0.045, ['passed', 'violet', 'lime'][k % 3]!, marks)
   }
-  const under: Part[] = []
   const over: Part[] = []
   const sg = record.signs
   if (sg) {
-    halo(sg, strength, under)
     craters(sg, family, strength, over)
     alien(sg, family, strength, over)
   }
   const facts: Facts = {
     crystals: marks.filter((m) => m.crystal).length,
-    sockets: marks.filter((m) => m.fill === 'light').length,
     symmetric: !mirrored || v[0] === v[1],
-    segments: sg ? 1 + sg.locks : 0,
-    lit: sg?.share ?? 0,
+    signs: !!sg,
     craters: sg?.impacts ?? 0,
-    eyes: sg ? 1 + sg.agent : 0,
     bright: sg?.job === 2,
   }
-  return { family, outline, under, body, over, marks, facts }
+  return { family, outline, body, over, marks, facts }
 }
 
 export function paintObject(s: Shape, draw: (part: Part) => void) {
-  s.under.forEach(draw)
   s.body.forEach(draw)
   s.over.forEach(draw)
   s.marks.forEach(draw)
