@@ -8,34 +8,21 @@ export type Row = { id: string; rule: string; roles: string[]; values: string[];
 
 export const gapOf: Record<string, (values: string[]) => boolean> = {
   odd_revision: (v) => v[0] !== v[1],
-  missing_link: (v) => v.includes('missing'),
-  pair: (v) => new Set(v).size < v.length,
 }
 
 export const level = {
-  locks: (c: Context | null) => Math.min(3, c?.locks ?? 0),
   job: (c: Context | null) => (c?.job === 'success' ? 2 : c?.job ? 1 : 0),
-  share: (c: Context | null) => (c?.share == null ? 0 : Math.round(c.share * 4)),
   impacts: (c: Context | null) => Math.min(2, c?.impacts ?? 0),
-  agent: (c: Context | null) => Math.min(3, c?.agent ?? 0),
-}
-export type Channel = keyof typeof level
-export const CHANNELS: Record<string, Channel[]> = {
-  odd_revision: ['job', 'impacts'],
-  missing_link: ['locks', 'impacts', 'agent'],
-  pair: ['job'],
 }
 
-export const signs = (r: Row): Signs | null =>
-  r.context && (Object.fromEntries(Object.entries(level).map(([k, f]) => [k, CHANNELS[r.rule]!.includes(k as Channel) ? f(r.context) : 0])) as Signs)
+export const signs = (r: Row): Signs | null => r.context && { job: level.job(r.context), impacts: level.impacts(r.context) }
 
-const order = ['odd_revision', 'missing_link', 'pair']
+const order = ['odd_revision']
 export const CERTAIN = [4, 9, 14, 19]
 const counts = [4, 5, 6, 6, 7]
 const WAVES = 20
 export const UNSEEN = 900
 export const unseen = (seed: number) => seed >= UNSEEN && seed < UNSEEN + 100
-export const ATYPICAL = 0.25
 
 for (const r of rows) {
   if (gapOf[r.rule]?.(r.values) !== r.gap) throw new Error(`row ${r.id} breaks its rule`)
@@ -43,30 +30,11 @@ for (const r of rows) {
 
 export const clue = (r: Row) => r.roles.map((role, i) => `${role} ${r.values[i]}`).join(' · ')
 
-export const pattern = (r: Row) => (r.rule === 'odd_revision' ? (r.values[0] === r.values[1] ? 'same' : 'differ') : r.values.join(','))
+export const pattern = (r: Row) => (r.values[0] === r.values[1] ? 'same' : 'differ')
 
 const scored = rows.filter((r) => !r.research)
 
-export const typicality = (r: Row) => {
-  const peers = scored.filter((x) => x.rule === r.rule && x.gap === r.gap)
-  return peers.filter((x) => pattern(x) === pattern(r)).length / peers.length
-}
-
 const shuffle = <T>(r: () => number, a: T[]) => a.map((x) => [r(), x] as const).sort((p, q) => p[0] - q[0]).map((p) => p[1])
-
-const lookalike = (x: Row, gap: Row) => (x.rule === 'missing_link' ? x.values.includes('failed') : x.rule === 'pair' && x.values.length === gap.values.length)
-
-const controls = (r: () => number, from: Row[], gap: Row, n: number, step: number) => {
-  const groups = new Map<string, Row[]>()
-  for (const x of shuffle(r, from)) groups.set(pattern(x), [...(groups.get(pattern(x)) ?? []), x])
-  const lean = step < 3 ? 1 : step > 3 ? -1 : 0
-  const sorted = [...groups.values()].sort((a, b) => lean * (+lookalike(a[0]!, gap) - +lookalike(b[0]!, gap)))
-  const lanes = sorted.slice(0, step)
-  const out: Row[] = []
-  while (out.length < n && lanes.some((l) => l.length)) for (const l of lanes) if (l.length && out.length < n) out.push(l.shift()!)
-  for (const x of sorted.slice(step).flat()) if (out.length < n) out.push(x)
-  return out
-}
 
 const turn = <T>(gaps: T[], i: number) => {
   const queue = [...gaps]
@@ -88,7 +56,7 @@ const wave = (rule: string, step: number, seed: number) => {
   const gap = seed >= ANCHOR_POOL ? certain[seed % certain.length] : seed < UNSEEN ? certain[CERTAIN.indexOf(seed % 100)] : undefined
   const r = rng(seed)
   const n = counts[step - 1]!
-  const choice = gap ? shuffle(r, [gap, ...controls(r, from.filter((x) => !x.gap), gap, n - 1, step)]) : shuffle(r, from.filter((x) => !certain.includes(x))).slice(0, n)
+  const choice = gap ? shuffle(r, [gap, ...shuffle(r, from.filter((x) => !x.gap)).slice(0, n - 1)]) : shuffle(r, from.filter((x) => !certain.includes(x))).slice(0, n)
   return { symbols: choice.map(clue), answers: choice.flatMap((x, i) => (x.gap ? [i] : [])), ids: choice.map((x) => x.id) }
 }
 
@@ -105,7 +73,6 @@ export const observations: Deck = {
     const r = byId.get(id)!
     return { id, clue: clue(r), rule: r.rule, values: r.values, url: r.run, signs: signs(r) }
   }),
-  typical: (w) => typicality(gapRow(w)) >= ATYPICAL,
   poolSize: 20,
   question: 'Each rock is one public gate run, given by its recorded values. Which rock does not fit with the others? Pick one.',
   levels: order.map((rule, k) => ({

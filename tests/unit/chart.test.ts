@@ -5,7 +5,7 @@ import strings from '../../src/game/strings.json'
 import { wilson } from '../../src/game/stats.ts'
 
 const tally = (you: number, n: number, ai: number, aiN: number, chance: number) => ({ you, n, ai, aiN, chance })
-const rep = (all: ReturnType<typeof tally>, typical: ReturnType<typeof tally> | null = null, atypical: ReturnType<typeof tally> | null = null) => ({ all, typical, atypical })
+const rep = (all: ReturnType<typeof tally>) => ({ all })
 const en: Labels = { ...strings.visible.en, chart: strings.labels.en.chart }
 const pc = (hits: number, n: number) => wilson(hits, n).map((p) => Math.round(p * 100)).join('–')
 

@@ -7,7 +7,7 @@ import { CERTAIN, rowOf } from '../../src/game/levels/observations.ts'
 import { summarize } from '../../scripts/results.ts'
 import { edition } from '../../src/game/eval/version.ts'
 
-it('reads only results of the current deck edition and splits human and AI hits by rule, pattern and gap case', async () => {
+it('reads only results of the current deck edition and splits human and AI hits by rule and gap case', async () => {
   const d = decks.observations!
   const spec = d.levels[0]!.sequence.find((s, i) => !d.levels[0]!.anchors.includes(i) && wave(d, s).answers.length === 1)!
   const w = wave(d, spec)
@@ -20,8 +20,7 @@ it('reads only results of the current deck edition and splits human and AI hits 
   ])
   expect(out).toMatchObject({ edition: await edition(d), games: 1, otherEditions: 1 })
   expect(out.rules.odd_revision).toEqual({ shown: 2, human: 0.5, ai: 1 })
-  expect(out.patterns['odd_revision typical']).toEqual({ shown: 2, human: 0.5, ai: 1 })
-  expect(out.hardest).toEqual([{ id: w.ids![right], arity: 2, breaks: 1, pattern: 'differ', typicality: 1, shown: 2, human: 0.5, ai: 1 }])
+  expect(out.hardest).toEqual([{ id: w.ids![right], arity: 2, breaks: 1, pattern: 'differ', shown: 2, human: 0.5, ai: 1 }])
   expect(out.certain).toEqual({ shown: 2, human: 0.5, ai: 1 })
   expect(out).not.toHaveProperty('waves')
   expect(out.aim).toEqual({ hit: { n: 1, ms: 1000, gap: 500, others: 100, switches: 1 }, miss: { n: 1, ms: 3000, gap: 1500, others: 300, switches: 1 } })
@@ -39,7 +38,7 @@ it('scores a research wave by any of its gaps and keeps waves without exactly on
   }
   const waves = JSON.stringify([row(none, 0), row(many, wave(d, many).answers[1]!)])
   const out = await summarize([{ version: await edition(d), level: 1, mode: 0, waves }])
-  expect([out.rules, out.patterns, out.hardest, out.aim.hit.n + out.aim.miss.n, out.peers.length]).toEqual([{}, {}, [], 0, 2])
+  expect([out.rules, out.hardest, out.aim.hit.n + out.aim.miss.n, out.peers.length]).toEqual([{}, [], 0, 2])
   expect(out.research[d.rules[0]!.id].picks).toBe(2)
 })
 

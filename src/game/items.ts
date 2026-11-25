@@ -1,20 +1,12 @@
-import { Badge, BadgeCheck, BadgeX, Bot, User } from 'lucide'
+import { Badge, BadgeCheck, BadgeX } from 'lucide'
 import type { ChoiceRecord } from './engine.ts'
-import { CHANNELS } from './levels/observations.ts'
 
-export const ICONS = { Badge, BadgeCheck, BadgeX, Bot, User }
+export const ICONS = { Badge, BadgeCheck, BadgeX }
 export type Item = keyof typeof ICONS
 
-export const ITEMS: Record<'job' | 'agent', Item[]> = {
-  job: ['Badge', 'BadgeX', 'BadgeCheck'],
-  agent: ['User', 'Bot', 'Bot', 'Bot'],
-}
+export const ITEMS: Item[] = ['Badge', 'BadgeX', 'BadgeCheck']
 
-export const itemOf = ({ rule, signs }: ChoiceRecord): Item => {
-  if (!signs) return 'Badge'
-  const channel = CHANNELS[rule]?.includes('job') ? 'job' : 'agent'
-  return ITEMS[channel][signs[channel]]!
-}
+export const itemOf = ({ signs }: ChoiceRecord): Item => (signs ? ITEMS[signs.job]! : 'Badge')
 
 export const icon = (item: Item) =>
   `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[item].map(([tag, attrs]) => `<${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ')}/>`).join('')}</svg>`

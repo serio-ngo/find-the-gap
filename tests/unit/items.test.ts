@@ -7,10 +7,10 @@ describe('items', () => {
   it('gives every drawn pattern an icon', () => {
     for (const r of rows) expect(Object.keys(ICONS), r.id).toContain(itemOf({ clue: '', rule: r.rule, values: r.values, signs: signs(r) }))
   })
-  it('keys the table on the job, or on the agent where no job is drawn', () => {
-    const base = { clue: '', values: [] }
-    expect(itemOf({ ...base, rule: 'pair', signs: { locks: 0, job: 2, share: 0, impacts: 0, agent: 0 } })).toBe('BadgeCheck')
-    expect(itemOf({ ...base, rule: 'missing_link', signs: { locks: 0, job: 0, share: 0, impacts: 0, agent: 2 } })).toBe(ITEMS.agent[2])
-    expect(itemOf({ ...base, rule: 'pair', signs: null })).toBe('Badge')
+  it('keys the item on the tests job of the run', () => {
+    const base = { clue: '', rule: 'odd_revision', values: [] }
+    expect(itemOf({ ...base, signs: { job: 2, impacts: 0 } })).toBe('BadgeCheck')
+    expect(itemOf({ ...base, signs: { job: 1, impacts: 0 } })).toBe(ITEMS[1])
+    expect(itemOf({ ...base, signs: null })).toBe('Badge')
   })
 })

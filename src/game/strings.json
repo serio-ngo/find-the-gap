@@ -34,12 +34,10 @@
       "rock": "Obiekt {n}: {s}",
       "wave": "Fala",
       "object": "obiekt",
-      "basalt": "skała bazaltowa",
       "iron": "skała żelazowo-niklowa",
       "ice": "skała lodowa",
       "carbon": "skała węglowa",
       "olivine": "skała oliwinowa",
-      "chondrite": "chondryt",
       "obsidian": "obsydian",
       "blue": "niebieski",
       "red": "czerwony",
@@ -51,12 +49,9 @@
       "contribute": "Wyślij ten wynik do Serio (badania)",
       "chart": "przedział 95%",
       "crystals": "kryształy: {n}",
-      "sockets": "puste gniazda: {n}",
       "symmetric": "symetryczny",
       "lopsided": "nierówny",
-      "halo": "aureola: segmenty {n}, świeci {q} z 4",
       "craters": "kratery: {n}",
-      "alien": "kosmita, oczy: {n}",
       "certain": "Fala pewna",
       "bright": "kosmita jasny",
       "dim": "kosmita przygaszony",
@@ -64,9 +59,7 @@
       "dropped": "Wypadło: {item}",
       "BadgeCheck": "testy zaliczone",
       "BadgeX": "testy niezaliczone",
-      "Badge": "brak testów",
-      "User": "bez agenta",
-      "Bot": "agent"
+      "Badge": "brak testów"
     },
     "en": {
       "pause": "Pause",
@@ -76,12 +69,10 @@
       "rock": "Object {n}: {s}",
       "wave": "Wave",
       "object": "object",
-      "basalt": "basalt rock",
       "iron": "iron-nickel rock",
       "ice": "ice rock",
       "carbon": "carbon rock",
       "olivine": "olivine rock",
-      "chondrite": "chondrite rock",
       "obsidian": "obsidian rock",
       "blue": "blue",
       "red": "red",
@@ -93,12 +84,9 @@
       "contribute": "Send this result to Serio (research)",
       "chart": "95% interval",
       "crystals": "crystals: {n}",
-      "sockets": "empty sockets: {n}",
       "symmetric": "symmetric",
       "lopsided": "lopsided",
-      "halo": "halo segments: {n}, lit {q} of 4",
       "craters": "craters: {n}",
-      "alien": "alien eyes: {n}",
       "certain": "Certain wave",
       "bright": "alien bright",
       "dim": "alien dim",
@@ -106,9 +94,7 @@
       "dropped": "Dropped: {item}",
       "BadgeCheck": "tests passed",
       "BadgeX": "tests failed",
-      "Badge": "no tests",
-      "User": "no agent",
-      "Bot": "agent"
+      "Badge": "no tests"
     }
   }
 }

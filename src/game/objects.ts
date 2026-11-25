@@ -5,7 +5,7 @@ import type { Family } from './gen.ts'
 export const records = (d: Deck, w: Wave): ChoiceRecord[] =>
   d.choiceRecords?.(w) ?? w.symbols.map((clue) => ({ clue, rule: w.rule, values: [clue] }))
 
-const FAMILY: Record<string, Family> = { odd_revision: 'iron', missing_link: 'basalt', pair: 'chondrite' }
+const FAMILY: Record<string, Family> = { odd_revision: 'iron' }
 export const strength = (step: number) => Math.min(1, 0.55 + 0.1125 * (step - 1))
 
 export function objectsFor(d: Deck, w: Wave) {
