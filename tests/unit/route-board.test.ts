@@ -25,8 +25,8 @@ describe('leaderboard', () => {
     expect(results).toHaveLength(1)
     await send('/api/game/board', game(false, 2500, ' Bo ', 1), env)
     expect(results).toHaveLength(1)
-    const read = await (await send('/api/game/board', { v: FIXTURE, level: 1, edition: ed, score: 100 }, env)).json()
-    expect(read).toEqual({ top: [['Ada', 175], ['Bo', 0]], n: 2, below: 1, score: 100 })
+    const third = await (await send('/api/game/board', game(true, 9000, 'Cy', 1), env)).json()
+    expect(third).toEqual({ top: [['Ada', 175], ['Cy', 110], ['Bo', 0]], n: 3, below: 1, score: 110 })
   })
 
   it('rejects a lying hit, a bad name and another edition without storing', async () => {
@@ -36,7 +36,7 @@ describe('leaderboard', () => {
     for (const body of [lie, game(true, 2500, ''), game(true, 2500, 'x'.repeat(21)), game(true, 2500, '<b>'), game(true, 2500, 7), { ...game(true, 2500), edition: 'fixture:000000000000' }]) {
       expect((await send('/api/game/board', body, env)).status).toBe(400)
     }
-    expect((await send('/api/game/board', { v: FIXTURE, level: 1, edition: ed, score: -1 }, env)).status).toBe(400)
+    expect((await send('/api/game/board', { ...game(true, 2500), sent: 2 }, env)).status).toBe(400)
     expect(board).toEqual([])
   })
 })

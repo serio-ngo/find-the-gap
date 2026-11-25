@@ -164,12 +164,6 @@ const standing = async (env: GameEnv, version: string, level: number, score: num
 }
 
 const board = async (b: Record<string, unknown>, env: GameEnv) => {
-  if (!('name' in b)) {
-    const { d, level } = context({ ...exact(b, ['v', 'level', 'edition', 'score']), mode: 0 })
-    const version = await edition(d)
-    if (b.edition !== version) bad()
-    return standing(env, version, level.id, int(b.score, 1e6))
-  }
   const c = await checked(exact(b, ['v', 'level', 'mode', 'waves', 'edition', 'name', 'sent']))
   const name = typeof b.name === 'string' && NAME.test(b.name.trim()) ? b.name.trim() : bad()
   if (!int(b.sent, 1)) await store(b, env, c)

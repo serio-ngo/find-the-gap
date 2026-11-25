@@ -171,7 +171,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
 const showBoard = (b: Board | null) => {
   if (!b) return
   $('.ftg-top').innerHTML = b.top.map(([name, s]) => `<li><span>${esc(name)}</span> <output>${s}</output></li>`).join('')
-  if (b.n) $('.ftg-norm').textContent += ` · ${l.better!.replace('{p}', String(Math.round((100 * b.below) / b.n)))}`
+  if (b.n) $('.ftg-norm').ariaLabel += `. ${l.better!.replace('{p}', String(Math.round((100 * b.below) / b.n)))}`
 }
 
 const end = () => {
@@ -185,7 +185,6 @@ const end = () => {
   boardEl.hidden = !api
   boardEl.querySelectorAll('input, button').forEach((e) => ((e as HTMLInputElement).disabled = false))
   $('.ftg-top').replaceChildren()
-  if (api) askBoard(api, { v: deckIdx, level, edition, score: score(g) }).then(showBoard)
   contribute()
   $('.ftg-end').focus()
 }

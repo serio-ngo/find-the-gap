@@ -13,7 +13,8 @@
       "privacy": "Prywatność",
       "nick": "Pseudonim",
       "save": "Zapisz",
-      "board": "Ranking"
+      "board": "Ranking",
+      "sigma": "σ"
     },
     "en": {
       "title": "Find the Gap",
@@ -28,7 +29,8 @@
       "privacy": "Privacy",
       "nick": "Nickname",
       "save": "Save",
-      "board": "Leaderboard"
+      "board": "Leaderboard",
+      "sigma": "σ"
     }
   },
   "labels": {

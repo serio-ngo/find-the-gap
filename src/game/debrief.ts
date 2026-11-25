@@ -44,10 +44,10 @@ export const showResult = (root: HTMLElement, deck: Deck, g: Game, { v, l }: Tex
   const r = report(deck, g)
   root.querySelector('.ftg-chart')!.innerHTML = chart(r, { ...v, chart: l.chart })
   const z = deviation(deck, g)
-  root.querySelector('.ftg-norm')!.textContent = [
-    l.norm!.replace('{z}', `${z >= 0 ? '+' : ''}${z.toFixed(1)}`),
-    ...(r.typical ? [l.typicalSplit!.replace('{a}', ratio(r.typical)).replace('{b}', ratio(r.atypical))] : []),
-  ].join(' · ')
+  const signed = `${z >= 0 ? '+' : ''}${z.toFixed(1)}`
+  const norm = root.querySelector('.ftg-norm')!
+  norm.textContent = `${signed}${v.sigma}`
+  norm.setAttribute('aria-label', [l.norm!.replace('{z}', signed), ...(r.typical ? [l.typicalSplit!.replace('{a}', ratio(r.typical)).replace('{b}', ratio(r.atypical))] : [])].join('. '))
   root.querySelector('.ftg-loot')!.innerHTML = loot(deck, g, rounds, l)
   const nextEl = root.querySelector<HTMLAnchorElement>('.ftg-next')!
   nextEl.hidden = !deck.levels.some((x) => x.id === g.level + 1)
