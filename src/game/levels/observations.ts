@@ -58,7 +58,7 @@ export const typical = (r: Row) => (looks.get(key(r)) ?? false) === r.gap
 
 const shuffle = <T>(r: () => number, a: T[]) => a.map((x) => [r(), x] as const).sort((p, q) => p[0] - q[0]).map((p) => p[1])
 
-export const CERTAIN_GAPS = ['obs:4d1ddd54e43b', 'obs:5896e69ff1aa', 'obs:ae9a03b0bffa', 'obs:2461a2cc9478']
+const CERTAIN_GAPS = ['obs:4d1ddd54e43b', 'obs:5896e69ff1aa', 'obs:ae9a03b0bffa', 'obs:2461a2cc9478']
 const shown: Record<string, Row[]> = { odd_revision: CERTAIN_GAPS.map((id) => rows.find((r) => r.id === id)!) }
 
 const wave = (rule: string, step: number, seed: number) => {
