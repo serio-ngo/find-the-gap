@@ -50,7 +50,7 @@ describe('the board carries the evidence', () => {
     expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'ice')))).toBeGreaterThan(0.02)
   })
 
-  const full: Signs = { job: 2, impacts: 2, criteria: 4, many: 1 }
+  const full: Signs = { job: 2, impacts: 2, full: 0, many: 1 }
   it('craters and alien keep an equal-commit rock mirror-symmetric, and each follows its field', () => {
     const r = (signs: Signs | null) => shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'], signs }, 'iron')
     expect(lopsided(picture(r(full)))).toBe(0)
@@ -59,9 +59,10 @@ describe('the board carries the evidence', () => {
     expect(r(null).over).toEqual([])
     expect(r({ ...full, impacts: 0 }).over.length).toBe(r(full).over.length - 6)
     expect(r(null).under).toEqual([])
-    expect(r(full).facts).toMatchObject({ arcs: 4, lit: true })
-    expect(r({ ...full, criteria: 2 }).under.length).toBe(6)
-    expect(r({ ...full, many: 0 }).under.length).toBe(4)
+    expect(r(full).facts).toMatchObject({ arcs: 3, lit: true })
+    expect(r({ ...full, full: 1 }).facts.arcs).toBe(1)
+    expect(r({ ...full, full: 1 }).under.length).toBe(3)
+    expect(r({ ...full, many: 0 }).under.length).toBe(3)
     expect(r({ ...full, many: 0 }).facts.lit).toBe(false)
   })
 

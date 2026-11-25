@@ -9,15 +9,15 @@ export const fakeEnv = (over: Partial<GameEnv> = {}) => {
   const cache = new Map<string, { body: string; created: number }>()
   const use = { step: 0, result: 0 }
   const results: unknown[][] = []
-  const board: { version: string; level: number; name: string; score: number }[] = []
-  const mine = (v: unknown[]) => board.filter((x) => x.version === v.at(-2) && x.level === v.at(-1))
+  const board: { version: string; level: number; mode: number; name: string; score: number }[] = []
+  const mine = (v: unknown[]) => board.filter((x) => x.version === v.at(-3) && x.level === v.at(-2) && x.mode === v.at(-1))
   const deleted: string[] = []
   const fail = { delete: false }
   const env: GameEnv = {
     DB: {
       prepare: (sql: string) => ({
         bind: (...v: unknown[]) => ({
-          all: async () => ({ results: board.filter((x) => x.version === v[0] && x.level === v[1]).sort((a, b) => b.score - a.score).slice(0, v[2] as number) as any[] }),
+          all: async () => ({ results: board.filter((x) => x.version === v[0] && x.level === v[1] && x.mode === v[2]).sort((a, b) => b.score - a.score).slice(0, v[3] as number) as any[] }),
           first: async () =>
             (sql.includes('COUNT(*)')
               ? { n: mine(v).length, below: mine(v).filter((x) => x.score < (v[0] as number)).length }
@@ -30,7 +30,7 @@ export const fakeEnv = (over: Partial<GameEnv> = {}) => {
               deleted.push(v[0] as string)
             }
             else if (sql.includes('game_cache')) cache.set(v[0] as string, { body: v[1] as string, created: v[2] as number })
-            else if (sql.includes('game_board')) board.push({ version: v[1] as string, level: v[2] as number, name: v[3] as string, score: v[4] as number })
+            else if (sql.includes('game_board')) board.push({ version: v[1] as string, level: v[2] as number, mode: v[3] as number, name: v[4] as string, score: v[5] as number })
             else results.push(v)
           },
         }),

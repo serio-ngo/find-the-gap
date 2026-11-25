@@ -151,7 +151,7 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, f
     sides,
     symmetric: !mirrored || v[0] === v[1],
     signs: !!sg,
-    arcs: sg ? Math.max(1, sg.criteria) : 0,
+    arcs: sg ? (sg.full ? 1 : 3) : 0,
     lit: !!sg?.many,
     craters: sg?.impacts ?? 0,
     bright: sg?.job === 2,

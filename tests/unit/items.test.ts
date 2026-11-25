@@ -9,8 +9,8 @@ describe('items', () => {
   })
   it('keys the item on the tests job of the run', () => {
     const base = { clue: '', rule: 'odd_revision', values: [] }
-    expect(itemOf({ ...base, signs: { job: 2, impacts: 0, criteria: 3, many: 0 } })).toBe('BadgeCheck')
-    expect(itemOf({ ...base, signs: { job: 1, impacts: 0, criteria: 3, many: 0 } })).toBe(ITEMS[1])
+    expect(itemOf({ ...base, signs: { job: 2, impacts: 0, full: 0, many: 0 } })).toBe('BadgeCheck')
+    expect(itemOf({ ...base, signs: { job: 1, impacts: 0, full: 0, many: 0 } })).toBe(ITEMS[1])
     expect(itemOf({ ...base, signs: null })).toBe('Badge')
   })
 })

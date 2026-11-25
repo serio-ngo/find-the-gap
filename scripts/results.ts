@@ -84,7 +84,7 @@ export const summarize = async (rows: { version: string; level: number; mode: nu
         objects.forEach((o, k) => {
           const rec = rowOf(w.ids![k]!)
           const { arity, breaks } = params(rec)
-          tally(res.drawn, o.shape.facts, objects.length, k === pick)
+          tally(res.drawn, { ...o.shape.facts, sides: o.shape.facts.sides.map((s) => `${s.crystals} ${s.tint} ${s.reach}`).join(' | ') }, objects.length, k === pick)
           tally(res.data, { gap: rec.gap, typical: typical(rec), arity, breaks, locks: rec.context?.locks, job: rec.context?.job, share: rec.context?.share, impacts: rec.context?.impacts, agent: rec.context?.agent, tests: rec.context?.tests, criteria: rec.context?.criteria }, objects.length, k === pick)
         })
         if (ms !== undefined && w.answers.length) {

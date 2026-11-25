@@ -5,8 +5,8 @@ const mix = (a: string, b: string, k: number) =>
   `#${[1, 3, 5].map((i) => Math.round(parseInt(colors[a]!.slice(i, i + 2), 16) * k + parseInt(colors[b]!.slice(i, i + 2), 16) * (1 - k)).toString(16).padStart(2, '0')).join('')}`
 
 export function halo(sg: Signs, k: number, parts: Part[]) {
-  const n = Math.max(1, sg.criteria)
-  const span = TAU / n - (n > 1 ? 0.24 : 0)
+  const n = sg.full ? 1 : 3
+  const span = sg.full ? TAU : TAU / n - 0.24
   const arc = (c: number): Pt[] => {
     const m = Math.max(6, Math.ceil((64 * span) / TAU))
     return Array.from({ length: m + 1 }, (_, i) => at(c - span / 2 + (i * span) / m, 0.86))

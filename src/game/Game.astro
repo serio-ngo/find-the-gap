@@ -43,7 +43,7 @@ const paths = {
     <form class="ftg-board" aria-label={v.board} hidden>
       <label>{v.nick} <input name="nick" maxlength="20" autocomplete="nickname" required pattern="[\p{L}\p{N} ._\-]{1,20}" /></label>
       <button type="submit">{v.save}</button>
-      <ol class="ftg-top"></ol>
+      <ol class="ftg-top" tabindex="-1"></ol>
     </form>
     <div class="ftg-share">
       <button class="ftg-again" aria-label={l.replay}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.again} /></svg></button>

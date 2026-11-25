@@ -12,11 +12,12 @@ export const gapOf: Record<string, (values: string[]) => boolean> = {
 }
 
 export const MANY = 56
+export const FULL = 5
 
 export const level = {
   job: (c: Context | null) => (c?.job === 'success' ? 2 : c?.job ? 1 : 0),
   impacts: (c: Context | null) => Math.min(2, c?.impacts ?? 0),
-  criteria: (c: Context | null) => Math.min(5, c?.criteria ?? 0),
+  full: (c: Context | null) => +((c?.criteria ?? 0) >= FULL),
   many: (c: Context | null) => +((c?.tests ?? 0) > MANY),
 }
 
@@ -35,7 +36,10 @@ for (const r of rows) {
 
 export const clue = (r: Row) => r.roles.map((role, i) => `${role} ${r.values[i]}`).join(' · ')
 
-export const seen = (r: Row) => {
+const described = new Map<string, string>()
+export const seen = (r: Row) => described.get(r.id) ?? described.set(r.id, describeRock(r)).get(r.id)!
+
+const describeRock = (r: Row) => {
   const f = shape({ rule: r.rule, values: r.values, signs: signs(r) }, 'iron').facts
   return [
     ...f.sides.map((s, i) => `${i ? 'right' : 'left'} half: ${s.crystals} ${s.tint} crystals, longest ${s.reach}`),

@@ -76,7 +76,8 @@
       "won": "nagroda",
       "norm": "{z}σ od losu",
       "typicalSplit": "typowe {a}, nietypowe {b}",
-      "better": "lepiej niż {p}% graczy"
+      "better": "lepiej niż {p}% graczy",
+      "notSaved": "Nie udało się zapisać wyniku"
     },
     "en": {
       "pause": "Pause",
@@ -120,7 +121,8 @@
       "won": "rewarded",
       "norm": "{z}σ from chance",
       "typicalSplit": "typical {a}, atypical {b}",
-      "better": "better than {p}% of players"
+      "better": "better than {p}% of players",
+      "notSaved": "The score could not be saved"
     }
   }
 }

@@ -22,7 +22,7 @@ it('the edition changes when what a rock shows changes', async () => {
 
 it('the edition changes when a drawn context sign changes', async () => {
   const d = decks.observations
-  const bump = (r: ChoiceRecord) => ({ ...r, signs: r.signs ? { ...r.signs, impacts: r.signs.impacts + 1 } : { job: 0, impacts: 1, criteria: 0, many: 0 } })
+  const bump = (r: ChoiceRecord) => ({ ...r, signs: r.signs ? { ...r.signs, impacts: r.signs.impacts + 1 } : { job: 0, impacts: 1, full: 0, many: 0 } })
   const resigned = { ...d, choiceRecords: (w: Wave) => d.choiceRecords!(w).map((r, i) => (i ? r : bump(r))) }
   expect(await edition(resigned)).not.toBe(await edition(d))
 })

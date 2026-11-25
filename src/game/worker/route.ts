@@ -142,36 +142,38 @@ const checked = async (b: Record<string, unknown>) => {
 }
 
 const store = async (b: Record<string, unknown>, env: GameEnv, { version, standard, waves }: Awaited<ReturnType<typeof checked>>) => {
-  if ((await used(env, 'result')) > RESULT_CAP) return false
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
     .bind(new Date().toISOString().slice(0, 10), version, b.level, standard ? 0 : 1, JSON.stringify(waves))
     .run()
   await prune(env)
-  return true
 }
 
 const result = async (b: Record<string, unknown>, env: GameEnv) => {
-  await store(b, env, await checked(exact(b, ['v', 'level', 'mode', 'waves', 'edition'])))
+  const c = await checked(exact(b, ['v', 'level', 'mode', 'waves', 'edition']))
+  if ((await used(env, 'result')) <= RESULT_CAP) await store(b, env, c)
   return new Response(null, { status: 204 })
 }
 
 export const scoreOf = (waves: number[][]) => waves.reduce((t, a) => (a[13] && a[4] ? t + 100 + Math.max(0, Math.round(100 - a[11]! / 100)) : t), 0)
 
-const standing = async (env: GameEnv, version: string, level: number, score: number) => {
-  const top = await env.DB.prepare('SELECT name, score FROM game_board WHERE version = ? AND level = ? ORDER BY score DESC, id ASC LIMIT ?').bind(version, level, TOP).all<{ name: string; score: number }>()
-  const count = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(score < ?) AS below FROM game_board WHERE version = ? AND level = ?').bind(score, version, level).first<{ n: number; below: number | null }>()
+const standing = async (env: GameEnv, version: string, level: number, mode: number, score: number) => {
+  const top = await env.DB.prepare('SELECT name, score FROM game_board WHERE version = ? AND level = ? AND mode = ? ORDER BY score DESC, id ASC LIMIT ?').bind(version, level, mode, TOP).all<{ name: string; score: number }>()
+  const count = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(score < ?) AS below FROM game_board WHERE version = ? AND level = ? AND mode = ?').bind(score, version, level, mode).first<{ n: number; below: number | null }>()
   return json({ top: top.results.map((x) => [x.name, x.score]), n: count?.n ?? 0, below: count?.below ?? 0, score })
 }
 
 const board = async (b: Record<string, unknown>, env: GameEnv) => {
   const c = await checked(exact(b, ['v', 'level', 'mode', 'waves', 'edition', 'name', 'sent']))
   const name = typeof b.name === 'string' && NAME.test(b.name.trim()) ? b.name.trim() : bad()
-  if (!int(b.sent, 1)) await store(b, env, c)
+  const sent = int(b.sent, 1)
+  if ((await used(env, 'result')) > RESULT_CAP) return new Response(null, { status: 204 })
   const score = scoreOf(c.waves as number[][])
-  await env.DB.prepare('INSERT INTO game_board (day, version, level, name, score) VALUES (?, ?, ?, ?, ?)')
-    .bind(new Date().toISOString().slice(0, 10), c.version, b.level, name, score)
+  const mode = c.standard ? 0 : 1
+  await env.DB.prepare('INSERT INTO game_board (day, version, level, mode, name, score) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(new Date().toISOString().slice(0, 10), c.version, b.level, mode, name, score)
     .run()
-  return standing(env, c.version, b.level as number, score)
+  if (!sent) await store(b, env, c)
+  return standing(env, c.version, b.level as number, mode, score)
 }
 
 const read = async (req: Request) => {

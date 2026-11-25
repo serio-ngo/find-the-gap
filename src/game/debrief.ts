@@ -31,13 +31,11 @@ export const loot = (deck: Deck, g: Game, rounds: Rounds, l: Record<string, stri
   const at = (k: number | null | undefined) => (typeof k === 'number' ? objects.find((o) => o.sourceIndex === k) : undefined)
   const cell = (who: string, k: number | null | undefined, won: boolean) => {
     const o = at(k)
-    if (!o) return { html: `<span class="ftg-${who}"></span>`, text: '' }
+    if (!o) return `<span class="ftg-${who}"></span>`
     const item = itemOf(o)
-    return { html: `<span class="ftg-${who}${won ? ' ftg-won' : ''}">${icon(item)}</span>`, text: `${who === 'me' ? l.you : 'AI'}: ${l[item]}${won ? `, ${l.won}` : ''}` }
+    return `<span class="ftg-${who}${won ? ' ftg-won' : ''}" role="img" aria-label="${l.wave} ${i + 1}. ${who === 'me' ? l.you : 'AI'}: ${l[item]}${won ? `, ${l.won}` : ''}">${icon(item)}</span>`
   }
-  const me = cell('me', x.pick, x.anchor && x.hit)
-  const ai = cell('ai', x.ai, x.anchor && typeof x.ai === 'number' && w.answers.includes(x.ai))
-  return `<li aria-label="${[`${l.wave} ${i + 1}`, me.text, ai.text].filter(Boolean).join('. ')}">${me.html}${ai.html}</li>`
+  return `<li>${cell('me', x.pick, x.anchor && x.hit)}${cell('ai', x.ai, x.anchor && typeof x.ai === 'number' && w.answers.includes(x.ai))}</li>`
 }).join('')
 
 export const showResult = (root: HTMLElement, deck: Deck, g: Game, { v, l }: Text, rounds: Rounds) => {

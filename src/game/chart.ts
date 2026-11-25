@@ -4,7 +4,7 @@ import { wilson } from './stats.ts'
 type Report = Pick<ReturnType<typeof report>, 'all'>
 export type Labels = { you: string; ai: string; chance: string; chart: string }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
+export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
 
 const pct = (p: number) => Math.round(p * 100)
 const X0 = 56

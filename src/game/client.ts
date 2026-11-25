@@ -11,6 +11,7 @@ import { bindInput } from './input.ts'
 import { load, save } from './stats.ts'
 import { describe, showResult } from './debrief.ts'
 import { collection, icon, itemOf } from './items.ts'
+import { esc } from './chart.ts'
 import type { Item } from './items.ts'
 import type { Rounds, Text } from './debrief.ts'
 
@@ -167,11 +168,14 @@ const contribute = () => {
   sendResult(api, resultRequest(deckIdx, level, g.mode, waves, edition))
 }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-const showBoard = (b: Board | null) => {
-  if (!b) return
-  $('.ftg-top').innerHTML = b.top.map(([name, s]) => `<li><span>${esc(name)}</span> <output>${s}</output></li>`).join('')
-  if (b.n) $('.ftg-norm').ariaLabel += `. ${l.better!.replace('{p}', String(Math.round((100 * b.below) / b.n)))}`
+const showBoard = (b: Board, name: string) => {
+  const row = ([who, s]: [string, number], k?: number) => `<li${k ? ` value="${k}"` : ''}${who === name && s === b.score ? ' class="ftg-mine"' : ''}><span>${esc(who)}</span> <output>${s}</output></li>`
+  const listed = b.top.some(([who, s]) => who === name && s === b.score)
+  $('.ftg-top').innerHTML = b.top.map((x) => row(x)).join('') + (listed ? '' : row([name, b.score], b.n - b.below))
+  const better = l.better!.replace('{p}', String(Math.round((100 * b.below) / b.n)))
+  $('.ftg-norm').ariaLabel += `. ${better}`
+  live.textContent = better
+  $('.ftg-top').focus()
 }
 
 const end = () => {
@@ -214,10 +218,15 @@ boardEl.onsubmit = async (e) => {
   const name = (boardEl.elements.namedItem('nick') as HTMLInputElement).value.trim()
   if (!api || !name) return
   boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = true))
+  const game = g
   const b = await askBoard(api, boardRequest(deckIdx, level, g.mode, waves, edition, name, sent))
-  if (!b) return boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = false))
+  if (g !== game) return
+  if (!b) {
+    live.textContent = l.notSaved!
+    return boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = false))
+  }
   sent = true
   showResult(root, deck, g, text, rounds)
-  showBoard(b)
+  showBoard(b, name)
 }
 document.addEventListener('visibilitychange', () => document.hidden && setPause(true))

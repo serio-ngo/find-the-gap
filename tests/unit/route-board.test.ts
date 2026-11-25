@@ -21,12 +21,20 @@ describe('leaderboard', () => {
     const res = await send('/api/game/board', game(true, 2500), env)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ top: [['Ada', 175]], n: 1, below: 0, score: 175 })
-    expect(board).toEqual([{ version: ed, level: 1, name: 'Ada', score: 175 }])
+    expect(board).toEqual([{ version: ed, level: 1, mode: 0, name: 'Ada', score: 175 }])
     expect(results).toHaveLength(1)
     await send('/api/game/board', game(false, 2500, ' Bo ', 1), env)
     expect(results).toHaveLength(1)
     const third = await (await send('/api/game/board', game(true, 9000, 'Cy', 1), env)).json()
     expect(third).toEqual({ top: [['Ada', 175], ['Cy', 110], ['Bo', 0]], n: 3, below: 1, score: 110 })
+  })
+
+  it('stops at the daily result cap before storing anything', async () => {
+    const { env, board, results, use } = fakeEnv()
+    use.result = 5000
+    expect((await send('/api/game/board', game(true, 2500), env)).status).toBe(204)
+    expect(board).toEqual([])
+    expect(results).toEqual([])
   })
 
   it('rejects a lying hit, a bad name and another edition without storing', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { pool, wave } from '../../src/game/engine.ts'
+import { pool, rng, wave } from '../../src/game/engine.ts'
 import type { Wave } from '../../src/game/engine.ts'
-import { MANY, level as levelOf, observations, signs } from '../../src/game/levels/observations.ts'
+import { FULL, MANY, level as levelOf, observations, signs } from '../../src/game/levels/observations.ts'
 import type { Row } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 
@@ -37,7 +37,20 @@ const reader = (key: (r: Row) => string) => {
   }, 0) / ws.length
   return { certain: hits(certain), decided: all.filter((w) => w.ids!.every((id) => pure(byId.get(id)!))).length, nmi: nmi(scored.map(key), scored.map((r) => String(r.gap))) }
 }
-const withMany = (t: number) => (r: Row) => JSON.stringify({ ...signs(r), many: +((r.context?.tests ?? 0) > t) })
+const odd = (key: (r: Row) => string) => {
+  const ws = certain.map((w) => ({ s: w.ids!.map((id) => key(byId.get(id)!)), g: w.answers[0]! }))
+  const score = (w: { s: string[] }, g: number) => {
+    const once = w.s.filter((x) => w.s.filter((y) => y === x).length === 1)
+    return once.length === 0 ? 1 / w.s.length : once.includes(w.s[g]!) ? 1 / once.length : 0
+  }
+  const seen = ws.reduce((t, w) => t + score(w, w.g), 0)
+  const r = rng(7)
+  const above = Array.from({ length: 2000 }, () => ws.reduce((t, w) => t + score(w, Math.floor(r() * w.s.length)), 0)).filter((x) => x >= seen).length
+  return (above + 1) / 2001
+}
+const encode = (full: number, many: number) => (r: Row) => ({ ...signs(r)!, full: +((r.context?.criteria ?? 0) >= full), many: +((r.context?.tests ?? 0) > many) })
+const tuple = (e: (r: Row) => object) => (r: Row) => JSON.stringify(e(r))
+const channels = (e: (r: Row) => Record<string, number>) => [tuple(e), ...Object.keys(levelOf).map((k) => (r: Row) => String(e(r)[k]))]
 const admissible = (x: ReturnType<typeof reader>) => x.certain <= CEILING && x.decided === 0
 
 describe('drawn signs correlate with the gap but never make an answer obvious', () => {
@@ -48,12 +61,17 @@ describe('drawn signs correlate with the gap but never make an answer obvious', 
     expect(x.decided).toBe(0)
   })
 
-  it('the tests-run threshold is the most correlating one that stays admissible', () => {
-    const chosen = reader(withMany(MANY))
-    const options = [...new Set(scored.map((r) => r.context!.tests!))].sort((a, b) => a - b).map((t) => ({ t, ...reader(withMany(t)) }))
-    console.table(options.map((o) => ({ t: o.t, certain: o.certain.toFixed(3), decided: o.decided, nmi: o.nmi.toFixed(3) })))
-    expect(admissible(chosen)).toBe(true)
-    for (const o of options.filter(admissible)) expect(o.nmi, `threshold ${o.t}`).toBeLessThanOrEqual(chosen.nmi)
-    expect(chosen.nmi).toBeGreaterThan(reader((r) => JSON.stringify({ ...signs(r), many: 0, criteria: 0 })).nmi)
-  })
+  it('no single sign or set of signs makes the gap the odd one out on the certain waves', () => {
+    const ps = channels((r) => signs(r)!).map(odd)
+    console.table(ps.map((p) => p.toFixed(3)))
+    for (const p of ps) expect(p).toBeGreaterThanOrEqual(0.05)
+  }, 120_000)
+
+  it('the halo thresholds are the most correlating pair that passes both readers', () => {
+    const chosen = reader(tuple(encode(FULL, MANY)))
+    const pairs = [...new Set(scored.map((r) => r.context!.criteria!))].flatMap((f) => [...new Set(scored.map((r) => r.context!.tests!)), Infinity].map((t) => ({ f, t, ...reader(tuple(encode(f, t))) })))
+    const better = pairs.filter((o) => o.nmi > chosen.nmi + 1e-9 && admissible(o))
+    for (const o of better) expect(channels(encode(o.f, o.t)).some((k) => odd(k) < 0.05), `criteria ${o.f}, tests ${o.t}`).toBe(true)
+    expect(chosen.nmi).toBeGreaterThan(reader((r) => JSON.stringify({ ...signs(r), many: 0, full: 0 })).nmi)
+  }, 300_000)
 })
