@@ -13,7 +13,6 @@ const inside = (ps: Part['points'], x: number, y: number) => ps.reduce((odd, [ax
   return (ay > y) !== (by > y) && x < ax + ((y - ay) * (bx - ax)) / (by - ay) ? !odd : odd
 }, false)
 
-// What the eye gets: an N x N picture of the drawn colours, shading included, nothing from the record.
 const picture = (s: Shape) => {
   const px: string[] = Array(N * N).fill('')
   const cell = (v: number) => Math.min(N - 1, Math.max(0, Math.floor(((v + 1) / 2) * N)))
@@ -40,7 +39,6 @@ const lopsided = (px: string[]) => {
   return off / seen
 }
 const argmax = (xs: number[]) => xs.indexOf(Math.max(...xs))
-// Look for an empty socket; with none on the board, pick the most lopsided rock.
 export const look = (shapes: Shape[]) => {
   const pics = shapes.map(picture)
   const h = pics.map(holes)
@@ -83,7 +81,6 @@ describe('the board carries the evidence', () => {
     expect(sockets('pair', ['t1', 't1', 't1', 't4'])).toBe(2)
   })
 
-  // The proof: an observer that sees only the picture finds the gap in every scored wave; the stored AI run reads the text.
   it('a picture-only observer finds every gap the AI finds from the data, and more', () => {
     const d = decks.observations!
     const ai = JSON.parse(readFileSync(new URL('../../src/game/eval/ai-run.json', import.meta.url), 'utf8')).standard as Record<string, (number | null)[]>

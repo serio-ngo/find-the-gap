@@ -6,7 +6,6 @@ export type Wave = Spec & { symbols: string[]; answers: number[]; ids?: string[]
 export type Policy = { high: number; low: number; window: number; confirm: number }
 export type ChoiceRecord = { id?: string; clue: string; rule: string; values: string[]; url?: string; signs?: Signs | null }
 export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'ids'> }
-// tail: the last waves every mode plays from the fixed sequence
 export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[]; tail?: number }
 export type Deck = {
   id: string; steps: number; policy: Policy; rules: Rule[]
@@ -30,7 +29,6 @@ export const MODEL = 'd1.1'
 export const URL_AI = 'https://api.liquid.ai/decisions/v1/systemone'
 export const HISTORY = 3
 
-// longest reaction time or aim dwell a research row stores, in ms
 export const MAX_MS = 600_000
 
 export const round05 = (x: number) => Math.round(x * 20) / 20
@@ -95,9 +93,7 @@ export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: nu
   const hit = wave(d, spec).answers.includes(pick)
   const anchor = d.levels.find((l) => l.id === g.level)!.anchors.includes(g.decisions.length)
   const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
-  // adaptive play moves its parameters only after a certain wave, so a research wave's truth never shows in the next wave
   if (g.mode === 'standard' || !anchor) return next
-  // shortcut: the live AI forecast still sees research picks, as a fuzzy aggregate; filter its history if that proves readable
   const { rule, step, streak } = advance(d, g, forecast(d, next, live), hit)
   return { ...next, rule, step, streak }
 }
@@ -107,7 +103,6 @@ export const asks = (d: Deck, g: Game, i: number) => !fixed(d, g, i) && d.levels
 export const score = (g: Game) =>
   g.decisions.reduce((t, x) => (x.anchor && x.hit ? t + 100 + Math.max(0, Math.round(100 - 10 * x.secs)) : t), 0)
 
-// Wave i is the same for everyone: all of standard mode and the fixed tail of adaptive mode. The stored AI run covers exactly these.
 export const fixed = (d: Deck, g: Game, i: number) => g.mode === 'standard' || i >= fixedFrom(d, g.level)
 
 export const aiPick = (run: AiRun, d: Deck, g: Game, i: number): number | null | undefined =>
@@ -115,7 +110,6 @@ export const aiPick = (run: AiRun, d: Deck, g: Game, i: number): number | null |
 
 export type Tally = { you: number; ai: number; aiN: number; chance: number; n: number }
 
-// Scored waves only. You: hits of n. AI: hits of the aiN waves where it gave a stable pick. Chance: expected hits by guessing.
 export const report = (d: Deck, g: Game) => {
   const rows = g.decisions.filter((x) => x.anchor).map((x) => ({ x, w: wave(d, x.spec) }))
   const tally = (rs: typeof rows): Tally => {

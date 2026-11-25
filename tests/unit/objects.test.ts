@@ -20,7 +20,6 @@ it('draws every wave the same way each time, never from the answer, and the same
       expect(presentObjects(deck, w).map((o) => o.sourceIndex).sort()).toEqual(objects.map((_, i) => i))
       expect(presentObjects(deck, w)).toEqual(presentObjects(deck, w))
       for (const o of objects) {
-        // the outline and evidence of a run are the same in every wave; only the step's context strength may differ
         const look = JSON.stringify([o.shape.outline, o.shape.marks, o.shape.facts])
         expect(seen.get(`${deck.id}:${o.id}`) ?? look).toBe(look)
         seen.set(`${deck.id}:${o.id}`, look)

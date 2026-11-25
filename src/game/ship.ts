@@ -2,10 +2,8 @@ import type { Pt } from './gen.ts'
 import { LOCK, PS, pos, rad } from './field.ts'
 import type { State } from './field.ts'
 
-// The beam leaves the ship's nose for the locked rock.
 export const nose = (s: State): Pt => [s.sx + Math.sin(s.angle) * 20 * PS, s.sy - Math.cos(s.angle) * 20 * PS]
 
-// Lock-on: four brackets close from wide to tight in LOCK frames and turn a quarter; calm mode shows them closed and still.
 export const reticle = (s: State, i: number) => {
   const { ctx, col } = s
   const q = pos(s, s.ts[i]!)
@@ -63,7 +61,6 @@ export const ship = (s: State) => {
   ctx.lineTo(0, 12 + flame * 0.6)
   ctx.fill()
   ctx.globalAlpha = 1
-  // wings, hull, cockpit
   ctx.fillStyle = col.ink2
   ctx.beginPath()
   ctx.moveTo(-6, 0)

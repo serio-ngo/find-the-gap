@@ -8,7 +8,6 @@ import { decks } from '../src/game/levels/index.ts'
 import { ATYPICAL, gapRow, pattern, rowOf, typicality } from '../src/game/levels/observations.ts'
 import type { Row } from '../src/game/levels/observations.ts'
 
-// Parameters a run gives from its own values: how many items, how many break the rule, and its pattern.
 const params = (r: Row) => {
   const breaks = r.rule === 'odd_revision' ? +(r.values[0] !== r.values[1])
     : r.rule === 'missing_link' ? r.values.filter((v) => v === 'missing').length
@@ -16,7 +15,6 @@ const params = (r: Row) => {
   return { arity: r.values.length, breaks, pattern: pattern(r) }
 }
 
-// Input: the host's `wrangler d1 execute <db> --json --command "SELECT version, level, mode, waves FROM game_results"` on stdin.
 
 type Stat = { shown: number; human: number; ai: number; aiShown: number }
 const add = (m: Map<string, Stat>, k: string, human: boolean, ai: boolean | null) => {
@@ -42,7 +40,6 @@ const round3 = (x: number) => Math.round(x * 1000) / 1000
 const ratio = (a: number, b: number) => (b ? round3(a / b) : null)
 
 type Tally = Record<string, Record<string, { picks: number; expected: number }>>
-// Every rock of a research wave expects 1/rocks of the picks; the picked rock takes one.
 const tally = (t: Tally, values: object, rocks: number, picked: boolean) => {
   for (const [f, v] of Object.entries(values)) {
     const s = ((t[f] ??= {})[String(v ?? 'null')] ??= { picks: 0, expected: 0 })
@@ -99,7 +96,6 @@ export const summarize = async (rows: { version: string; level: number; mode: nu
           res.aim.expected += (dwell.reduce((t, x) => t + x, 0) * w.answers.length) / objects.length
         }
       }
-      // other players' choices only where everyone saw the same wave for the first time
       if (row.mode === 0 && first === 1) {
         const k = `${row.level}:${rule}:${step}:${seed}`
         const c = peers.get(k) ?? w.symbols.map(() => 0)

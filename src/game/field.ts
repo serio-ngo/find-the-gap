@@ -2,10 +2,8 @@ import { rng } from './engine.ts'
 import { colors, paintObject } from './gen.ts'
 import type { Pt, Shape } from './gen.ts'
 
-// cx, cy: the centre of the rock's own cell as a share of the play area, so a resize keeps every rock in its cell.
 export type Target = { cx: number; cy: number; phase: number; key: string; shape: Shape }
 export type Shot = { to: number; outcome: boolean | null; phase: 0 | 1 | 2; t: number }
-// A shard is a rock fragment (pts, around its own centre) or a speck of dust (no pts).
 export type Shard = { x: number; y: number; vx: number; vy: number; life: number; c: string; pts?: Pt[]; a?: number; va?: number }
 export type Colors = { field: string; paper: string; paper2: string; paper3: string; ink2: string; ink3: string; brick: string }
 
@@ -23,7 +21,6 @@ export type State = {
   done: (() => void) | null
   shards: Shard[]
   focused: number
-  // aim: the rock the ship locks onto (hover, press or focus); aimT: frames since the lock began
   aim: number
   aimT: number
   acc: number
@@ -32,7 +29,6 @@ export type State = {
   sy: number
   tx: number
   ty: number
-  // ship heading in radians, 0 = nose up
   angle: number
   off: number[]
   sprites: Map<string, HTMLCanvasElement>
@@ -55,9 +51,7 @@ export const stars = LAYERS.map((L, i) => {
 })
 
 export const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x))
-// half a cell: the rock and all its marks fit inside, so neighbours never overlap
 export const rad = (s: State) => Math.max(14, Math.min(s.w / s.cols, (s.h - BAND - TOP) / s.rows) / 2)
-// Destruction looks the same for every pick; only a certain wave holds longer, for its verdict.
 export const effect = (s: State) => (s.calm ? 8 : 0) + (s.shot!.outcome === null ? (s.calm ? 0 : 26) : 54)
 export const LOCK = 12
 

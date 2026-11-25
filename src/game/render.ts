@@ -4,7 +4,6 @@ import type { State } from './field.ts'
 import { update } from './motion.ts'
 import { draw } from './paint.ts'
 
-// onAim reports every change of the locked rock (-1: none), so the page can measure aim dwell and switches.
 export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean; onAim?: (i: number) => void }) => {
   const s: State = {
     ctx: canvas.getContext('2d')!, calm: opts.calm, w: 1, h: 1, dpr: 1, cols: 1, rows: 1, ts: [], answers: [], shot: null,
@@ -82,7 +81,6 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean; on
   }
 
   return {
-    // Every rock and its marks are in place in the first frame; the display order (already neutral) fills the cells row by row.
     show(objects: TargetObject[], names: string[]) {
       finish(s)
       if (canvas.clientWidth !== s.w || canvas.clientHeight !== s.h) fit()
@@ -91,7 +89,6 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean; on
       s.focused = -1
       s.aim = -1
       const count = objects.length
-      // the grid with the largest cells wins; on a tie, fewer columns
       const cell = (c: number) => Math.min(s.w / c, (s.h - BAND - TOP) / Math.ceil(count / c))
       s.cols = Array.from({ length: count }, (_, i) => i + 1).reduce((best, c) => (cell(c) > cell(best) ? c : best))
       s.rows = Math.ceil(count / s.cols)
@@ -104,7 +101,6 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean; on
       canvas.setAttribute('aria-label', names.join(', '))
       draw(s)
     },
-    // The ship follows the pointer: along x anywhere, along y inside the bottom band. A rock under the pointer gets the lock.
     aim(x: number, y: number) {
       s.tx = clamp(x, EDGE, s.w - EDGE)
       s.ty = clamp(s.h - BAND + 18 + ((y / s.h) * (BAND - 40)), s.h - BAND + 18, s.h - 22)

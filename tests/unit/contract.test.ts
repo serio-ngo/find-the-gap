@@ -16,7 +16,6 @@ const env: GameEnv = {
   LIMIT: { limit: async () => ({ success: true }) },
   KEY: 'k',
 }
-// a valid Liquid answer for however many rocks the posted state has
 vi.stubGlobal('fetch', async (_u: string, init: RequestInit) => {
   const ks = JSON.parse(init.body as string).state.rocks.map((_: unknown, i: number) => `r${i}`)
   const probabilities = Object.fromEntries(ks.map((k: string) => [k, 1 / ks.length]))
@@ -30,7 +29,6 @@ vi.stubGlobal('fetch', async (_u: string, init: RequestInit) => {
 const send = (path: string, body: unknown) =>
   route(new Request(ORIGIN + path, { method: 'POST', body: JSON.stringify(body), headers: { origin: ORIGIN } }), env, { waitUntil() {} })
 
-// plays one whole game the way Game.astro does, posting every body it would build
 const play = async (name: 'observations' | 'fixture', mode: Mode) => {
   const d = decks[name]!
   const v = Object.values(decks).indexOf(d)

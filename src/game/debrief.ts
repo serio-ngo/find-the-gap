@@ -14,10 +14,8 @@ export type Rounds = ReturnType<typeof presentObjects>[]
 const link = (url: string, label: string) => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`
 let download = ''
 
-// A clue in the page language: known words (reported, passed, missing…) have labels; criteria, tests and commits stay as they are.
 export const say = (clue: string, l: Record<string, string | undefined>) => clue.split(' ').map((t) => l[t] ?? t).join(' ')
 
-// What a rock shows, in words: the same parts a sighted player sees, never the record's raw values.
 export const describe = (f: Facts, l: Record<string, string | undefined>) => {
   const n = (key: string, v: number) => l[key]!.replace('{n}', String(v))
   return [

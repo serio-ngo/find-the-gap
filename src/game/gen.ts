@@ -7,12 +7,9 @@ import type { Family, Part, Pt } from './geom.ts'
 export { colors, hash } from './geom.ts'
 export type { Family, Part, Pt, Signs } from './geom.ts'
 
-// Unit space: 1 is half of the rock's cell. The rock reaches about 0.68, its crystals about 0.95.
-// under: the halo behind the rock; over: craters and the alien on it; marks: the evidence; facts: what is drawn, for accessible names.
 export type Facts = { crystals: number; sockets: number; symmetric: boolean; segments: number; lit: number; craters: number; eyes: number; bright: boolean }
 export type Shape = { family: Family; outline: Pt[]; under: Part[]; body: Part[]; over: Part[]; marks: Part[]; facts: Facts }
 
-// slot i of n sits at a fixed clock position, clockwise from 12 o'clock, in every rock
 const slot = (i: number, n: number) => -Math.PI / 2 + (i * TAU) / n
 const digits = (v: string) => [...(v.length > 7 ? hash(v).toString(16) : v).padEnd(7, '0').slice(0, 7)].map((c) => {
   const d = parseInt(c, 16)
@@ -22,7 +19,6 @@ const digits = (v: string) => [...(v.length > 7 ? hash(v).toString(16) : v).padE
 type Face = { points: Pt[]; edge: [Pt, Pt]; ring: number; noise: number }
 type Side = { out: Pt[]; faces: Face[] }
 
-// One half of a rock (x >= 0, 12 o'clock to 6 o'clock), all from one data seed; equal seeds give mirror-equal halves.
 function side(seed: string, ends: [number, number], squash: number): Side {
   const r = rng(hash(seed))
   const n = 7 + Math.floor(r() * 4)
@@ -48,7 +44,6 @@ const flip = (s: Side): Side => ({
   faces: s.faces.map((f) => ({ ...f, points: f.points.map(mirror), edge: [mirror(f.edge[0]), mirror(f.edge[1])] })),
 })
 
-// A lit, faceted rock from two halves: shading follows the geometry, so equal halves give a mirror-symmetric rock.
 function rock(family: Family, shared: string, right: string, left: string) {
   const s = rng(hash(shared))
   const ends: [number, number] = [0.5 + 0.12 * s(), 0.5 + 0.12 * s()]
@@ -78,7 +73,6 @@ function rock(family: Family, shared: string, right: string, left: string) {
   return { outline: [...a!.out, ...b!.out.slice(1, -1).reverse()], body }
 }
 
-// The rim point straight out from the centre at angle a.
 const rimAt = (out: Pt[], a: number): Pt => {
   const d = at(a, 1)
   let best = 0.5
@@ -98,7 +92,6 @@ const tints: Record<string, [string, string, string]> = {
   violet: ['violet', 'obsidian3', 'violet'], lime: ['lime', 'olivine3', 'lime'], rose: ['rose', 'iron3', 'rose'],
 }
 
-// A crystal rooted just inside the rim; a failed result is copper, bent and cracked.
 function crystal(root: Pt, dir: Pt, length: number, w: number, tint: string, marks: Part[], hand = 1) {
   const perp: Pt = [-dir[1] * hand, dir[0] * hand]
   const reach = len(add(root, dir, length))
@@ -112,7 +105,6 @@ function crystal(root: Pt, dir: Pt, length: number, w: number, tint: string, mar
   if (failed) marks.push(wire([add(shaft, perp, w), add(add(root, dir, l * 0.55), perp, -w * 0.6)], 'void', 0.014))
 }
 
-// An empty socket where a crystal should stand: a pale rim no rock tone uses, a dark pit and a broken stump.
 function socket(rim: Pt, dir: Pt, marks: Part[]) {
   const c = add(rim, dir, -0.07)
   const angle = Math.atan2(dir[1], dir[0]) + Math.PI / 2
@@ -127,7 +119,6 @@ const radial = (out: Pt[], i: number, n: number) => {
   return { rim, dir, root: add(rim, dir, -0.06) }
 }
 
-// odd_revision: each side carries a druse grown from one commit's digits; equal commits give mirror-equal druses.
 function druse(v: string, right: boolean, vent: number, out: Pt[], marks: Part[]) {
   const d = digits(v)
   const n = 2 + (d[0]! % 3)
@@ -139,13 +130,10 @@ function druse(v: string, right: boolean, vent: number, out: Pt[], marks: Part[]
   }
 }
 
-// Every part comes from the record: evidence from its values, context from the pull request when the gate ran.
-// strength (0 to 1) is the step's context strength: it changes how strongly context shows, never what is drawn.
 export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, family: Family, strength = 1): Shape {
   const v = record.values
   const mirrored = record.rule === 'odd_revision'
   const seed = `${record.rule}:${v.join(',')}`
-  // odd_revision grows each half from one commit, so equal commits give a mirror-symmetric rock
   const { outline, body } = rock(family, record.rule, mirrored ? `c:${v[1]}` : seed, mirrored ? `c:${v[0]}` : seed)
   const marks: Part[] = []
   if (mirrored) {
@@ -153,7 +141,6 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, f
     druse(v[0] ?? '', false, vent, outline, marks)
     druse(v[1] ?? '', true, vent, outline, marks)
   } else if (record.rule === 'missing_link') {
-    // each result is a druse on its own slot; a missing result leaves the slot an empty socket
     const r = rng(hash(`${seed}:druse`))
     for (const [i, s] of v.entries()) {
       const { rim, dir, root } = radial(outline, i, v.length)
@@ -165,7 +152,6 @@ export function shape(record: Pick<ChoiceRecord, 'rule' | 'values' | 'signs'>, f
       for (const k of [-1, 1, 0]) crystal(add(root, [-dir[1], dir[0]], k * 0.035), at(slot(i, v.length) + k * (0.3 + 0.1 * r()), 1), (k ? 0.17 : 0.27) + 0.05 * r(), k ? 0.032 : 0.045, s, marks)
     }
   } else if (record.rule === 'pair') {
-    // a criterion's crystal grows on the slot of the first criterion naming the same test; its own slot stays an empty socket
     const home = v.map((t) => v.indexOf(t))
     home.forEach((h, i) => {
       if (h !== i) socket(radial(outline, i, v.length).rim, radial(outline, i, v.length).dir, marks)

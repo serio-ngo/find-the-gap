@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { open, play, strings, type Lang } from './helpers.ts'
 
-// Mocks /api/game/*; returns the recorded request bodies.
 async function mock(page: Page, step: (r: import('@playwright/test').Route) => unknown = (r) => r.fulfill({ json: { fallback: true } })) {
   const results: { waves: number[][] }[] = []
   const steps: unknown[] = []
@@ -28,7 +27,7 @@ test('nothing is sent until the toggle is on, then once per game', async ({ page
   await page.waitForLoadState('networkidle')
   expect(results).toHaveLength(0)
 
-  await study(page).click() // the game just finished is sent
+  await study(page).click()
   await expect(study(page)).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => results.length).toBe(1)
   expect(results[0].waves.length).toBeGreaterThan(0)
@@ -49,7 +48,7 @@ test('adaptive mode uses /step answers when they arrive', async ({ page }) => {
   const live = { hit: 0.9, miss: 0.1 }
   const { results, steps } = await mock(page, (r) => r.fulfill({ json: { ai: 0, ...live, cached: false } }))
   await open(page, 'en', 1, '?mode=adaptive')
-  await play(page, { mode: 'adaptive', live }) // play() fails if the page shows a wave the live answers would not produce
+  await play(page, { mode: 'adaptive', live })
   await expect.poll(() => results.length).toBe(1)
   expect((steps as { past: unknown[] }[]).map((s) => s.past.length)).toEqual([4, 9, 14, 19])
   expect(results[0].waves.some((w) => w[8] === 1)).toBe(true)
