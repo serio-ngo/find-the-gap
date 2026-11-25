@@ -18,7 +18,7 @@ if (archive) {
   out.push('```mermaid', 'flowchart LR',
     `  A["observations.jsonl: ${raw.length}"] -->|private: ${raw.length - pub}| X1[out]`,
     `  A --> B["public: ${pub}"] -->|holdout: ${pub - deck}| X2[out]`,
-    `  B --> C["public deck: ${deck}"] -->|missing_link, pair, lock_only: ${deck - game}| X3[out]`,
+    `  B --> C["public deck: ${deck}"] -->|${[...new Set(raw.map((o) => o.relation as string))].filter((r) => !(r in gapOf)).join(', ')}: ${deck - game}| X3[out]`,
     `  C --> D["game relations: ${game}"] -->|curation.json: ${Object.keys(curation).length}| X4[out]`,
     `  D --> E["rows.ts: ${rows.length}"]`,
     '```', '')
