@@ -15,3 +15,6 @@ jobs:
   gate:
     uses: serio-ngo/serio-focus/.github/workflows/lifecycle-gate.yml@main
     secrets: inherit
+    with:
+      unit: npx vitest run --reporter=junit --outputFile=junit/unit.xml
+      e2e: ""
