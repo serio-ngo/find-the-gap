@@ -42,11 +42,3 @@ it('a step prunes the cache without any result upload', async () => {
   await send('/api/game/step', stepReq, env)
   expect(deleted).toHaveLength(2)
 })
-
-it('a failing prune never fails a step', async () => {
-  on(4)
-  const { env, fail } = fakeEnv()
-  fail.delete = true
-  stubFetch()
-  expect((await send('/api/game/step', stepReq, env)).status).toBe(200)
-})

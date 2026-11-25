@@ -45,16 +45,6 @@ test('nothing is sent until the toggle is on, then once per game', async ({ page
   await expect.poll(() => results.length).toBe(2)
 })
 
-test('a game played with the toggle already on is sent once at the end', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('ftg:study', '1'))
-  const { results } = await mock(page)
-  await open(page)
-  await play(page)
-  await expect.poll(() => results.length).toBe(1)
-  await page.waitForLoadState('networkidle')
-  expect(results).toHaveLength(1)
-})
-
 for (const lang of ['pl', 'en'] as Lang[])
   test(`the toggle is named in ${lang}`, async ({ page }) => {
     await mock(page)

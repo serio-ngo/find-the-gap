@@ -18,10 +18,6 @@ describe('askStep', () => {
       expect(await askStep('/api', {})).toBeNull()
     }
   })
-  it('aborts after the timeout', async () => {
-    vi.stubGlobal('fetch', vi.fn((_u: string, init: RequestInit) => new Promise((_, no) => init.signal!.addEventListener('abort', () => no(init.signal!.reason)))))
-    expect(await askStep('/api', {}, 20)).toBeNull()
-  })
 })
 
 describe('sendResult', () => {

@@ -56,7 +56,7 @@ export const showReplay = (root: HTMLElement, deck: Deck, g: Game, rounds: Round
       `<li><details class="ftg-object-evidence"><summary>${choice(p)} ${w.answers.includes(sourceIndex) ? mark(true) : ''}</summary></details></li>`).join('')
     const exhibit = (p: number) => {
       const { shape, url } = objects[p]!
-      return `<div class="ftg-object-report">${svg(shape)}${url ? `<div>${link(url, url.replace('https://github.com/', ''))}</div>` : ''}</div>`
+      return `<div class="ftg-object-report">${svg(shape)}${url ? `<div>${link(url, new URL(url).pathname.slice(1))}</div>` : ''}</div>`
     }
     const tags = [i >= tailFrom ? tag(l.unseen, '✦') : '', d.anchor && deck.typical && !deck.typical(w) ? tag(v.atypical, '◇') : ''].join('')
     const seconds = new Intl.NumberFormat(root.dataset.lang, { style: 'unit', unit: 'second', maximumFractionDigits: 1 }).format(d.secs)

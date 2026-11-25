@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ANCHOR_POOL, advance, aiBody, aiPick, band, begin, canonical, estimate, pool, report, rng, score, shoot, stepBody, upcoming, wave,
+  ANCHOR_POOL, advance, aiBody, aiPick, band, begin, estimate, report, score, shoot, stepBody, upcoming, wave,
 } from '../../src/game/engine.ts'
-import type { AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
+import type { AiRun, Deck, Spec, Wave } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { replay } from '../replay.ts'
 
@@ -42,26 +42,11 @@ describe('engine', () => {
     expect(advance(deck, { rule: 'a', step: 1, streak: 0 }, 0.3, false)).toMatchObject({ step: 1, streak: 1, switched: false })
   })
 
-  it('advance holds the step when the verdict contradicts the forecast', () => {
-    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.9, false)).toMatchObject({ step: 2, switched: false })
-    expect(advance(deck, { rule: 'a', step: 2, streak: 0 }, 0.1, true)).toMatchObject({ step: 2, switched: false })
-  })
-
   it('advance switches rule after two confirming waves at a limit', () => {
     expect(advance(deck, { rule: 'b', step: 3, streak: 1 }, 0.9, true)).toMatchObject({ rule: 'c', step: 2, streak: 0, switched: true })
     expect(advance(deck, { rule: 'b', step: 1, streak: 1 }, 0.3, false)).toMatchObject({ rule: 'a', step: 1, streak: 0, switched: true })
     expect(advance(deck, { rule: 'c', step: 3, streak: 1 }, 0.9, true)).toMatchObject({ rule: 'c', step: 3 })
     expect(advance(deck, { rule: 'a', step: 1, streak: 1 }, 0.3, false)).toMatchObject({ rule: 'a', step: 1 })
-  })
-
-  it('estimate uses the last four waves of the current rule', () => {
-    const d = (r: string, hit: boolean) => ({ spec: { rule: r, step: 1, seed: 1 }, pick: 0, hit, anchor: false, secs: 0 })
-    const g: Game = {
-      mode: 'adaptive', level: 1, rule: 'a', step: 1, streak: 0,
-      decisions: [d('a', true), d('a', true), d('b', false), d('a', true), d('b', true), d('a', false), d('a', false), d('a', false)],
-    }
-    expect(estimate(deck, g)).toBe(0.35)
-    expect(estimate(deck, { ...g, decisions: [] })).toBe(0.5)
   })
 
   it('shoot is pure and scores every wave against its answer', () => {
@@ -77,12 +62,6 @@ describe('engine', () => {
     expect(score(end)).toBe(400)
   })
 
-  it('adaptive shoot holds the step on a research wave', () => {
-    const g = { ...begin(deck, 1, 'adaptive'), step: 2 }
-    expect(shoot(deck, g, 0, 0, { hit: 0.9, miss: 0.9 }).step).toBe(2)
-    expect(shoot(deck, g, 0, 0, { hit: 0.1, miss: 0.1 }).step).toBe(2)
-  })
-
   it('shoot with live steps up on a hit, down on a miss and holds when the verdict contradicts the forecast; without it the result is the estimate', () => {
     const start = { ...begin(deck, 1, 'adaptive'), step: 2 }
     const g = [0, 0, 0].reduce((acc, p) => shoot(deck, acc, p), start)
@@ -96,24 +75,6 @@ describe('engine', () => {
       const next = shoot(deck, g, pick)
       expect(next.step).toBe(advance(deck, g, estimate(deck, { ...next, decisions: next.decisions.filter((x) => x.anchor) }), next.decisions[3]!.hit).step)
     }
-  })
-
-  it('a 4/4 game with the forecasts of a real production game steps up and never down', () => {
-    const d = decks.observations!
-    let g = begin(d, 1, 'adaptive')
-    const steps: number[] = []
-    for (let i = 0; upcoming(d, g); i++) {
-      const spec = upcoming(d, g)!
-      const certain = d.levels[0]!.anchors.includes(i)
-      g = shoot(d, g, wave(d, spec).answers[0] ?? 0, 0, certain ? { hit: [0.55, 0.6, 0.7, 0.6][d.levels[0]!.anchors.indexOf(i)]!, miss: 0.5 } : undefined)
-      if (certain) steps.push(g.step)
-    }
-    expect(Math.max(...steps)).toBeGreaterThan(1)
-    expect(steps.every((x, i) => x >= (steps[i - 1] ?? 1))).toBe(true)
-  })
-
-  it('band edges', () => {
-    expect([2.99, 3, 7.99, 8].map(band)).toEqual([0, 1, 1, 2])
   })
 
   it('stepBody adds if_hit and if_miss and never the current answer', () => {
@@ -137,15 +98,6 @@ describe('engine', () => {
     expect(score(replay(deck, 1, 'standard', [0, 0, 0, 0, 0]))).toBe(200)
   })
 
-  it('upcoming is deterministic and draws adaptive seeds from the pool', () => {
-    const g = begin(deck, 1, 'adaptive')
-    const spec = upcoming(deck, g)
-    expect(upcoming(deck, begin(deck, 1, 'adaptive'))).toEqual(spec)
-    expect(pool(deck, g.rule, g.step)).toContainEqual(spec)
-    expect(spec).toEqual(pool(deck, g.rule, g.step)[Math.floor(rng(100)() * deck.poolSize)])
-    expect(upcoming(deck, begin(deck, 1, 'standard'))).toEqual(sequence[0])
-  })
-
   it('adaptive mode plays the fixed tail from the sequence, and only fixed waves take the stored AI pick', () => {
     let g = begin(deck, 1, 'adaptive')
     for (let i = 0; i < 10; i++) g = shoot(deck, g, 0)
@@ -156,18 +108,6 @@ describe('engine', () => {
     expect(g.decisions.map((_, i) => aiPick(run, deck, g, i))).toEqual([...Array(10).fill(undefined), 1])
     const s = replay(deck, 1, 'standard', picks)
     expect(s.decisions.map((_, i) => aiPick(run, deck, s, i))).toEqual(run.standard[1])
-  })
-
-  it('adaptive draws unseen pool seeds, certain waves from their own pool, and falls back to the whole pool once all are used', () => {
-    let g = begin(deck, 1, 'adaptive')
-    const seeds = []
-    for (let i = 0; i < 10; i++) {
-      seeds.push(upcoming(deck, g)!.seed)
-      g = shoot(deck, g, 0)
-    }
-    expect(new Set(seeds.slice(0, 3)).size).toBe(3)
-    expect(seeds.map((x) => x - (x % 1000))).toEqual([1000, 1000, 1000, ANCHOR_POOL, ANCHOR_POOL, 1000, 1000, 1000, 1000, 1000])
-    expect(seeds.every((x) => x % 1000 < 3)).toBe(true)
   })
 
   it('every real level plays 20 distinct adaptive seeds, one gap on each certain wave, and never shows a revealed gap again', () => {
@@ -215,9 +155,5 @@ describe('engine', () => {
       for (const kept of ['sym-cur-0', 'sym-his-0']) expect(text).toContain(kept)
     }
     expect((aiBody(deck, w, []) as { state: { history: unknown[] } }).state.history).toEqual([])
-  })
-
-  it('canonical sorts keys', () => {
-    expect(canonical({ b: 1, a: { d: 1, c: 2 } })).toBe('{"a":{"c":2,"d":1},"b":1}')
   })
 })

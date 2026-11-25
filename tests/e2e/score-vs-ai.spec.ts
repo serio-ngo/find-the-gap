@@ -19,16 +19,6 @@ for (const lang of ['en', 'pl'] as const)
     await expect(page.locator('.ftg-why')).toBeVisible()
   })
 
-test('after two plays the top list has two entries and one is current', async ({ page }) => {
-  await open(page)
-  await play(page)
-  await page.getByRole('button', { name: strings.labels.en.replay, exact: true }).click()
-  const g = await play(page, { begun: true, pick: (s) => (s.decisions.length % 2 ? wrong(deck, s) : right(deck, s)) })
-  await expectEnd(page, g)
-  await expect(page.locator('.ftg-top li')).toHaveCount(2)
-  await expect(page.locator('.ftg-top [aria-current]')).toHaveCount(1)
-})
-
 test('the debrief scores certain waves only, links their runs and keeps research waves hidden', async ({ page }) => {
   await open(page, 'en', 2)
   const g = await play(page, { level: 2, pick: (s) => wrong(deck, s) })

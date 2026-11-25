@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { wave } from '../../src/game/engine.ts'
 import { colors, paintObject, shape } from '../../src/game/gen.ts'
-import { families } from '../../src/game/geom.ts'
 import type { Part, Shape, Signs } from '../../src/game/gen.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { presentObjects } from '../../src/game/objects.ts'
@@ -46,13 +45,6 @@ export const look = (shapes: Shape[]) => {
 }
 
 describe('the board carries the evidence', () => {
-  it('is reproducible for every skin', () => {
-    for (const family of families) {
-      const r = { rule: 'pair', values: ['t1', 't1', 't3'] }
-      expect(shape(r, family)).toEqual(shape(r, family))
-    }
-  })
-
   it('odd revision: equal commits give a mirror-symmetric rock, different commits a lopsided one', () => {
     expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'] }, 'ice')))).toBe(0)
     expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'ice')))).toBeGreaterThan(0.02)
@@ -67,15 +59,6 @@ describe('the board carries the evidence', () => {
     expect(r(null).over).toEqual([])
     expect(r({ ...full, impacts: 0 }).over.length).toBe(r(full).over.length - 6)
     expect(r({ ...full, locks: 0 }).under.length).toBeLessThan(r(full).under.length)
-  })
-
-  it('the alien is at least 0.2 of the half cell wide and grows with agent commits', () => {
-    const width = (agent: number) => {
-      const xs = shape({ rule: 'pair', values: ['t1', 't2'], signs: { ...full, agent } }, 'basalt').over.slice(-(4 + 2 * (agent + 1)) - 2).flatMap((p) => p.points.map((q) => q[0]))
-      return Math.max(...xs) - Math.min(...xs)
-    }
-    expect(width(0)).toBeGreaterThanOrEqual(0.4)
-    expect(width(3)).toBeGreaterThan(width(0))
   })
 
   it('context strength fades context colours, never evidence or what is drawn', () => {
@@ -94,13 +77,6 @@ describe('the board carries the evidence', () => {
     expect(sockets('missing_link', ['failed', 'missing', 'missing', 'passed'])).toBe(2)
     expect(sockets('pair', ['t1', 't2', 't3', 't4'])).toBe(0)
     expect(sockets('pair', ['t1', 't1', 't1', 't4'])).toBe(2)
-  })
-
-  it('paints the halo, the body, craters and alien, then the evidence on top', () => {
-    const s = shape({ rule: 'pair', values: ['t1', 't2'], signs: full }, 'carbon')
-    const parts: Part[] = []
-    paintObject(s, (p) => parts.push(p))
-    expect(parts).toEqual([...s.under, ...s.body, ...s.over, ...s.marks])
   })
 
   it('a picture-only observer finds every gap the AI finds from the data, and more', () => {

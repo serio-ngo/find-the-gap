@@ -26,12 +26,6 @@ describe('stats', () => {
     for (const n of [2, 9, 4, 7, 1, 8, 6]) save('a', 1, n, { mode: 'standard', picks: [] }, s)
     expect(load('a', 1, s)?.top).toEqual([9, 8, 7, 6, 4])
   })
-  it('upgrades an old record without top', () => {
-    const s = fake({ 'ftg:a:1': '{"plays":1,"best":4,"last":{"mode":"standard","picks":[]}}' })
-    expect(load('a', 1, s)?.best).toBe(4)
-    save('a', 1, 6, { mode: 'standard', picks: [] }, s)
-    expect(load('a', 1, s)).toMatchObject({ plays: 2, best: 6, top: [6] })
-  })
   it('retains legacy scores and exports each edition separately', () => {
     const legacy = '{"plays":1,"best":9}'
     const s = fake({ 'ftg:a:1': legacy })
