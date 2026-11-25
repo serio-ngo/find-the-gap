@@ -34,3 +34,11 @@ it('a failed prune still stores the result and is retried by the next request', 
   await send('/api/game/result', result, env)
   expect(deleted).toHaveLength(2)
 })
+
+it('a step prunes the cache without any result upload', async () => {
+  on(3)
+  const { env, deleted } = fakeEnv()
+  stubFetch()
+  await send('/api/game/step', stepReq, env)
+  expect(deleted).toHaveLength(2)
+})

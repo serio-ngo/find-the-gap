@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chart, label, spread, table } from '../../src/game/chart.ts'
+import { label, spread } from '../../src/game/chart.ts'
 import type { Labels } from '../../src/game/chart.ts'
 import strings from '../../src/game/strings.json'
 import { wilson } from '../../src/game/stats.ts'

@@ -42,6 +42,16 @@ describe('stats', () => {
     expect(s.getItem('ftg:a:1')).toBeNull()
     expect(s.getItem('other')).toBe('x')
   })
+  it('survives a throwing storage', () => {
+    const bad = { get length(): number { throw new Error('x') }, key: () => { throw new Error('x') }, getItem: () => { throw new Error('x') }, setItem: () => { throw new Error('x') }, removeItem: () => { throw new Error('x') } } as unknown as Storage
+    expect(load('a', 1, bad)).toBeNull()
+    expect(() => save('a', 1, 1, { mode: 'standard', picks: [] }, bad)).not.toThrow()
+    expect(exportSaves(bad)).toBe('{}')
+    expect(() => clearSaves(bad)).not.toThrow()
+  })
+  it('ignores corrupt data', () => {
+    expect(load('a', 1, fake({ 'ftg:a:1': '{' }))).toBeNull()
+  })
 
   it('gives a 95% Wilson interval', () => {
     const [lo, hi] = wilson(6, 100)

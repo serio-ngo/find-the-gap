@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import curation from '../../scripts/deck/curation.json'
-import { pool, score, wave } from '../../src/game/engine.ts'
+import { pool, wave } from '../../src/game/engine.ts'
 import type { Spec } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
-import { ATYPICAL, clue, gapOf, pattern, rowOf, typicality, unseen } from '../../src/game/levels/observations.ts'
+import { ATYPICAL, clue, gapOf, rowOf, typicality, unseen } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { staleRepos, toRows } from '../../scripts/make-deck.ts'
 
-const { observations, fixture } = decks
+const { observations } = decks
 const specs = [
   ...observations.levels.flatMap((l) => l.sequence.map((s, i) => ({ s, certain: l.anchors.includes(i) }))),
   ...observations.rules.flatMap((r) => [1, 2, 3, 4, 5].flatMap((step) => [false, true].flatMap((certain) => pool(observations, r.id, step, certain).map((s) => ({ s, certain }))))),
@@ -39,6 +39,18 @@ describe('observation deck', () => {
 
   it('keeps every curated row out of the deck', () => {
     expect(rows.filter((r) => r.id in curation)).toEqual([])
+  })
+
+  it('lists public repos whose gates are missing from the cases or newer than the snapshot', () => {
+    const gate = (repo: string, run: number, at: string) => ({ repo, key: `serio-ngo/${repo}/${run}-1-gate`, at })
+    const gates = [gate('fresh', 0, '2026-01-02T10:00:00Z'), gate('old', 1, '2026-01-02T10:00:00.123Z'), gate('missing', 2, '2026-01-02T10:00:00Z'), gate('hidden', 3, '2026-01-02T10:00:00Z'), gate('broken', 4, 'not a time')]
+    const cases = new Set(['serio-ngo/fresh/0-1-gate', 'serio-ngo/old/1-1-gate', 'serio-ngo/broken/4-1-gate'])
+    const snap = (priv: boolean, taken: string) => ({ private: priv, taken })
+    const stale = staleRepos(gates, cases, {
+      fresh: snap(false, '2026-01-02T10:00:01Z'), old: snap(false, '2026-01-02T10:00:00Z'), missing: snap(false, '2026-01-03T00:00:00Z'),
+      hidden: snap(true, '2025-01-01T00:00:00Z'), broken: snap(false, '2026-01-03T00:00:00Z'),
+    })
+    expect(stale.map((x) => x.split(':')[0]).sort()).toEqual(['broken', 'missing', 'old'])
   })
 
   it('draws every choice from a public run whose values decide its gap', () => {
@@ -73,6 +85,16 @@ describe('observation deck', () => {
       expect(new Set([1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step, true)).map(gapOfWave))).toEqual(new Set(shown))
       const research = [...l.sequence.filter((_, i) => !l.anchors.includes(i)), ...[1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step))]
       expect(research.flatMap((s) => wave(observations, s).ids!.filter((id) => shown.includes(id)))).toEqual([])
+    }
+  })
+
+  it('has three levels of 21 waves, certain only at 5, 10, 15 and 20, the last from runs no scored wave uses', () => {
+    expect(observations.levels).toHaveLength(3)
+    for (const l of observations.levels) {
+      expect(l.anchors).toEqual([4, 9, 14, 19])
+      expect(l.sequence).toHaveLength(21)
+      expect(l.tail).toBe(1)
+      expect(unseen(l.sequence.at(-1)!.seed)).toBe(true)
     }
   })
 

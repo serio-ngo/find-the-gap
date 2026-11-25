@@ -53,7 +53,6 @@ describe('route checks', () => {
 })
 
 describe('step', () => {
-
   it('falls back when the daily cap is spent, without calling the model', async () => {
     const { env, use } = fakeEnv()
     use.step = 1000

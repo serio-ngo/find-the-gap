@@ -31,6 +31,12 @@ test('a research wave announces only its number', async ({ page }) => {
   await expect(live(page)).toHaveText(`${l.wave} 4`)
 })
 
+test('a live region announces a hit on a certain wave', async ({ page }) => {
+  await open(page)
+  await play(page, { limit: 5 })
+  await expect(live(page)).toHaveText(l.hit)
+})
+
 test('a live region announces a miss on a certain wave', async ({ page }) => {
   await open(page)
   await play(page, { limit: 5, pick: (g) => (g.decisions.length === 4 ? wrong(deck, g) : right(deck, g)) })

@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { wave } from '../../src/game/engine.ts'
 import { colors, paintObject, shape } from '../../src/game/gen.ts'
-import { families } from '../../src/game/geom.ts'
 import type { Part, Shape, Signs } from '../../src/game/gen.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { presentObjects } from '../../src/game/objects.ts'
@@ -46,7 +45,6 @@ export const look = (shapes: Shape[]) => {
 }
 
 describe('the board carries the evidence', () => {
-
   it('odd revision: equal commits give a mirror-symmetric rock, different commits a lopsided one', () => {
     expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'] }, 'ice')))).toBe(0)
     expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'ice')))).toBeGreaterThan(0.02)

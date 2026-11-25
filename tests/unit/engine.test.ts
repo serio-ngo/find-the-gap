@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ANCHOR_POOL, advance, aiBody, aiPick, band, begin, canonical, estimate, pool, report, rng, score, shoot, stepBody, upcoming, wave,
+  ANCHOR_POOL, advance, aiBody, aiPick, band, begin, estimate, report, score, shoot, stepBody, upcoming, wave,
 } from '../../src/game/engine.ts'
-import type { AiRun, Deck, Game, Spec, Wave } from '../../src/game/engine.ts'
+import type { AiRun, Deck, Spec, Wave } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
 import { replay } from '../replay.ts'
 
