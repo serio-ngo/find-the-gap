@@ -8,10 +8,12 @@ const base = {
   alien0: '#7d6a1c', alien1: '#f2d45c', alienDim0: '#55503f', alienDim1: '#bdb595',
 }
 const minerals = {
+  basalt: ['#1a2127', '#28323a', '#3f4c55', '#5f6e77', '#8b9a9f'],
   iron: ['#261a15', '#3f2c24', '#5f4334', '#876345', '#b38c62'],
   ice: ['#1b2c37', '#2c4757', '#4a7080', '#7aa2ad', '#bcd6da'],
   carbon: ['#15120e', '#221e18', '#363027', '#50483c', '#716756'],
   olivine: ['#192217', '#293725', '#425539', '#637a51', '#91a676'],
+  chondrite: ['#29221a', '#41362a', '#615241', '#87745e', '#b3a083'],
   obsidian: ['#15121b', '#231e2d', '#372f46', '#534764', '#7a6c8b'],
 } as const
 export type Family = keyof typeof minerals
