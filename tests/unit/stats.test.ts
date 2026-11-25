@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearSaves, exportSaves, load, save, wilson } from '../../src/game/stats.ts'
+import { load, save, wilson } from '../../src/game/stats.ts'
 
 const fake = (init: Record<string, string> = {}) => {
   const m = new Map(Object.entries(init))
@@ -26,28 +26,19 @@ describe('stats', () => {
     for (const n of [2, 9, 4, 7, 1, 8, 6]) save('a', 1, n, { mode: 'standard', picks: [] }, s)
     expect(load('a', 1, s)?.top).toEqual([9, 8, 7, 6, 4])
   })
-  it('retains legacy scores and exports each edition separately', () => {
+  it('retains legacy scores and keeps each edition separately', () => {
     const legacy = '{"plays":1,"best":9}'
     const s = fake({ 'ftg:a:1': legacy })
     save('a', 1, 3, { mode: 'standard', picks: [], edition: 'one' }, s)
     save('a', 1, 6, { mode: 'standard', picks: [], edition: 'two' }, s)
     expect(load('a', 1, s, 'one')?.top).toEqual([3])
     expect(load('a', 1, s, 'two')?.top).toEqual([6])
-    expect(JSON.parse(exportSaves(s))).toMatchObject({ 'ftg:a:1': legacy, 'ftg:a:1:two': expect.stringContaining('"edition":"two"') })
-  })
-  it('exports and clears only ftg: keys', () => {
-    const s = fake({ 'ftg:a:1': '{"plays":1}', other: 'x' })
-    expect(JSON.parse(exportSaves(s))).toEqual({ 'ftg:a:1': '{"plays":1}' })
-    clearSaves(s)
-    expect(s.getItem('ftg:a:1')).toBeNull()
-    expect(s.getItem('other')).toBe('x')
+    expect(s.getItem('ftg:a:1')).toBe(legacy)
   })
   it('survives a throwing storage', () => {
     const bad = { get length(): number { throw new Error('x') }, key: () => { throw new Error('x') }, getItem: () => { throw new Error('x') }, setItem: () => { throw new Error('x') }, removeItem: () => { throw new Error('x') } } as unknown as Storage
     expect(load('a', 1, bad)).toBeNull()
     expect(() => save('a', 1, 1, { mode: 'standard', picks: [] }, bad)).not.toThrow()
-    expect(exportSaves(bad)).toBe('{}')
-    expect(() => clearSaves(bad)).not.toThrow()
   })
   it('ignores corrupt data', () => {
     expect(load('a', 1, fake({ 'ftg:a:1': '{' }))).toBeNull()

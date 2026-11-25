@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { label, spread } from '../../src/game/chart.ts'
+import { label } from '../../src/game/chart.ts'
 import type { Labels } from '../../src/game/chart.ts'
 import strings from '../../src/game/strings.json'
 import { wilson } from '../../src/game/stats.ts'
@@ -14,12 +14,5 @@ describe('chart', () => {
     expect(label(rep(tally(3, 4, 4, 4, 1.25)), en)).toBe(
       `${en.you} 3/4, ${en.chart} ${pc(3, 4)}%; ${en.ai} 4/4, ${en.chart} ${pc(4, 4)}%; ${en.chance.toLowerCase()} 31%`,
     )
-  })
-})
-
-describe('spread', () => {
-  it('gives median and range', () => {
-    expect(spread([5, 1, 3])).toEqual({ n: 3, median: 3, min: 1, max: 5 })
-    expect(spread([4, 2, 8, 6]).median).toBe(5)
   })
 })

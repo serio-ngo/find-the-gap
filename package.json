@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
+  "keywords": ["astro-component"],
+  "exports": { "./game/*": "./src/game/*" },
   "engines": {
     "node": ">=22.22.0"
   },
@@ -14,12 +16,16 @@
     "size": "node scripts/check-size.ts",
     "previews": "node scripts/make-previews.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.game.json",
-    "deck": "node scripts/make-deck.ts"
+    "deck": "node scripts/make-deck.ts",
+    "map": "node scripts/level-map.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
     "@types/node": "^22.20.5",
     "typescript": "^6.0.3",
     "vitest": "^5.1.1"
+  },
+  "dependencies": {
+    "lucide": "^1.80.0"
   }
 }

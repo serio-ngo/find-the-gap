@@ -133,6 +133,7 @@ export const createField = (canvas: HTMLCanvasElement, opts: { calm: boolean; on
     setCalm(b: boolean) {
       s.calm = b
     },
+    at: (i: number) => pos(s, s.ts[i]!),
     rockAt(x: number, y: number): number {
       let best = -1
       let d = (rad(s) * 0.9) ** 2
