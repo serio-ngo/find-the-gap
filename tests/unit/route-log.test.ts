@@ -25,7 +25,7 @@ describe('step fallback logging', () => {
     const boom = async () => {
       throw new Error('d1 1.2.3.4')
     }
-    expect(await quiet(fakeEnv({ DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom }) }) } }).env)).toBe('step fallback: error')
+    expect(await quiet(fakeEnv({ DB: { prepare: () => ({ bind: () => ({ first: boom, run: boom, all: boom }) }) } }).env)).toBe('step fallback: error')
   })
   it('logs why Liquid failed, without its payload', async () => {
     stubFetch(async () => new Response('secret payload', { status: 500 }))

@@ -11,7 +11,7 @@ import type { GameEnv } from '../../src/game/worker/route.ts'
 const ORIGIN = 'https://example.org'
 const env: GameEnv = {
   DB: {
-    prepare: (sql: string) => ({ bind: () => ({ first: async <T,>() => (sql.includes('game_use') ? { n: 1 } : null) as T | null, run: async () => {} }) }),
+    prepare: (sql: string) => ({ bind: () => ({ first: async <T,>() => (sql.includes('game_use') ? { n: 1 } : null) as T | null, run: async () => {}, all: async <T,>() => ({ results: [] as T[] }) }) }),
   },
   LIMIT: { limit: async () => ({ success: true }) },
   KEY: 'k',

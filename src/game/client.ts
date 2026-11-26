@@ -2,8 +2,8 @@ import { decks } from './levels/index.ts'
 import { aiPick, asks, begin, forecast, upcoming, wave, shoot, score } from './engine.ts'
 import type { AiRun, Game, Mode, Wave } from './engine.ts'
 import stored from './eval/ai-run.json'
-import { askStep, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
-import type { Step } from './net.ts'
+import { askBoard, askStep, boardRequest, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
+import type { Board, Step } from './net.ts'
 import { presentObjects } from './objects.ts'
 import { createField } from './render.ts'
 import { aimTracker } from './aim.ts'
@@ -11,6 +11,7 @@ import { bindInput } from './input.ts'
 import { load, save } from './stats.ts'
 import { describe, showResult } from './debrief.ts'
 import { collection, icon, itemOf } from './items.ts'
+import { esc } from './chart.ts'
 import type { Item } from './items.ts'
 import type { Rounds, Text } from './debrief.ts'
 
@@ -34,6 +35,7 @@ const live = $('.ftg-sr')
 const modeBtn = $<HTMLButtonElement>('.ftg-mode')
 const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
+const boardEl = $<HTMLFormElement>('.ftg-board')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
 const aim = aimTracker()
 const onAim = (i: number) => aim.lock(i, root.dataset.phase === 'paused' ? pausedAt : performance.now(), root.dataset.phase === 'play')
@@ -166,6 +168,16 @@ const contribute = () => {
   sendResult(api, resultRequest(deckIdx, level, g.mode, waves, edition))
 }
 
+const showBoard = (b: Board, name: string) => {
+  const mine = b.top.findIndex(([who, s]) => who === name && s === b.score)
+  const row = ([who, s]: [string, number], me: boolean, k?: number) => `<li${k ? ` value="${k}"` : ''}${me ? ' class="ftg-mine"' : ''}><span>${esc(who)}</span> <output>${s}</output></li>`
+  $('.ftg-top').innerHTML = b.top.map((x, i) => row(x, i === mine)).join('') + (mine < 0 ? row([name, b.score], true, b.n - b.below) : '')
+  const better = l.better!.replace('{p}', String(Math.round((100 * b.below) / b.n)))
+  $('.ftg-norm').ariaLabel += `. ${better}`
+  live.textContent = better
+  $('.ftg-top').focus()
+}
+
 const end = () => {
   phase('end')
   field.pause()
@@ -173,7 +185,10 @@ const end = () => {
   rocksEl.replaceChildren()
   $('.ftg-end').hidden = false
   save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions.map(({ hit, ...d }) => (d.anchor ? { ...d, hit } : d)) })
-  showResult(root, deck, g, text)
+  showResult(root, deck, g, text, rounds)
+  boardEl.hidden = !api
+  boardEl.querySelectorAll('input, button').forEach((e) => ((e as HTMLInputElement).disabled = false))
+  $('.ftg-top').replaceChildren()
   contribute()
   $('.ftg-end').focus()
 }
@@ -197,5 +212,25 @@ studyBtn.onclick = () => {
   try { localStorage.setItem('ftg:study', on ? '1' : '0') } catch {}
   studyBtn.setAttribute('aria-pressed', String(on))
   contribute()
+}
+boardEl.onsubmit = async (e) => {
+  e.preventDefault()
+  const name = (boardEl.elements.namedItem('nick') as HTMLInputElement).value.trim()
+  if (!api || !name) return
+  boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = true))
+  const game = g
+  const was = sent
+  sent = true
+  const b = await askBoard(api, boardRequest(deckIdx, level, g.mode, waves, edition, name, was))
+  if (g !== game) return
+  if (!b) {
+    sent = was
+    boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = false))
+    live.textContent = ''
+    setTimeout(() => (live.textContent = l.notSaved!), 50)
+    return (boardEl.elements.namedItem('nick') as HTMLInputElement).focus()
+  }
+  showResult(root, deck, g, text, rounds)
+  showBoard(b, name)
 }
 document.addEventListener('visibilitychange', () => document.hidden && setPause(true))

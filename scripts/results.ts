@@ -5,7 +5,7 @@ import { objectsFor } from '../src/game/objects.ts'
 import { wilson } from '../src/game/stats.ts'
 import { edition } from '../src/game/eval/version.ts'
 import { decks } from '../src/game/levels/index.ts'
-import { gapRow, pattern, rowOf } from '../src/game/levels/observations.ts'
+import { gapRow, pattern, rowOf, typical } from '../src/game/levels/observations.ts'
 import type { Row } from '../src/game/levels/observations.ts'
 
 const params = (r: Row) => {
@@ -51,6 +51,7 @@ export const summarize = async (rows: { version: string; level: number; mode: nu
   const current = await edition(d)
   const mine = rows.filter((r) => r.version === current)
   const byRule = new Map<string, Stat>()
+  const byPattern = new Map<string, Stat>()
   const byGap = new Map<string, Stat>()
   const peers = new Map<string, number[]>()
   const seen = new Set<string>()
@@ -70,6 +71,7 @@ export const summarize = async (rows: { version: string; level: number; mode: nu
         if (w.answers.length === 1) {
           const right = w.answers[0]!
           const gap = gapRow(w)
+          add(byPattern, typical(gap) ? 'typical' : 'atypical', hit, aiHit)
           add(byGap, gap.id, hit, aiHit)
           if (ms !== undefined) aim[hit ? 'hit' : 'miss'].push([ms, dwell[right]!, mean(dwell.filter((_, k) => k !== right)), switches!])
         }
@@ -82,8 +84,8 @@ export const summarize = async (rows: { version: string; level: number; mode: nu
         objects.forEach((o, k) => {
           const rec = rowOf(w.ids![k]!)
           const { arity, breaks } = params(rec)
-          tally(res.drawn, o.shape.facts, objects.length, k === pick)
-          tally(res.data, { gap: rec.gap, arity, breaks, locks: rec.context?.locks, job: rec.context?.job, share: rec.context?.share, impacts: rec.context?.impacts, agent: rec.context?.agent }, objects.length, k === pick)
+          tally(res.drawn, { ...o.shape.facts, sides: o.shape.facts.sides.map((s) => `${s.crystals} ${s.tint} ${s.reach}`).join(' | ') }, objects.length, k === pick)
+          tally(res.data, { gap: rec.gap, typical: typical(rec), arity, breaks, locks: rec.context?.locks, job: rec.context?.job, share: rec.context?.share, impacts: rec.context?.impacts, agent: rec.context?.agent, tests: rec.context?.tests, criteria: rec.context?.criteria }, objects.length, k === pick)
         })
         if (ms !== undefined && w.answers.length) {
           res.aim.waves++
@@ -112,7 +114,8 @@ export const summarize = async (rows: { version: string; level: number; mode: nu
       lift: { drawn: lift(r.drawn), data: lift(r.data) },
     }])),
     aim: Object.fromEntries(Object.entries(aim).map(([k, xs]) => [k, { n: xs.length, ms: median(xs.map((x) => x[0]!)), gap: median(xs.map((x) => x[1]!)), others: median(xs.map((x) => x[2]!)), switches: median(xs.map((x) => x[3]!)) }])),
-    hardest: [...byGap].map(([id, s]) => ({ id, ...params(rowOf(id)), ...rate(s) }))
+    patterns: Object.fromEntries([...byPattern].map(([k, s]) => [k, rate(s)])),
+    hardest: [...byGap].map(([id, s]) => ({ id, ...params(rowOf(id)), typical: typical(rowOf(id)), ...rate(s) }))
       .sort((a, b) => a.human - b.human).slice(0, 10),
     peers: [...peers].map(([k, c]) => {
       const n = c.reduce((t, x) => t + x, 0)

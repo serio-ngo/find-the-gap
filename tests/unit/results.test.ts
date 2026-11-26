@@ -3,7 +3,7 @@ import { wave } from '../../src/game/engine.ts'
 import { objectsFor } from '../../src/game/objects.ts'
 import type { Spec } from '../../src/game/engine.ts'
 import { decks } from '../../src/game/levels/index.ts'
-import { CERTAIN, rowOf } from '../../src/game/levels/observations.ts'
+import { CERTAIN, rowOf, typical } from '../../src/game/levels/observations.ts'
 import { summarize } from '../../scripts/results.ts'
 import { edition } from '../../src/game/eval/version.ts'
 
@@ -20,7 +20,8 @@ it('reads only results of the current deck edition and splits human and AI hits 
   ])
   expect(out).toMatchObject({ edition: await edition(d), games: 1, otherEditions: 1 })
   expect(out.rules.odd_revision).toEqual({ shown: 2, human: 0.5, ai: 1 })
-  expect(out.hardest).toEqual([{ id: w.ids![right], arity: 2, breaks: 1, pattern: 'differ', shown: 2, human: 0.5, ai: 1 }])
+  expect(out.hardest).toEqual([{ id: w.ids![right], arity: 2, breaks: 1, pattern: 'differ', typical: typical(rowOf(w.ids![right]!)), shown: 2, human: 0.5, ai: 1 }])
+  expect(out.patterns).toEqual({ [typical(rowOf(w.ids![right]!)) ? 'typical' : 'atypical']: { shown: 2, human: 0.5, ai: 1 } })
   expect(out.certain).toEqual({ shown: 2, human: 0.5, ai: 1 })
   expect(out).not.toHaveProperty('waves')
   expect(out.aim).toEqual({ hit: { n: 1, ms: 1000, gap: 500, others: 100, switches: 1 }, miss: { n: 1, ms: 3000, gap: 1500, others: 300, switches: 1 } })
@@ -63,7 +64,7 @@ describe('research summary', () => {
     expect(r.picks).toBe(specs.reduce((t, s) => t + wave(d, s).symbols.length, 0))
     expect(r.waves).toEqual({ 0: 1, 1: 1, 2: 1 })
     expect(Object.keys(r.lift.drawn)).toEqual(Object.keys(objectsFor(d, wave(d, specs[0]!))[0]!.shape.facts))
-    expect(Object.keys(r.lift.data)).toEqual(['gap', 'arity', 'breaks', 'locks', 'job', 'share', 'impacts', 'agent'])
+    expect(Object.keys(r.lift.data)).toEqual(['gap', 'typical', 'arity', 'breaks', 'locks', 'job', 'share', 'impacts', 'agent', 'tests', 'criteria'])
     const all = lifts(r)
     expect(all.length).toBeGreaterThan(0)
     expect(all.every((x) => x === 1)).toBe(true)

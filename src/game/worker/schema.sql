@@ -18,3 +18,15 @@ CREATE TABLE IF NOT EXISTS game_results (
   mode INTEGER NOT NULL,
   waves TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS game_board (
+  id INTEGER PRIMARY KEY,
+  day TEXT NOT NULL,
+  version TEXT NOT NULL,
+  level INTEGER NOT NULL,
+  mode INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  score INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS game_board_rank ON game_board (version, level, mode, score);

@@ -10,7 +10,11 @@
       "you": "Ty",
       "ai": "AI",
       "chance": "Los",
-      "privacy": "Prywatność"
+      "privacy": "Prywatność",
+      "nick": "Pseudonim",
+      "save": "Zapisz",
+      "board": "Ranking",
+      "sigma": "σ"
     },
     "en": {
       "title": "Find the Gap",
@@ -22,7 +26,11 @@
       "you": "You",
       "ai": "AI",
       "chance": "Chance",
-      "privacy": "Privacy"
+      "privacy": "Privacy",
+      "nick": "Nickname",
+      "save": "Save",
+      "board": "Leaderboard",
+      "sigma": "σ"
     }
   },
   "labels": {
@@ -51,6 +59,9 @@
       "crystals": "kryształy: {n}",
       "symmetric": "symetryczny",
       "lopsided": "nierówny",
+      "halo": "aureola: łuki {n}",
+      "lit": "aureola świeci",
+      "unlit": "aureola ciemna",
       "craters": "kratery: {n}",
       "certain": "Fala pewna",
       "bright": "kosmita jasny",
@@ -59,7 +70,14 @@
       "dropped": "Wypadło: {item}",
       "BadgeCheck": "testy zaliczone",
       "BadgeX": "testy niezaliczone",
-      "Badge": "brak testów"
+      "Badge": "brak testów",
+      "loot": "Twoje łupy i łupy AI, fala po fali",
+      "you": "Ty",
+      "won": "nagroda",
+      "norm": "{z}σ od losu",
+      "typicalSplit": "typowe {a}, nietypowe {b}",
+      "better": "lepiej niż {p}% graczy",
+      "notSaved": "Nie udało się zapisać wyniku"
     },
     "en": {
       "pause": "Pause",
@@ -86,6 +104,9 @@
       "crystals": "crystals: {n}",
       "symmetric": "symmetric",
       "lopsided": "lopsided",
+      "halo": "halo arcs: {n}",
+      "lit": "halo lit",
+      "unlit": "halo dark",
       "craters": "craters: {n}",
       "certain": "Certain wave",
       "bright": "alien bright",
@@ -94,7 +115,14 @@
       "dropped": "Dropped: {item}",
       "BadgeCheck": "tests passed",
       "BadgeX": "tests failed",
-      "Badge": "no tests"
+      "Badge": "no tests",
+      "loot": "Your loot and the AI loot, wave by wave",
+      "you": "You",
+      "won": "rewarded",
+      "norm": "{z}σ from chance",
+      "typicalSplit": "typical {a}, atypical {b}",
+      "better": "better than {p}% of players",
+      "notSaved": "The score could not be saved"
     }
   }
 }

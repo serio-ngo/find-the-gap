@@ -13,7 +13,7 @@ type Observation = {
 const value = (v: unknown) => String(v).replace(/^AC\d+(-AC\d+)?:\s*/, '')
 
 type Snapshots = Record<string, { private: boolean; taken: string }>
-const KEYS = ['locks', 'impacts', 'agent', 'job', 'share'] as const
+const KEYS = ['locks', 'impacts', 'agent', 'job', 'share', 'tests', 'criteria'] as const
 
 export const toRows = (text: string, curation: Record<string, string> = {}) => {
   const all = text.trim().split('\n').map((line) => JSON.parse(line) as Observation)

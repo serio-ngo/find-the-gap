@@ -1,11 +1,11 @@
 export type Pt = [number, number]
 export type Part = { points: Pt[]; fill?: string; stroke?: string; width: number; crystal?: true }
-export type Signs = { job: number; impacts: number }
+export type Signs = { job: number; impacts: number; full: number; relocked: number }
 
 const base = {
   void: '#141c23', shadow: '#283541', frame: '#576776', armor: '#aeb9bc', light: '#f3f1de',
   glass: '#3f7f8a', signal: '#a6e8e1', violet: '#b79cf0', rose: '#f08fb0', lime: '#c6e87a', dull: '#4a5157',
-  alien0: '#7d6a1c', alien1: '#f2d45c', alienDim0: '#55503f', alienDim1: '#bdb595',
+  halo0: '#2e4166', halo1: '#3f63b0', halo2: '#a9c6ff', alien0: '#7d6a1c', alien1: '#f2d45c', alienDim0: '#55503f', alienDim1: '#bdb595',
 }
 const minerals = {
   basalt: ['#1a2127', '#28323a', '#3f4c55', '#5f6e77', '#8b9a9f'],

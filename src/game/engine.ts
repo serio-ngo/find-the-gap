@@ -11,6 +11,7 @@ export type Deck = {
   id: string; steps: number; policy: Policy; rules: Rule[]
   poolSize: number; question?: string; levels: Level[]
   choiceRecords?: (wave: Wave) => ChoiceRecord[]
+  typical?: (wave: Wave) => boolean
 }
 export type Decision = { spec: Spec; pick: number; hit: boolean; anchor: boolean; secs: number; ai?: number | null }
 export type Game = { mode: Mode; level: number; rule: string; step: number; streak: number; decisions: Decision[] }
@@ -121,7 +122,12 @@ export const report = (d: Deck, g: Game) => {
       n: rs.length,
     }
   }
-  return { all: tally(rows) }
+  const typical = d.typical
+  return {
+    all: tally(rows),
+    typical: typical ? tally(rows.filter(({ w }) => typical(w))) : null,
+    atypical: typical ? tally(rows.filter(({ w }) => !typical(w))) : null,
+  }
 }
 
 export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
