@@ -21,10 +21,16 @@ describe('askBoard', () => {
 })
 
 describe('sendResult', () => {
-  it('posts with keepalive and swallows errors', async () => {
+  it('posts with keepalive and resolves true only when the worker stored it', async () => {
     const f = vi.fn(async () => { throw new Error('x') })
     vi.stubGlobal('fetch', f)
-    await expect(sendResult('/api', { v: 'x' })).resolves.toBeUndefined()
+    await expect(sendResult('/api', { v: 'x' })).resolves.toBe(false)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 429 })))
+    await expect(sendResult('/api', {})).resolves.toBe(false)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
+    await expect(sendResult('/api', {})).resolves.toBe(true)
+    vi.stubGlobal('fetch', f)
+    await sendResult('/api', { v: 'x' })
     expect(f).toHaveBeenCalledWith('/api/result', expect.objectContaining({ method: 'POST', keepalive: true }))
   })
 })

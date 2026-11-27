@@ -20,7 +20,8 @@ export const visitRow = (room: (typeof ENC)[number], i: number, pick = gapSlot(r
   return [RS.indexOf(room), i, pick, ms, 3, 1, 0, ...read, ...Array(12 - read.length).fill(-1), ...Array.from({ length: 4 }, (_, k) => (k < room.monsters.length ? 812 : 0))]
 }
 export const visits = (rooms = ENC, pick?: (r: (typeof ENC)[number]) => number) => rooms.map((r, i) => visitRow(r, i, pick?.(r)))
-export const resultBody = (v: number[][], edition = ED) => ({ v: 0, level: 1, visits: v, edition })
+export const RECEIPT = 2 ** 40 + 7
+export const resultBody = (v: number[][], edition = ED, receipt = RECEIPT) => ({ v: 0, level: 1, visits: v, edition, receipt })
 export const allRooms = (pick?: (r: (typeof ENC)[number]) => number) => visits([...CERTAIN, ...ENC.filter((r) => !r.certain)], pick)
 export const ORIGIN = 'https://example.org'
 
@@ -28,6 +29,7 @@ export const fakeEnv = (over: Partial<GameEnv> = {}) => {
   const cache = new Map<string, { body: string; created: number }>()
   const use = { step: 0, result: 0 }
   const results: unknown[][] = []
+  const ids: unknown[] = []
   const board: { version: string; level: number; mode: number; name: string; score: number }[] = []
   const mine = (v: unknown[]) => board.filter((x) => x.version === v.at(-3) && x.level === v.at(-2) && x.mode === v.at(-1))
   const deleted: string[] = []
@@ -50,7 +52,12 @@ export const fakeEnv = (over: Partial<GameEnv> = {}) => {
             }
             else if (sql.includes('game_cache')) cache.set(v[0] as string, { body: v[1] as string, created: v[2] as number })
             else if (sql.includes('game_board')) board.push({ version: v[1] as string, level: v[2] as number, mode: v[3] as number, name: v[4] as string, score: v[5] as number })
-            else results.push(v)
+            else {
+              const at = ids.indexOf(v[0])
+              const row = v.slice(1)
+              if (at < 0) ids.push(v[0]), results.push(row)
+              else if (results[at]![1] === row[1] && JSON.parse(row[4] as string).length >= JSON.parse(results[at]![4] as string).length) results[at] = row
+            }
           },
         }),
       }),

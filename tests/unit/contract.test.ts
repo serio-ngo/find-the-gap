@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MAX_MS, encounters, rooms } from '../../src/game/engine.ts'
-import { boardRequest, resultRequest, visitRow } from '../../src/game/net.ts'
+import { boardRequest, newReceipt, resultRequest, visitRow } from '../../src/game/net.ts'
 import type { VisitRecord } from '../../src/game/net.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
@@ -35,16 +35,16 @@ const played = ENC.map((r, i) => visitRow(record(r, i)))
 
 describe('client bodies are accepted by the route', () => {
   it('a full run is accepted as a result and a board entry, and asks the model for every room', async () => {
-    const body = resultRequest(played, await edition(world, rows))
+    const body = resultRequest(played, await edition(world, rows), newReceipt())
     expect(JSON.stringify(body)).toMatch(/^[\d,[\]{}":a-z-]*$/)
     expect((await send('/api/game/result', body)).status).toBe(204)
-    expect((await send('/api/game/board', boardRequest(played, body.edition, 'Ada', false))).status).toBe(200)
+    expect((await send('/api/game/board', boardRequest(played, body.edition, 'Ada', body.receipt))).status).toBe(200)
     for (const r of ENC) expect(await (await send('/api/game/step', { v: 0, room: RS.indexOf(r) })).json()).toMatchObject({ ai: 0 })
   })
 
   it('a worst-case body stays under the byte limit', async () => {
     const x = visitRow({ ...record(ENC[0]!, 99), ms: MAX_MS * 2, switches: 999, stations: [4, 3, 2, 1, 0], dwell: Array(4).fill(MAX_MS * 2) })
-    const body = boardRequest(ENC.map(() => x), await edition(world, rows), 'x'.repeat(20), true)
+    const body = boardRequest(ENC.map(() => x), await edition(world, rows), 'x'.repeat(20), Number.MAX_SAFE_INTEGER)
     expect(JSON.stringify(body).length).toBeLessThan(8192)
   })
 

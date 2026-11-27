@@ -3,7 +3,7 @@ import type { AiRun } from './engine.ts'
 import stored from './eval/ai-run.json'
 import { decks } from './levels/index.ts'
 import type { Row, World } from './levels/observations.ts'
-import { askBoard, boardRequest, resultRequest, sendResult, visitRow } from './net.ts'
+import { askBoard, boardRequest, newReceipt, resultRequest, sendResult, visitRow } from './net.ts'
 import type { Board, VisitRecord } from './net.ts'
 import { aimTracker } from './aim.ts'
 import { bindInput } from './input.ts'
@@ -55,7 +55,9 @@ let lost = 0
 let pausedAt = 0
 let toggled = false
 let first = false
-let sent = false
+let receipt = newReceipt()
+let kept = ''
+let sending = ''
 
 const clock = () => (root.dataset.phase === 'paused' ? pausedAt : performance.now()) - lost
 const rec = () => recs.get(room.id)
@@ -182,7 +184,8 @@ const start = () => {
   recs = new Map()
   order = []
   bag = new Map()
-  sent = false
+  receipt = newReceipt()
+  kept = sending = ''
   lost = 0
   first = !load('observations', level, undefined, edition)?.plays
   room = byId.get(world.start)!
@@ -199,9 +202,16 @@ const start = () => {
 const study = () => { try { return localStorage.getItem('ftg:study') === '1' } catch { return false } }
 const rowsOut = () => order.map(visitRow)
 const contribute = () => {
-  if (!api || sent || !study()) return
-  sent = true
-  sendResult(api, resultRequest(rowsOut(), edition))
+  const visits = rowsOut()
+  const key = JSON.stringify(visits)
+  if (!api || !visits.length || !study() || key === kept || key === sending) return
+  sending = key
+  const mine = receipt
+  sendResult(api, resultRequest(visits, edition, mine)).then((ok) => {
+    if (mine !== receipt) return
+    if (ok) kept = key
+    if (sending === key) sending = ''
+  })
 }
 
 const showBoard = (b: Board, name: string) => {
@@ -252,12 +262,11 @@ boardEl.onsubmit = async (e) => {
   if (!api || !name) return
   boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = true))
   const game = order
-  const was = sent
-  sent = true
-  const b = await askBoard(api, boardRequest(rowsOut(), edition, name, was))
+  const visits = rowsOut()
+  const b = await askBoard(api, boardRequest(visits, edition, name, receipt))
   if (order !== game) return
+  if (b) kept = JSON.stringify(visits)
   if (!b) {
-    sent = was
     boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = false))
     live.textContent = ''
     setTimeout(() => (live.textContent = l.notSaved!), 50)
@@ -266,4 +275,9 @@ boardEl.onsubmit = async (e) => {
   showResult(root, world, rows, order, ai, text, hasNext)
   showBoard(b, name)
 }
-document.addEventListener('visibilitychange', () => document.hidden && setPause(true))
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return
+  setPause(true)
+  contribute()
+})
+addEventListener('pagehide', contribute)
