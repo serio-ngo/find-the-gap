@@ -136,12 +136,10 @@ const move = (dx: number, dy: number) => {
   if (passable(r, { found, accused, room, world })) go(r.to)
 }
 
-const near = (a: Spot, b: Spot) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= 1
-
 const walk = (kind: string, i: number) => {
   if (kind === 'm' && reach(lay, at).monsters.includes(i)) return stamp(i)
   const door = kind === 'd' ? lay.doors[i] : undefined
-  const goal = (p: Spot) => (kind === 'm' ? reach(lay, p).monsters.includes(i) : kind === 's' && near(lay.items[i]!, p))
+  const goal = (p: Spot) => (kind === 'm' ? reach(lay, p).monsters.includes(i) : kind === 's' && reach(lay, p).station === i)
   const seen = new Set([`${at.x},${at.y}`])
   const queue = [{ p: at, m: [] as (readonly number[])[] }]
   for (const { p, m } of queue) {

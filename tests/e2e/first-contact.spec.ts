@@ -31,8 +31,10 @@ test('the hot spots and the D-pad walk the hero', async ({ page }) => {
   const root = page.locator('.ftg')
   await page.locator('[data-walk="m0"]').dispatchEvent('click')
   await expect(page.locator('.ftg-mon').first()).toHaveAttribute('data-near', '')
-  await page.locator('[data-walk="s0"]').dispatchEvent('click')
-  await expect(page.locator('.ftg-st').first()).toHaveAttribute('data-near', '')
+  for (const k of r.lay.items.keys()) {
+    await page.locator(`[data-walk="s${k}"]`).dispatchEvent('click')
+    await expect(page.locator('.ftg-st').nth(k)).toHaveAttribute('data-near', '')
+  }
   const before = await hero(page)
   for (const dir of [l.down, l.up, l.left, l.right]) {
     const at = await hero(page)
