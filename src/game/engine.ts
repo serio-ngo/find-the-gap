@@ -1,22 +1,10 @@
-import type { Signs } from './gen.ts'
+import { BINDINGS, clueOf, gapOf } from './levels/observations.ts'
+import type { Binding, Room, Row, World } from './levels/observations.ts'
 
-export type Mode = 'standard' | 'adaptive'
-export type Spec = { rule: string; step: number; seed: number }
-export type Wave = Spec & { symbols: string[]; answers: number[]; ids?: string[] }
-export type Policy = { high: number; low: number; window: number; confirm: number }
-export type ChoiceRecord = { id?: string; clue: string; rule: string; values: string[]; url?: string; signs?: Signs | null }
-export type Rule = { id: string; make: (step: number, seed: number) => Pick<Wave, 'symbols' | 'answers' | 'ids'> }
-export type Level = { id: number; start: { rule: string; step: number }; anchors: number[]; sequence: Spec[]; tail?: number }
-export type Deck = {
-  id: string; steps: number; policy: Policy; rules: Rule[]
-  poolSize: number; question?: string; levels: Level[]
-  choiceRecords?: (wave: Wave) => ChoiceRecord[]
-  typical?: (wave: Wave) => boolean
-}
-export type Decision = { spec: Spec; pick: number; hit: boolean; anchor: boolean; secs: number; ai?: number | null }
-export type Game = { mode: Mode; level: number; rule: string; step: number; streak: number; decisions: Decision[] }
 export type AiPick = { choice: string; probabilities: Record<string, number> }
-export type AiRun = { hash: string; model: string; date: string; standard: Record<string, (number | null)[]> }
+export type AiRun = { hash: string; model: string; date: string; picks: Record<string, number | null> }
+export type Visit = { room: number; pick: number; ms: number }
+export type Tally = { you: number; ai: number; aiN: number; chance: number; n: number }
 
 export const rng = (seed: number) => () => {
   seed = (seed + 0x6d2b79f5) | 0
@@ -27,142 +15,73 @@ export const rng = (seed: number) => () => {
 
 export const MODEL = 'd1.1'
 export const URL_AI = 'https://api.liquid.ai/decisions/v1/systemone'
-export const HISTORY = 3
-
 export const MAX_MS = 600_000
 
-export const round05 = (x: number) => Math.round(x * 20) / 20
+const QUESTION = 'Each monster is one public gate run, described by its evidence and the clues read in the room. Which monster has the gap? Pick one.'
 
-export const keys = (w: Wave) => w.symbols.map((_, i) => `r${i}`)
+export const rooms = (w: World): Room[] => w.wings.flatMap((x) => x.suites.flatMap((s) => s.rooms))
 
-export const wave = (d: Deck, s: Spec): Wave => ({ ...s, ...d.rules.find((r) => r.id === s.rule)!.make(s.step, s.seed) })
+export const encounters = (w: World): Room[] => rooms(w).filter((r) => r.monsters.length)
 
-export const ANCHOR_POOL = 2000
+export const rowMap = (rows: Row[]) => new Map(rows.map((r) => [r.id, r]))
 
-export const pool = (d: Deck, rule: string, step: number, anchor = false): Spec[] =>
-  Array.from({ length: d.poolSize }, (_, i) => ({ rule, step, seed: (anchor ? ANCHOR_POOL : 1000) + i }))
+export const hit = (rows: Map<string, Row>, room: Room, pick: number) =>
+  !!room.relation && pick >= 0 && pick < room.monsters.length && gapOf[room.relation]!(rows.get(room.monsters[pick]!)!.values)
 
-export const begin = (d: Deck, level: number, mode: Mode): Game => {
-  const { rule, step } = d.levels.find((l) => l.id === level)!.start
-  return { mode, level, rule, step, streak: 0, decisions: [] }
+export const chance = (room: Room) => 1 / room.monsters.length
+
+export const scoreOf = (ok: boolean, ms: number) => (ok ? 100 + Math.max(0, Math.round(100 - ms / 100)) : 0)
+
+export const score = (w: World, rows: Map<string, Row>, visits: Visit[]) =>
+  visits.reduce((t, v) => {
+    const room = rooms(w)[v.room]
+    return room?.certain ? t + scoreOf(hit(rows, room, v.pick), v.ms) : t
+  }, 0)
+
+const looks = (r: Row) => JSON.stringify(r.context && BINDINGS.map((b) => clueOf(b.field, r.context!)))
+
+export const typicalOf = (rows: Map<string, Row>) => {
+  const scored = [...rows.values()].filter((r) => !r.research)
+  const base = scored.filter((r) => r.gap).length / scored.length
+  const gappy = new Map([...new Set(scored.map(looks))].map((k) => { const s = scored.filter((r) => looks(r) === k); return [k, s.filter((r) => r.gap).length / s.length > base] }))
+  return (r: Row) => (gappy.get(looks(r)) ?? false) === r.gap
 }
 
-const fixedFrom = (d: Deck, level: number) => {
-  const l = d.levels.find((x) => x.id === level)!
-  return l.sequence.length - (l.tail ?? 0)
-}
-
-export const upcoming = (d: Deck, g: Game): Spec | null => {
-  const i = g.decisions.length
-  const level = d.levels.find((l) => l.id === g.level)!
-  if (g.mode === 'standard' || i >= fixedFrom(d, g.level)) return level.sequence[i] ?? null
-  const anchor = level.anchors.includes(i)
-  const all = pool(d, g.rule, g.step, anchor)
-  const free = all.filter((s) => !g.decisions.some((x) => x.spec.seed === s.seed))
-  const gap = (s: Spec) => { const w = wave(d, s); return w.ids?.[w.answers[0]!] }
-  const fresh = anchor ? free.filter((s) => !g.decisions.some((x) => x.anchor && gap(x.spec) === gap(s))) : free
-  const from = fresh.length ? fresh : free.length ? free : all
-  return from[Math.floor(rng(g.level * 100 + i)() * from.length)]!
-}
-
-export const estimate = (d: Deck, g: Game): number => {
-  const last = g.decisions.filter((x) => x.spec.rule === g.rule).slice(-d.policy.window)
-  return round05((last.filter((x) => x.hit).length + 1) / (last.length + 2))
-}
-
-export const forecast = (d: Deck, g: Game, live?: { hit: number; miss: number }) =>
-  live ? live[g.decisions.at(-1)!.hit ? 'hit' : 'miss'] : estimate(d, { ...g, decisions: g.decisions.filter((x) => x.anchor) })
-
-export const advance = (d: Deck, s: { rule: string; step: number; streak: number }, p: number, hit: boolean) => {
-  const up = hit && p >= d.policy.high
-  const down = !hit && p < d.policy.low
-  const streak = (up && s.step === d.steps) || (down && s.step === 1) ? s.streak + 1 : 0
-  if (streak >= d.policy.confirm) {
-    const next = d.rules[d.rules.findIndex((r) => r.id === s.rule) + (up ? 1 : -1)]
-    if (next) return { rule: next.id, step: up ? 2 : 1, streak: 0, switched: true }
-  }
-  const step = Math.min(d.steps, Math.max(1, s.step + (up ? 1 : down ? -1 : 0)))
-  return { rule: s.rule, step, streak, switched: false }
-}
-
-export const band = (secs: number): 0 | 1 | 2 => (secs < 3 ? 0 : secs < 8 ? 1 : 2)
-
-export const shoot = (d: Deck, g: Game, pick: number, secs = 0, live?: { hit: number; miss: number }): Game => {
-  const spec = upcoming(d, g)
-  if (!spec) return g
-  const hit = wave(d, spec).answers.includes(pick)
-  const anchor = d.levels.find((l) => l.id === g.level)!.anchors.includes(g.decisions.length)
-  const next = { ...g, decisions: [...g.decisions, { spec, pick, hit, anchor, secs }] }
-  if (g.mode === 'standard' || !anchor) return next
-  const { rule, step, streak } = advance(d, g, forecast(d, next, live), hit)
-  return { ...next, rule, step, streak }
-}
-
-export const asks = (d: Deck, g: Game, i: number) => !fixed(d, g, i) && d.levels.find((l) => l.id === g.level)!.anchors.includes(i)
-
-export const score = (g: Game) =>
-  g.decisions.reduce((t, x) => (x.anchor && x.hit ? t + 100 + Math.max(0, Math.round(100 - 10 * x.secs)) : t), 0)
-
-export const fixed = (d: Deck, g: Game, i: number) => g.mode === 'standard' || i >= fixedFrom(d, g.level)
-
-export const aiPick = (run: AiRun, d: Deck, g: Game, i: number): number | null | undefined =>
-  fixed(d, g, i) ? run.standard[g.level]?.[i] : undefined
-
-export type Tally = { you: number; ai: number; aiN: number; chance: number; n: number }
-
-export const report = (d: Deck, g: Game) => {
-  const rows = g.decisions.filter((x) => x.anchor).map((x) => ({ x, w: wave(d, x.spec) }))
-  const tally = (rs: typeof rows): Tally => {
-    const ai = rs.filter(({ x }) => typeof x.ai === 'number')
+export const report = (w: World, rows: Map<string, Row>, visits: Visit[], ai: AiRun['picks']) => {
+  const rs = rooms(w)
+  const isTypical = typicalOf(rows)
+  const played = visits.flatMap((v) => (rs[v.room]?.certain && v.pick >= 0 ? [{ room: rs[v.room]!, pick: v.pick }] : []))
+  const tally = (ps: typeof played): Tally => {
+    const asked = ps.filter(({ room }) => typeof ai[room.id] === 'number')
     return {
-      you: rs.filter(({ x }) => x.hit).length,
-      ai: ai.filter(({ x, w }) => w.answers.includes(x.ai!)).length,
-      aiN: ai.length,
-      chance: rs.reduce((t, { w }) => t + 1 / w.symbols.length, 0),
-      n: rs.length,
+      you: ps.filter(({ room, pick }) => hit(rows, room, pick)).length,
+      ai: asked.filter(({ room }) => hit(rows, room, ai[room.id]!)).length,
+      aiN: asked.length,
+      chance: ps.reduce((t, { room }) => t + chance(room), 0),
+      n: ps.length,
     }
   }
-  const typical = d.typical
-  return {
-    all: tally(rows),
-    typical: typical ? tally(rows.filter(({ w }) => typical(w))) : null,
-    atypical: typical ? tally(rows.filter(({ w }) => !typical(w))) : null,
+  const split = (want: boolean) => {
+    const ps = played.filter(({ room }) => isTypical(rows.get(room.monsters.find((id) => rows.get(id)!.gap)!)!) === want)
+    return ps.length ? tally(ps) : null
   }
+  return { all: tally(played), typical: split(true), atypical: split(false) }
 }
 
-export const aiBody = (d: Deck, w: Wave, history: Wave[]): object => ({
+const seen = (row: Row, clues: string[]) =>
+  [...row.roles.map((role, i) => `${role} ${row.values[i]}`), ...(row.context ? clues.map((f) => `${f} ${clueOf(f as Binding['field'], row.context!)}`) : [])].join(', ')
+
+export const roomBody = (room: Room, rows: Map<string, Row>): object => ({
   model: MODEL,
-  state: {
-    step: w.step,
-    rocks: w.symbols,
-    history: history.slice(-HISTORY).map((h) => ({ rocks: h.symbols })),
-  },
+  state: { rocks: room.monsters.map((id) => seen(rows.get(id)!, room.clues)) },
   questions: {
     ai: {
       type: 'choice',
-      instructions: d.question,
-      criteria: Object.fromEntries(keys(w).map((k, i) => [k, w.symbols[i]])),
+      instructions: QUESTION,
+      criteria: Object.fromEntries(room.monsters.map((id, i) => [`r${i}`, seen(rows.get(id)!, room.clues)])),
     },
   },
 })
-
-const IF_HIT = 'If the player picks a correct rock on this wave, what is the probability that they are correct on the next wave?'
-const IF_MISS = 'If the player picks a wrong rock on this wave, what is the probability that they are correct on the next wave?'
-
-export type Past = { w: Wave; hit: boolean | null; tempo: 0 | 1 | 2 }
-
-export const stepBody = (d: Deck, w: Wave, past: Past[]): object => {
-  const body = aiBody(d, w, past.map((p) => p.w)) as { state: object; questions: object }
-  const answer = { type: 'choice', criteria: { hit: 'hit', miss: 'miss' } }
-  return {
-    ...body,
-    state: {
-      ...body.state,
-      history: past.slice(-HISTORY).map((p) => ({ rocks: p.w.symbols, hit: p.hit, tempo: p.tempo })),
-    },
-    questions: { ...body.questions, if_hit: { ...answer, instructions: IF_HIT }, if_miss: { ...answer, instructions: IF_MISS } },
-  }
-}
 
 export const validate = (ks: string[], answer: AiPick | undefined): AiPick => {
   const p = answer?.probabilities
@@ -174,21 +93,10 @@ export const validate = (ks: string[], answer: AiPick | undefined): AiPick => {
   return { choice: answer.choice, probabilities: Object.fromEntries(ks.map((k) => [k, Math.round(p[k]! * 1000) / 1000])) }
 }
 
-const drawn = (d: Deck, s: Spec, records: boolean) => { const w = wave(d, s); return records ? { ...w, records: d.choiceRecords?.(w) } : w }
-
-export const content = (d: Deck, records = false): unknown => ({
-  id: d.id,
-  model: MODEL,
-  history: HISTORY,
-  steps: d.steps,
-  poolSize: d.poolSize,
-  policy: d.policy,
-  question: d.question,
-  levels: d.levels.map((l) => ({ id: l.id, start: l.start, anchors: l.anchors, waves: l.sequence.map((s) => drawn(d, s, records)) })),
-  pool: d.rules.flatMap((r) =>
-    Array.from({ length: d.steps }, (_, i) => [...pool(d, r.id, i + 1), ...pool(d, r.id, i + 1, true)].map((s) => drawn(d, s, records))).flat(),
-  ),
-})
+export const content = (w: World, rows: Row[]): unknown => {
+  const m = rowMap(rows)
+  return [MODEL, w, rows, encounters(w).map((r) => roomBody(r, m))]
+}
 
 export const canonical = (v: unknown): string =>
   JSON.stringify(v, (_, x) =>

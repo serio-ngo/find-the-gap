@@ -1,12 +1,10 @@
-import { Badge, BadgeCheck, BadgeX } from 'lucide'
-import type { ChoiceRecord } from './engine.ts'
+import { Copy, Key, Lock, Unlink } from 'lucide'
+import type { Row } from './levels/observations.ts'
 
-export const ICONS = { Badge, BadgeCheck, BadgeX }
+export const ICONS = { odd_revision: Key, missing_link: Unlink, pair: Copy, lock_only: Lock }
 export type Item = keyof typeof ICONS
 
-export const ITEMS: Item[] = ['Badge', 'BadgeX', 'BadgeCheck']
-
-export const itemOf = ({ signs }: ChoiceRecord): Item => (signs ? ITEMS[signs.job]! : 'Badge')
+export const itemOf = ({ rule }: Pick<Row, 'rule'>): Item => rule as Item
 
 export const icon = (item: Item) =>
   `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[item].map(([tag, attrs]) => `<${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ')}/>`).join('')}</svg>`

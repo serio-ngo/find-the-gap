@@ -1,40 +1,10 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { gapOf } from '../src/game/levels/observations.ts'
-import type { Context, Row } from '../src/game/levels/observations.ts'
-
-type Observation = {
-  id: string; relation: string; items: { role: string; value: unknown }[]; gap: boolean
-  links: { run: string }; flags: { visibility: string; split: string; labelled: boolean }; context?: Context | null
-}
-
-const value = (v: unknown) => String(v).replace(/^AC\d+(-AC\d+)?:\s*/, '')
+import { buildWorld, toRows } from './world.ts'
 
 type Snapshots = Record<string, { private: boolean; taken: string }>
-const KEYS = ['locks', 'impacts', 'agent', 'job', 'share', 'tests', 'criteria'] as const
-
-export const toRows = (text: string, curation: Record<string, string> = {}) => {
-  const all = text.trim().split('\n').map((line) => JSON.parse(line) as Observation)
-    .filter((o) => o.flags.visibility === 'public' && o.flags.split === 'deck' && o.relation in gapOf)
-    .map((o): Row => ({
-      id: o.id, rule: o.relation, roles: o.items.map((i) => i.role), values: o.items.map((i) => value(i.value)),
-      gap: o.gap, research: !o.flags.labelled, run: o.links.run, context: o.context ?? null,
-    }))
-  const reason = (r: Row) => {
-    if (gapOf[r.rule]!(r.values) !== r.gap) return `${r.rule} [${r.values}] archive gap ${r.gap}`
-    const nulls = r.context ? KEYS.filter((k) => r.context![k] == null) : ['context']
-    return nulls.length ? `null ${nulls.join(', ')}` : ''
-  }
-  const open = all.filter((r) => !(r.id in curation))
-  const findings = open.flatMap((r) => (reason(r) ? [{ id: r.id, reason: reason(r) }] : []))
-  return {
-    rows: open.filter((r) => !reason(r)), findings,
-    stale: Object.keys(curation).filter((id) => !all.some((r) => r.id === id)),
-    manual: all.filter((r) => r.id in curation && !reason(r)).map((r) => r.id),
-  }
-}
 
 export const staleRepos = (gates: { repo: string; key: string; at: string }[], caseKeys: Set<string>, snapshots: Snapshots): string[] => {
   const pub = gates.filter((g) => snapshots[g.repo] && !snapshots[g.repo]!.private)
@@ -62,7 +32,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const snapshots: Snapshots = Object.fromEntries(readdirSync(join(dir, 'snapshot/serio-ngo')).filter((f) => f.endsWith('.json')).sort().map((f) => [f.slice(0, -5), json('snapshot/serio-ngo', f)]))
   const staleList = staleRepos(gates, caseKeys, snapshots)
   if (staleList.length) fail(`stale archive:\n${staleList.join('\n')}`)
-  const { rows, findings, stale, manual } = toRows(readFileSync(join(dir, 'observations.jsonl'), 'utf8'), curation)
+  const observations = readFileSync(join(dir, 'observations.jsonl'), 'utf8')
+  const { rows, findings, stale, manual, public: total, holdout, other } = toRows(observations, curation)
   if (findings.length || stale.length) {
     fail([
       ...findings.length ? ['findings, review and paste into curation.json:', ...findings.map((f) => `"${f.id}": ${JSON.stringify(f.reason)},`)] : [],
@@ -70,12 +41,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     ].join('\n'))
   }
   if (manual.length) console.log(`excluded by hand with no automatic finding: ${manual.join(', ')}`)
-  const text = `import type { Row } from './observations.ts'\n\nexport const rows: Row[] = [\n${rows.map((r) => `  ${JSON.stringify(r)},`).join('\n')}\n]\n`
-  const lines = text.trimEnd().split('\n').length
-  if (lines > 200) fail(`rows.ts would have ${lines} lines; the host allows 200`)
-  writeFileSync(fileURLToPath(new URL('../src/game/levels/rows.ts', import.meta.url)), text)
   const taken = Object.fromEntries(Object.entries(snapshots).filter(([, s]) => !s.private).map(([r, s]) => [r, s.taken]))
-  const provenance = { observations: git('rev-parse', 'HEAD:observations.jsonl'), taken, rows: rows.length, excluded: Object.keys(curation).length }
+  const provenance = { observations: git('rev-parse', 'HEAD:observations.jsonl'), commit: git('rev-parse', '--short', 'HEAD'), taken, public: total, rows: rows.length, holdout, other, excluded: Object.keys(curation).length }
+  if (provenance.rows + holdout + other + provenance.excluded !== total) fail(`provenance does not add up: ${JSON.stringify(provenance)}`)
   writeFileSync(fileURLToPath(new URL('deck/provenance.json', import.meta.url)), `${JSON.stringify(provenance, null, 2)}\n`)
-  console.log(`${rows.length} rows, ${provenance.excluded} excluded`)
+  const files = buildWorld({ observations, cases: readFileSync(join(dir, 'cases.jsonl'), 'utf8'), snapshots: Object.fromEntries(Object.keys(snapshots).filter((r) => !snapshots[r]!.private).map((r) => [r, readFileSync(join(dir, 'snapshot/serio-ngo', `${r}.json`), 'utf8')])) }, curation)
+  const long = Object.entries(files).filter(([, text]) => text.trimEnd().split('\n').length > 200)
+  if (long.length) fail(`over 200 lines, the host allows 200: ${long.map(([name]) => name).join(', ')}`)
+  const levels = fileURLToPath(new URL('../src/game/levels/', import.meta.url))
+  for (const f of readdirSync(levels).filter((f) => /^rows-\d+\.ts$/.test(f) && !(f in files))) rmSync(join(levels, f))
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(levels, name), text)
+  console.log(`${rows.length} placed, ${holdout} holdout, ${other} other relation, ${provenance.excluded} excluded; ${Object.keys(files).length} files`)
 }

@@ -1,60 +1,71 @@
-import { expect, test } from '@playwright/test'
-import { deck, displayed, expectEnd, open, play, playButton, right, strings, wrong } from './helpers.ts'
+import { expect, test, type Page } from '@playwright/test'
+import { Run, expectEnd, open, playButton, right, strings, suites, trunk, wrong } from './helpers.ts'
 
 const l = strings.labels.en
+const [t1] = trunk
+const live = (page: Page) => page.locator('.ftg-sr')
+const parts = (n: number) => l.branch!.replace('{n}', String(n)).replace('{k}', '12')
 
-test('every button and link has an accessible name and the canvas is hidden from screen readers', async ({ page }) => {
+test('every button and link has an accessible name and the floor is hidden from screen readers', async ({ page }) => {
   await open(page)
-  await expect(page.locator('canvas')).toHaveAttribute('aria-hidden', 'true')
   const named = async () => {
     const all = [...(await page.getByRole('button').all()), ...(await page.getByRole('link').all())]
     expect(all.length).toBeGreaterThan(0)
     for (const e of all) await expect(e).toHaveAccessibleName(/\S/)
   }
   await named()
-  await play(page)
+  await playButton(page).click()
+  await expect(page.locator('.ftg-floor')).toHaveAttribute('aria-hidden', 'true')
+  await new Run(page).go(t1!.id)
   await named()
 })
 
-test('a keyboard-only player finishes level 1 through the rock twins', async ({ page }) => {
+test('a keyboard-only player finishes the level with the arrow keys and the stamp', async ({ page }) => {
   await open(page)
-  const g = await play(page, { by: 'keys' })
+  await playButton(page).click()
+  await new Run(page, true).finish()
   await expectEnd(page)
-  expect(g.decisions).toHaveLength(deck.levels[0].sequence.length)
 })
 
-const live = (page: import('@playwright/test').Page) => page.locator('.ftg-sr')
-
-test('a research wave announces only its number', async ({ page }) => {
+test('Enter and Space stamp the monster beside the hero', async ({ page }) => {
   await open(page)
-  await play(page, { limit: 4 })
-  await expect(live(page)).toContainText(`${l.wave} 4`)
+  await playButton(page).click()
+  const r = new Run(page, true)
+  await r.go(suites[0]!)
+  await r.monster(0)
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.ftg-branch svg')).toHaveAccessibleName(parts(1))
+  await r.go(suites[1]!)
+  await r.monster(0)
+  await page.keyboard.press('Space')
+  await expect(page.locator('.ftg-branch svg')).toHaveAccessibleName(parts(2))
 })
 
-test('a live region announces a hit on a certain wave', async ({ page }) => {
+test('reading a station is announced with its clue for every monster', async ({ page }) => {
   await open(page)
-  await play(page, { limit: 5 })
-  await expect(live(page)).toContainText(l.hit)
+  await playButton(page).click()
+  const r = new Run(page)
+  await r.go(t1!.id)
+  await r.station(0)
+  await expect(live(page)).toContainText(l.lamp!)
+  await expect(live(page)).toContainText(l.pick!.replace('{n}', '1'))
 })
 
-test('a live region announces a miss on a certain wave', async ({ page }) => {
+test('an accusation outside the certain rooms announces only the dropped item', async ({ page }) => {
   await open(page)
-  await play(page, { limit: 5, pick: (g) => (g.decisions.length === 4 ? wrong(deck, g) : right(deck, g)) })
-  await expect(live(page)).toContainText(l.miss)
+  await playButton(page).click()
+  await new Run(page).accuseIn(suites[0]!)
+  await expect(live(page)).toContainText(l.dropped!.split('{item}')[0]!)
+  await expect(live(page)).not.toContainText(l.hit!)
+  await expect(live(page)).not.toContainText(l.miss!)
 })
 
-test('choices are named by what is drawn, never by raw values, and a certain hit is announced', async ({ page }) => {
-  for (const lang of ['en', 'pl'] as const) {
-    await open(page, lang)
-    await playButton(page, lang).click()
-    const g = await play(page, { lang, limit: 4, begun: true })
-    const names = await page.locator('.ftg-rocks button').evaluateAll((buttons) => buttons.map((button) => button.ariaLabel))
-    const bad = { en: 'bad datum', pl: 'zła dana' }[lang]
-    expect(names.filter((name) => name?.trim()).length).toBeGreaterThanOrEqual(4)
-    expect(names.join('|')).not.toMatch(/[0-9a-f]{7}|passed|failed|missing|zaliczone|brak wyniku/)
-    expect.soft(names.join('\n')).not.toContain(bad)
-    const slot = displayed(deck, g).findIndex((o) => o.sourceIndex === right(deck, g))
-    await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click')
-    await expect(live(page)).toContainText(strings.labels[lang].hit)
-  }
-})
+for (const [name, pick, said] of [['hit', right, l.hit], ['miss', wrong, l.miss]] as const)
+  test(`a live region announces a ${name} in a certain room`, async ({ page }) => {
+    await open(page)
+    await playButton(page).click()
+    const r = new Run(page)
+    await r.go(t1!.id)
+    await r.accuse(pick(t1!))
+    await expect(live(page)).toContainText(said!)
+  })

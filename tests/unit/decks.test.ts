@@ -1,24 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import curation from '../../scripts/deck/curation.json'
-import { pool, wave } from '../../src/game/engine.ts'
-import type { Spec } from '../../src/game/engine.ts'
-import { decks } from '../../src/game/levels/index.ts'
-import { gapOf, rowOf, seen, unseen } from '../../src/game/levels/observations.ts'
+import { gapOf } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
-import { staleRepos, toRows } from '../../scripts/make-deck.ts'
+import { staleRepos } from '../../scripts/make-deck.ts'
+import { toRows } from '../../scripts/world.ts'
 
-const { observations } = decks
-const specs = [
-  ...observations.levels.flatMap((l) => l.sequence.map((s, i) => ({ s, certain: l.anchors.includes(i) }))),
-  ...observations.rules.flatMap((r) => [1, 2, 3, 4, 5].flatMap((step) => [false, true].flatMap((certain) => pool(observations, r.id, step, certain).map((s) => ({ s, certain }))))),
-]
-
-describe('observation deck', () => {
-  it('splits the certain waves into typical and atypical gaps by their drawn signs', () => {
-    const l = observations.levels[0]!
-    expect(new Set(l.anchors.map((i) => observations.typical!(wave(observations, l.sequence[i]!)))).size).toBe(2)
-  })
-
+describe('observation rows', () => {
   it('reads only public deck rows and names every row whose values contradict the archive flag', () => {
     const context = { locks: 0, impacts: 0, agent: 0, job: 'failure', share: 0.5, tests: 30, criteria: 4 }
     const line = (o: object) => JSON.stringify({
@@ -58,48 +45,18 @@ describe('observation deck', () => {
     expect(stale.map((x) => x.split(':')[0]).sort()).toEqual(['broken', 'missing', 'old'])
   })
 
-  it('draws every choice from a public run whose values decide its gap', () => {
+  it('draws every row from a public run whose values decide its gap, for all four relations', () => {
     for (const r of rows) {
       expect(r.run).toMatch(/^https:\/\/github\.com\/serio-ngo\/(lifecycle-sandbox|serio-focus)\/actions\/runs\/\d+$/)
       expect(gapOf[r.rule]!(r.values)).toBe(r.gap)
     }
+    expect(new Set(rows.map((r) => r.rule))).toEqual(new Set(Object.keys(gapOf)))
   })
 
-  it('gives every wave exactly 4, 5, 6, 6 or 7 distinct runs by step, exactly one gap on a certain wave and any number on a research wave', () => {
-    const research = new Set<number>()
-    for (const { s, certain } of specs) {
-      const w = wave(observations, s)
-      const picked = w.ids!.map(rowOf)
-      expect(w.symbols).toEqual(picked.map(seen))
-      expect(w.symbols).toHaveLength([4, 5, 6, 6, 7][s.step - 1]!)
-      expect(new Set(picked.map((r) => r.run)).size).toBe(picked.length)
-      if (certain) expect(w.answers).toHaveLength(1)
-      else research.add(w.answers.length)
-      expect(w.answers).toEqual(picked.flatMap((r, i) => (r.gap ? [i] : [])))
-      expect(picked.every((r) => r.rule === s.rule && r.research === unseen(s.seed))).toBe(true)
-      expect(wave(observations, s)).toEqual(w)
-    }
-    expect([Math.min(...research), Math.max(...research) > 1]).toEqual([0, true])
-  })
-
-  it('reveals four different gap runs per level, the same in fixed and adaptive play, and never draws them on a research wave', () => {
-    for (const l of observations.levels) {
-      const gapOfWave = (s: Spec) => { const w = wave(observations, s); return w.ids![w.answers[0]!]! }
-      const shown = l.anchors.map((i) => gapOfWave(l.sequence[i]!))
-      expect(new Set(shown).size).toBe(l.anchors.length)
-      expect(new Set([1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step, true)).map(gapOfWave))).toEqual(new Set(shown))
-      const research = [...l.sequence.filter((_, i) => !l.anchors.includes(i)), ...[1, 2, 3, 4, 5].flatMap((step) => pool(observations, l.start.rule, step))]
-      expect(research.flatMap((s) => wave(observations, s).ids!.filter((id) => shown.includes(id)))).toEqual([])
-    }
-  })
-
-  it('has one odd revision level of 21 waves, certain only at 5, 10, 15 and 20, the last from runs no scored wave uses', () => {
-    expect(observations.levels.map((l) => l.start.rule)).toEqual(['odd_revision'])
-    for (const l of observations.levels) {
-      expect(l.anchors).toEqual([4, 9, 14, 19])
-      expect(l.sequence).toHaveLength(21)
-      expect(l.tail).toBe(1)
-      expect(unseen(l.sequence.at(-1)!.seed)).toBe(true)
-    }
+  it('derives the gap of each relation from its items', () => {
+    expect([gapOf.odd_revision!(['a', 'b']), gapOf.odd_revision!(['a', 'a'])]).toEqual([true, false])
+    expect([gapOf.lock_only!(['passed', 'fail']), gapOf.lock_only!(['passed', 'pass']), gapOf.lock_only!(['failed', 'pass'])]).toEqual([true, false, false])
+    expect([gapOf.missing_link!(['passed', 'missing']), gapOf.missing_link!(['passed', 'failed'])]).toEqual([true, false])
+    expect([gapOf.pair!(['t', 'u', 't']), gapOf.pair!(['t', 'u', '-', '-'])]).toEqual([true, false])
   })
 })

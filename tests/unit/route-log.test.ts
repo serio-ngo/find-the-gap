@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GameEnv } from '../../src/game/worker/route.ts'
-import { fakeEnv, send, stepReq, stubFetch } from './route-env.ts'
+import { ENC, fakeEnv, send, stepReq, stubFetch } from './route-env.ts'
 
 afterEach(() => {
   vi.restoreAllMocks()

@@ -1,14 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { decks } from '../../src/game/levels/index.ts'
-import { wave } from '../../src/game/engine.ts'
-import { edition } from '../../src/game/eval/version.ts'
-import { FIXTURE, fakeEnv, send, stepReq, stubFetch } from './route-env.ts'
+import { CERTAIN, fakeEnv, resultBody, send, stepReq, stubFetch, visits } from './route-env.ts'
 
 const DAY = 86_400_000
 const KEEP = 365 * DAY
-const d = decks.fixture!
-const pick = wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).answers[0]!
-const result = { v: FIXTURE, level: 1, mode: 0, edition: await edition(d), waves: [[0, 1, 0, pick, 1, 1, 0, 12, 0, 0, 1, 2345, 3, 0, ...wave(d, { rule: d.rules[0]!.id, step: 1, seed: 0 }).symbols.map(() => 812)]] }
+const result = resultBody(visits(CERTAIN))
 const on = (n: number) => vi.useFakeTimers({ toFake: ['Date'], now: Date.UTC(2031, 0, n) })
 afterEach(() => {
   vi.useRealTimers()

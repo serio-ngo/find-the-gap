@@ -1,10 +1,13 @@
 import { expect, test } from '@playwright/test'
-import { chartName, deck, expectEnd, open, play, right, wrong } from './helpers.ts'
+import { Run, chartName, expectEnd, open, playButton, right, trunk, wrong } from './helpers.ts'
 
 for (const lang of ['en', 'pl'] as const)
   test(`the end screen charts you against the AI and chance in ${lang}`, async ({ page }) => {
-    await open(page, lang, 1)
-    const g = await play(page, { lang, level: 1, pick: (s) => (s.decisions.length % 2 ? wrong(deck, s) : right(deck, s)) })
+    await open(page, lang)
+    await playButton(page, lang).click()
+    const r = new Run(page)
+    r.pick = (room) => (trunk.indexOf(room) % 2 ? wrong(room) : right(room))
+    await r.finish()
     await expectEnd(page)
-    await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(chartName(g, lang))
+    await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(chartName(r.visits, lang))
   })

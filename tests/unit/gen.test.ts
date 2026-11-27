@@ -1,110 +1,39 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { wave } from '../../src/game/engine.ts'
-import { colors, paintObject, shape } from '../../src/game/gen.ts'
-import type { Part, Shape, Signs } from '../../src/game/gen.ts'
-import { decks } from '../../src/game/levels/index.ts'
-import { presentObjects } from '../../src/game/objects.ts'
+import { digits, druse, monster } from '../../src/game/gen.ts'
+import { rows } from '../../src/game/levels/rows.ts'
 
-const N = 64
-const inside = (ps: Part['points'], x: number, y: number) => ps.reduce((odd, [ax, ay], i) => {
-  const [bx, by] = ps[(i + 1) % ps.length]!
-  return (ay > y) !== (by > y) && x < ax + ((y - ay) * (bx - ax)) / (by - ay) ? !odd : odd
-}, false)
+const odd = (a: string, b: string, criteria = 3) =>
+  monster({ rule: 'odd_revision', values: [a, b], context: { locks: 0, impacts: 0, agent: 0, job: 'success', share: 1, tests: 1, criteria } })
+const count = (s: string, tag: string) => s.split(tag).length - 1
+const segments = (values: string[]) => (monster({ rule: 'pair', values, context: null }).match(/,19\.5\)">.*?<\/g>/g) ?? [])
 
-const picture = (s: Shape) => {
-  const px: string[] = Array(N * N).fill('')
-  const cell = (v: number) => Math.min(N - 1, Math.max(0, Math.floor(((v + 1) / 2) * N)))
-  const fill = (p: Part, c: string) => {
-    const xs = p.points.map((q) => q[0])
-    const ys = p.points.map((q) => q[1])
-    for (let j = cell(Math.min(...ys)); j <= cell(Math.max(...ys)); j++) {
-      for (let i = cell(Math.min(...xs)); i <= cell(Math.max(...xs)); i++) if (inside(p.points, ((i + 0.5) / N) * 2 - 1, ((j + 0.5) / N) * 2 - 1)) px[j * N + i] = c
+describe('the monster carries the evidence', () => {
+  it('reads a short value as hex digits and a long one through a hash', () => {
+    expect(digits('a4757c3')).toEqual([10, 4, 7, 5, 7, 12, 3])
+    expect(digits('0123456789abcdef')).toHaveLength(7)
+  })
+
+  it('draws horns per half from the druse of its own SHA', () => {
+    expect(count(odd('a4757c3', '994920d'), 'rotate(')).toBe(druse('a4757c3').count + druse('994920d').count)
+    expect(odd('a4757c3', '994920d')).not.toBe(odd('994920d', 'a4757c3'))
+  })
+
+  it('draws 1, 2 or 3 eyes from the criteria', () => {
+    expect([2, 3, 4, 5, 6].map((c) => count(odd('a4757c3', '994920d', c), '<ellipse') - 2)).toEqual([1, 1, 2, 3, 3])
+  })
+
+  it('draws one segment per item: equal names give equal glyphs, a status a rivet', () => {
+    const [a, b, c] = segments(['same name', 'same name', 'other name'])
+    expect(a).toBe(b)
+    expect(a).not.toBe(c)
+    expect(new Set(segments(['passed', 'failed', 'missing'])).size).toBe(3)
+  })
+
+  it('never reads the gap flag or the id, and draws every row', () => {
+    for (const r of rows) {
+      const svg = monster(r)
+      expect(svg).toBe(monster({ rule: r.rule, values: r.values, context: r.context }))
+      expect(svg.startsWith('<svg')).toBe(true)
     }
-  }
-  paintObject(s, (p) => p.fill && fill(p, colors[p.fill] ?? p.fill))
-  return px
-}
-const holes = (px: string[]) => px.filter((c) => c === colors.light).length
-const lopsided = (px: string[]) => {
-  let seen = 0
-  let off = 0
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const a = px[j * N + i]!
-    if (!a) continue
-    seen++
-    off += +(a !== px[j * N + N - 1 - i])
-  }
-  return off / seen
-}
-const argmax = (xs: number[]) => xs.indexOf(Math.max(...xs))
-export const look = (shapes: Shape[]) => {
-  const pics = shapes.map(picture)
-  const h = pics.map(holes)
-  return Math.max(...h) > 0 ? argmax(h) : argmax(pics.map(lopsided))
-}
-
-describe('the board carries the evidence', () => {
-  it('odd revision: equal commits give a mirror-symmetric rock, different commits a lopsided one', () => {
-    expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'] }, 'ice')))).toBe(0)
-    expect(lopsided(picture(shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'] }, 'ice')))).toBeGreaterThan(0.02)
   })
-
-  const full: Signs = { job: 2, impacts: 2, full: 0, relocked: 1 }
-  it('craters and alien keep an equal-commit rock mirror-symmetric, and each follows its field', () => {
-    const r = (signs: Signs | null) => shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'], signs }, 'iron')
-    expect(lopsided(picture(r(full)))).toBe(0)
-    expect(r(full).facts).toMatchObject({ signs: true, craters: 2, bright: true, symmetric: true })
-    expect(r({ ...full, job: 1 }).facts.bright).toBe(false)
-    expect(r(null).over).toEqual([])
-    expect(r({ ...full, impacts: 0 }).over.length).toBe(r(full).over.length - 6)
-    expect(r(null).under).toEqual([])
-    expect(r(full).facts).toMatchObject({ arcs: 3, lit: true })
-    expect(r({ ...full, full: 1 }).facts.arcs).toBe(1)
-    expect(r({ ...full, full: 1 }).under.length).toBe(3)
-    expect(r({ ...full, relocked: 0 }).under.length).toBe(3)
-    expect(r({ ...full, relocked: 0 }).facts.lit).toBe(false)
-  })
-
-  it('each half reports the crystals drawn from its own commit', () => {
-    const [left, right] = shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'], signs: null }, 'iron').facts.sides
-    const same = shape({ rule: 'odd_revision', values: ['4a4c54a', '4a4c54a'], signs: null }, 'iron').facts.sides
-    expect(same[0]).toEqual(same[1])
-    expect(left).not.toEqual(right)
-  })
-
-  it('context strength fades context colours, never evidence or what is drawn', () => {
-    const a = shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'], signs: full }, 'iron', 0.4)
-    const b = shape({ rule: 'odd_revision', values: ['47f353e', '9c2d87a'], signs: full }, 'iron', 1)
-    expect(a.marks).toEqual(b.marks)
-    expect(a.body).toEqual(b.body)
-    expect(a.facts).toEqual(b.facts)
-    expect(a.over.map((p) => p.points)).toEqual(b.over.map((p) => p.points))
-    expect(a.under.map((p) => p.points)).toEqual(b.under.map((p) => p.points))
-    expect(a.over.map((p) => p.fill)).not.toEqual(b.over.map((p) => p.fill))
-  })
-
-  it('a picture-only observer finds every gap the AI finds from the data, and more', () => {
-    const d = decks.observations!
-    const ai = JSON.parse(readFileSync(new URL('../../src/game/eval/ai-run.json', import.meta.url), 'utf8')).standard as Record<string, (number | null)[]>
-    const tally = d.levels.map((l) => {
-      let eye = 0
-      let model = 0
-      let waves = 0
-      l.sequence.forEach((s, i) => {
-        const w = wave(d, s)
-        if (w.answers.length !== 1) return
-        waves++
-        const objects = presentObjects(d, w)
-        eye += +w.answers.includes(objects[look(objects.map((o) => o.shape))]!.sourceIndex)
-        model += +w.answers.includes(ai[l.id]![i] as number)
-      })
-      return { level: l.id, waves, eye, model }
-    })
-    console.table(tally)
-    for (const t of tally) {
-      expect(t.eye).toBe(t.waves)
-      expect(t.eye).toBeGreaterThanOrEqual(t.model)
-    }
-  }, 60_000)
 })
