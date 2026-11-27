@@ -158,7 +158,7 @@ export const paint = (root: HTMLElement, s: Scene) => {
   all('.ftg-mon').forEach((e, i) => { e.toggleAttribute('data-near', at.monsters.includes(i) && !done); e.toggleAttribute('data-picked', s.pick === i) })
   all('.ftg-st').forEach((e, i) => { e.toggleAttribute('data-near', i === at.station); e.toggleAttribute('data-read', s.read.includes(lay.items[i]!.code)) })
   all('.ftg-door').forEach((e, i) => { e.toggleAttribute('data-hidden', lay.doors[i]!.hidden && !s.found.has(lay.doors[i]!.id)); e.toggleAttribute('data-lock', !passable(lay.doors[i]!, s)) })
-  memo(q('.ftg-panel'), done ? `r${s.pick}${s.hit}${s.gain}` : `p${at.station}`, () => (done ? result(s) : panel(s, at.station)))
+  memo(q('.ftg-panel'), done ? `r${s.pick}${s.hit}${s.gain}` : `p${s.room.id}${at.station}`, () => (done ? result(s) : panel(s, at.station)))
   q('.ftg-hits').textContent = String(s.score)
   memo(q('.ftg-branch'), `${s.accused.size}`, () => branch(s))
   all('.ftg-items').forEach((e) => memo(e, `${[...s.bag]}`, () => collection(s.bag, s.l)))
