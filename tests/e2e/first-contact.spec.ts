@@ -1,61 +1,45 @@
 import { expect, test, type Page } from '@playwright/test'
-import { begin, shoot } from '../../src/game/engine.ts'
-import { chartName, deck, displayed, expectEnd, open, play, playButton, rockNames, strings } from './helpers.ts'
+import { world } from '../../src/game/levels/world.ts'
+import { Run, named, open, playButton, strings, trunk } from './helpers.ts'
 
 const l = strings.labels.en
+const [t1] = trunk
+const hero = (page: Page) => page.locator('.ftg-hero').getAttribute('style')
 
 for (const lang of ['en', 'pl'] as const)
-  test(`in ${lang} every rock carries its evidence and context from the first frame, one pick per wave, a verdict only on certain waves`, async ({ page }) => {
+  test(`in ${lang} the first room is a quiet hall and the first encounter names every monster by its evidence`, async ({ page }) => {
     await open(page, lang)
     await playButton(page, lang).click()
-    const g = begin(deck, 1, 'standard')
-    const twins = page.locator('[data-rock]')
-    await expect.poll(() => twins.evaluateAll((bs) => bs.map((b) => b.ariaLabel))).toEqual(rockNames(deck, g, lang))
-    await expect(page.locator('.ftg-hud button')).toHaveCount(3)
-    await expect(page.locator('.ftg-wave')).toHaveText('1/21')
-    await twins.nth(0).dispatchEvent('click')
-    await twins.nth(1).dispatchEvent('click')
-    await expect(page.locator('.ftg-wave')).toHaveText('2/21')
-    const after = await play(page, { lang, begun: true, start: shoot(deck, g, displayed(deck, g)[0]!.sourceIndex) })
-    expect(after.decisions).toHaveLength(21)
-    await expectEnd(page)
-    const certain = after.decisions.filter((d) => d.anchor)
-    expect(certain).toHaveLength(4)
-    await expect(page.locator('.ftg-chart [role=img]')).toHaveAccessibleName(chartName(after, lang))
-    const hud = await page.locator('.ftg-hud').innerText()
-    expect(hud).not.toContain('21/21')
-    await expect(page.locator('.ftg-end')).toBeFocused()
+    await expect(page.locator('.ftg')).toHaveAttribute('data-room', world.start)
+    await expect(page.locator('.ftg-card')).toHaveCount(0)
+    await expect(page.locator('.ftg-hits')).toHaveText('0')
+    await expect(page.locator('.ftg-branch svg')).toHaveAccessibleName(strings.labels[lang].branch!.replace('{n}', '0').replace('{k}', String(world.key)))
+    await expect(page.locator('.ftg-map svg')).toBeVisible()
+    await new Run(page).go(t1!.id)
+    await expect(page.locator('.ftg-card')).toHaveCount(t1!.monsters.length)
+    await expect.poll(() => page.locator('[data-walk^="m"]').evaluateAll((bs) => bs.map((b) => b.ariaLabel))).toEqual(named(t1!, lang))
+    await expect(page.locator('.ftg-card [data-accuse]:enabled')).toHaveCount(0)
   })
 
-test('pointer input on the canvas picks a rock', async ({ page }, info) => {
+test('the hot spots and the D-pad walk the hero', async ({ page }) => {
   await open(page)
   await playButton(page).click()
-  const box = (await page.locator('canvas').boundingBox())!
-  const points = await page.evaluate(
-    ({ x, y, w, h }) => {
-      const out: number[][] = []
-      for (let r = 0; r < 14; r++)
-        for (let c = 0; c < 20; c++) {
-          const px = x + ((c + 0.5) * w) / 20
-          const py = y + ((r + 0.5) * h) / 14
-          if (document.elementFromPoint(px, py)?.tagName === 'CANVAS') out.push([px, py])
-        }
-      return out
-    },
-    { x: box.x, y: box.y, w: box.width, h: box.height },
-  )
-  const status = page.locator('.ftg-sr').first()
-  let hit = false
-  for (let round = 0; round < 3 && !hit; round++)
-    for (const [x, y] of points) {
-      if (info.project.name === 'touch') await page.touchscreen.tap(x, y)
-      else await page.mouse.click(x, y)
-      if (await status.textContent()) {
-        hit = true
-        break
-      }
-    }
-  expect(hit).toBe(true)
+  const r = new Run(page)
+  await r.go(t1!.id)
+  const root = page.locator('.ftg')
+  await page.locator('[data-walk="m0"]').dispatchEvent('click')
+  await expect(page.locator('.ftg-mon').first()).toHaveAttribute('data-near', '')
+  await expect(page.locator('[data-accuse="0"]')).toBeEnabled()
+  await page.locator('[data-walk="s0"]').dispatchEvent('click')
+  await expect(page.locator('.ftg-st').first()).toHaveAttribute('data-near', '')
+  const before = await hero(page)
+  for (const dir of [l.down, l.up, l.left, l.right]) {
+    const at = await hero(page)
+    await page.getByRole('button', { name: dir, exact: true }).click()
+    if (dir === l.down || dir === l.left) await expect.poll(() => hero(page)).not.toBe(at)
+  }
+  expect(before).not.toBeNull()
+  await expect(root).toHaveAttribute('data-phase', 'play')
 })
 
 for (const [name, press] of [
@@ -63,26 +47,22 @@ for (const [name, press] of [
   ['the P key', async (p: Page) => p.keyboard.press('p')],
   ['the Escape key', async (p: Page) => p.keyboard.press('Escape')],
 ] as const) {
-  test(`pause by ${name} stops the wave counter`, async ({ page }) => {
+  test(`pause by ${name} freezes the hero and resume lets it walk`, async ({ page }) => {
     await open(page)
     await playButton(page).click()
     const root = page.locator('.ftg')
-    const wave = page.locator('.ftg-wave')
-    const hits = page.locator('.ftg-hits')
-    const live = page.locator('.ftg-sr').first()
-    const before = await wave.textContent()
-    const hitsBefore = await hits.textContent()
+    const live = page.locator('.ftg-sr')
+    const before = await hero(page)
     await press(page)
     await expect(root).toHaveAttribute('data-phase', 'paused')
-    const twin = page.locator('[data-rock]').first()
-    await twin.press('Enter')
-    await expect(hits).toHaveText(hitsBefore!)
+    await page.keyboard.press('ArrowUp')
+    await page.keyboard.press('ArrowLeft')
+    await page.locator('.ftg-pad').first().click()
+    expect(await hero(page)).toBe(before)
     await expect(live).toHaveText('')
-    await expect(wave).toHaveText(before!)
-    await page.getByRole('button', { name: strings.visible.en.resume }).click()
+    await page.getByRole('button', { name: l.resume }).click()
     await expect(root).toHaveAttribute('data-phase', 'play')
-    await twin.press('Enter')
-    await expect(live).not.toHaveText('')
-    await expect(wave).not.toHaveText(before!)
+    await page.keyboard.press('ArrowUp')
+    await expect.poll(() => hero(page)).not.toBe(before)
   })
 }

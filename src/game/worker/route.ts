@@ -1,7 +1,9 @@
-import { MAX_MS, URL_AI, canonical, keys, pool, round05, stepBody, validate, wave } from '../engine.ts'
-import type { AiPick, Deck, Level, Past, Spec } from '../engine.ts'
+import { MAX_MS, URL_AI, canonical, encounters, roomBody, rooms, rowMap, score as engineScore, validate } from '../engine.ts'
+import type { AiPick } from '../engine.ts'
 import { edition, sha256 } from '../eval/version.ts'
-import { decks } from '../levels/index.ts'
+import { BINDINGS } from '../levels/observations.ts'
+import { rows } from '../levels/rows.ts'
+import { world } from '../levels/world.ts'
 
 export type GameEnv = {
   DB: {
@@ -12,7 +14,7 @@ export type GameEnv = {
 }
 
 const DAILY_CAP = 1000
-const MAX_BYTES = 2048
+const MAX_BYTES = 8192
 const RESULT_CAP = 5000
 const TIMEOUT = 1500
 const KEEP_DAYS = 365
@@ -29,25 +31,14 @@ const list = (x: unknown, n: number): unknown[] => (Array.isArray(x) && x.length
 const exact = (x: unknown, ks: string[]): Record<string, unknown> =>
   x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).sort().join() === [...ks].sort().join() ? (x as Record<string, unknown>) : bad()
 
-const spec = (d: Deck, level: Level, standard: boolean, pos: number, a: unknown[]): Spec => {
-  const [r, step, seed] = [int(a[0], d.rules.length - 1), int(a[1], 1e6), int(a[2], 1e9)]
-  const s = { rule: d.rules[r]!.id, step, seed }
-  const same = (q: Spec) => q.rule === s.rule && q.step === s.step && q.seed === s.seed
-  const seq = level.sequence
-  const inPool = step >= 1 && step <= d.steps && pool(d, s.rule, step, level.anchors.includes(pos)).some(same)
-  return (standard || pos >= seq.length - (level.tail ?? 0) ? seq[pos] && same(seq[pos]) : inPool) ? s : bad()
-}
+const RS = rooms(world)
+const ENC = encounters(world)
+const ROWS = rowMap(rows)
+const HIDDEN = world.doors.filter((d) => d.kind === 'hidden').length
 
-const context = (b: Record<string, unknown>) => {
-  const d = Object.values(decks)[int(b.v, 1e3)] ?? bad()
-  const level = d.levels.find((l) => l.id === b.level) ?? bad()
-  const standard = int(b.mode, 1) === 0
-  return { d, level, standard, seq: level.sequence }
-}
-
-const hitOf = (d: Deck, s: Spec, pick: number) => {
-  const w = wave(d, s)
-  return { w, hit: w.answers.includes(int(pick, w.symbols.length - 1)) }
+const room = (b: Record<string, unknown>) => {
+  if (b.v !== 0) bad()
+  return RS[int(b.room, RS.length - 1)]!
 }
 
 const json = (o: unknown) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
@@ -79,16 +70,11 @@ const used = (env: GameEnv, col: 'step' | 'result', n = 1) =>
     .then((r) => r?.n ?? Infinity)
 
 const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p: Promise<unknown>): void }) => {
-  const { d, level, standard, seq } = context(exact(b, ['v', 'level', 'mode', 'wave', 'past']))
+  const r = room(exact(b, ['v', 'room']))
+  if (!r.monsters.length) bad()
   ctx.waitUntil(prune(env))
-  const rows = Array.isArray(b.past) && b.past.length < seq.length ? b.past : bad()
-  const past: Past[] = rows.map((p, i) => {
-    const a = list(p, 5)
-    const { w, hit } = hitOf(d, spec(d, level, standard, i, a), a[3] as number)
-    return { w, hit, tempo: int(a[4], 2) as 0 | 1 | 2 }
-  })
-  const w = wave(d, spec(d, level, standard, past.length, list(b.wave, 3)))
-  const body = stepBody(d, w, past)
+  const body = roomBody(r, ROWS)
+  const ks = r.monsters.map((_, i) => `r${i}`)
   const key = await sha256(canonical(body))
   const hit = await env.DB.prepare('SELECT body FROM game_cache WHERE key = ?').bind(key).first<{ body: string }>()
   if (hit) return json({ ...JSON.parse(hit.body), cached: true })
@@ -104,20 +90,14 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
     }).catch(() => fail(signal.aborted ? 'timeout' : 'unreachable'))
     if (!res.ok) fail('liquid ' + res.status)
     try {
-      const a = ((await res.json()) as { answers?: Record<string, AiPick> }).answers ?? {}
-      return { ai: validate(keys(w), a.ai).choice, hit: validate(['hit', 'miss'], a.if_hit).probabilities.hit!, miss: validate(['hit', 'miss'], a.if_miss).probabilities.hit! }
+      return validate(ks, ((await res.json()) as { answers?: Record<string, AiPick> }).answers?.ai).choice
     } catch {
       return fail(signal.aborted ? 'timeout' : 'invalid answer')
     }
   }
   const pass = await Promise.all([ask(), ask()]).catch((e: Error) => e)
   if (pass instanceof Error) return fallback(pass.message)
-  const [x, y] = pass
-  const out = {
-    ai: x.ai === y.ai ? Number(x.ai.slice(1)) : null,
-    hit: round05((x.hit + y.hit) / 2),
-    miss: round05((x.miss + y.miss) / 2),
-  }
+  const out = { ai: pass[0] === pass[1] ? Number(pass[0].slice(1)) : null }
   ctx.waitUntil(
     env.DB.prepare('INSERT OR IGNORE INTO game_cache (key, body, created) VALUES (?, ?, ?)').bind(key, JSON.stringify(out), Date.now()).run().catch(() => {}),
   )
@@ -125,36 +105,41 @@ const step = async (b: Record<string, unknown>, env: GameEnv, ctx: { waitUntil(p
 }
 
 const checked = async (b: Record<string, unknown>) => {
-  const { d, level, standard, seq } = context(b)
-  const version = await edition(d)
+  if (b.v !== 0 || b.level !== 1) bad()
+  const version = await edition(world, rows)
   if (b.edition !== version) bad()
-  const rows = Array.isArray(b.waves) && b.waves.length <= seq.length ? b.waves : bad()
-  const waves = rows.map((r, i) => {
-    const a = Array.isArray(r) ? r : bad()
-    const s = spec(d, level, standard, i, a)
-    const { w, hit } = hitOf(d, s, a[3] as number)
-    list(a, 14 + w.symbols.length)
-    if (a[4] !== +hit || a[13] !== +level.anchors.includes(i)) bad()
-    const n = w.symbols.length - 1
-    return [...a.slice(0, 4), a[4], int(a[5], 2), a[6] === -1 ? -1 : int(a[6], n), int(a[7], 20), int(a[8], 1), int(a[9], 1), int(a[10], 1), int(a[11], MAX_MS), int(a[12], 99), a[13], ...a.slice(14).map((x) => int(x, MAX_MS))]
+  const given = Array.isArray(b.visits) && b.visits.length <= ENC.length ? b.visits : bad()
+  const entered = new Set<number>()
+  const visits = given.map((r, i) => {
+    const a = list(r, 17)
+    const at = int(a[0], RS.length - 1)
+    const n = RS[at]!.monsters.length
+    if (!n || a[1] !== i || entered.has(at)) bad()
+    entered.add(at)
+    const stations = a.slice(7, 12).map((x) => (x === -1 ? -1 : int(x, BINDINGS.length - 1)))
+    stations.forEach((x, k) => {
+      if (x !== -1 && (!RS[at]!.clues.includes(BINDINGS[x]!.field) || stations.indexOf(x) !== k)) bad()
+      if (x === -1 && stations[k + 1] !== undefined && stations[k + 1] !== -1) bad()
+    })
+    const dwell = a.slice(12).map((x, k) => (k < n ? int(x, MAX_MS) : x === 0 ? 0 : bad()))
+    const pick = a[2] === -1 ? -1 : int(a[2], n - 1)
+    return [at, i, pick, int(a[3], MAX_MS), int(a[4], 99), int(a[5], 1), int(a[6], HIDDEN), ...stations, ...dwell] as number[]
   })
-  return { version, standard, waves }
+  return { version, visits }
 }
 
-const store = async (b: Record<string, unknown>, env: GameEnv, { version, standard, waves }: Awaited<ReturnType<typeof checked>>) => {
+const store = async (b: Record<string, unknown>, env: GameEnv, { version, visits }: Awaited<ReturnType<typeof checked>>) => {
   await env.DB.prepare('INSERT INTO game_results (day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?)')
-    .bind(new Date().toISOString().slice(0, 10), version, b.level, standard ? 0 : 1, JSON.stringify(waves))
+    .bind(new Date().toISOString().slice(0, 10), version, b.level, 0, JSON.stringify(visits))
     .run()
   await prune(env)
 }
 
 const result = async (b: Record<string, unknown>, env: GameEnv) => {
-  const c = await checked(exact(b, ['v', 'level', 'mode', 'waves', 'edition']))
+  const c = await checked(exact(b, ['v', 'level', 'visits', 'edition']))
   if ((await used(env, 'result')) <= RESULT_CAP) await store(b, env, c)
   return new Response(null, { status: 204 })
 }
-
-export const scoreOf = (waves: number[][]) => waves.reduce((t, a) => (a[13] && a[4] ? t + 100 + Math.max(0, Math.round(100 - a[11]! / 100)) : t), 0)
 
 const standing = async (env: GameEnv, version: string, level: number, mode: number, score: number) => {
   const top = await env.DB.prepare('SELECT name, score FROM game_board WHERE version = ? AND level = ? AND mode = ? ORDER BY score DESC, id ASC LIMIT ?').bind(version, level, mode, TOP).all<{ name: string; score: number }>()
@@ -163,17 +148,18 @@ const standing = async (env: GameEnv, version: string, level: number, mode: numb
 }
 
 const board = async (b: Record<string, unknown>, env: GameEnv) => {
-  const c = await checked(exact(b, ['v', 'level', 'mode', 'waves', 'edition', 'name', 'sent']))
+  const c = await checked(exact(b, ['v', 'level', 'visits', 'edition', 'name', 'sent']))
   const name = typeof b.name === 'string' && NAME.test(b.name.trim()) ? b.name.trim() : bad()
   const sent = int(b.sent, 1)
   if ((await used(env, 'result')) > RESULT_CAP) return new Response(null, { status: 204 })
-  const score = scoreOf(c.waves as number[][])
-  const mode = c.standard ? 0 : 1
+  const picked = c.visits.filter((a) => a[2]! >= 0)
+  if (picked.length < world.key || ENC.some((r) => r.certain && !picked.some((a) => RS[a[0]!] === r))) bad()
+  const score = engineScore(world, ROWS, c.visits.map((a) => ({ room: a[0]!, pick: a[2]!, ms: a[3]! })))
   await env.DB.prepare('INSERT INTO game_board (day, version, level, mode, name, score) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(new Date().toISOString().slice(0, 10), c.version, b.level, mode, name, score)
+    .bind(new Date().toISOString().slice(0, 10), c.version, b.level, 0, name, score)
     .run()
   if (!sent) await store(b, env, c)
-  return standing(env, c.version, b.level as number, mode, score)
+  return standing(env, c.version, b.level as number, 0, score)
 }
 
 const read = async (req: Request) => {

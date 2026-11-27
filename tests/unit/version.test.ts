@@ -1,28 +1,23 @@
 import { expect, it } from 'vitest'
-import type { ChoiceRecord, Wave } from '../../src/game/engine.ts'
 import { RUN, checkRun, hashContent, loadRun } from '../../scripts/ai.ts'
 import { edition } from '../../src/game/eval/version.ts'
-import { decks } from '../../src/game/levels/index.ts'
+import { rows } from '../../src/game/levels/rows.ts'
+import { world } from '../../src/game/levels/world.ts'
 
-it('the stored AI run matches the deck', async () => {
-  expect(checkRun(loadRun(RUN), await hashContent(decks.observations), decks.observations)).toBeNull()
+it('the stored AI run matches the world', async () => {
+  expect(checkRun(loadRun(RUN), await hashContent(world, rows), world)).toBeNull()
 })
 
-it('the edition changes when the anchors change', async () => {
-  const d = decks.observations
-  const moved = { ...d, levels: d.levels.map((l) => ({ ...l, anchors: [...l.anchors, 99] })) }
-  expect(await edition(moved)).not.toBe(await edition(d))
+it('checkRun reports a missing, stale or incomplete run', async () => {
+  const hash = await hashContent(world, rows)
+  expect(checkRun(undefined, hash, world)).toMatch(/missing/)
+  expect(checkRun({ hash: 'old', model: 'd1.1', date: '', picks: {} }, hash, world)).toMatch(/stale/)
+  expect(checkRun({ hash, model: 'd1.1', date: '', picks: {} }, hash, world)).toMatch(/incomplete/)
 })
 
-it('the edition changes when what a rock shows changes', async () => {
-  const d = decks.observations
-  const relinked = { ...d, choiceRecords: (w: Wave) => d.choiceRecords!(w).map((r) => ({ ...r, url: `${r.url}#moved` })) }
-  expect(await edition(relinked)).not.toBe(await edition(d))
-})
-
-it('the edition changes when a drawn context sign changes', async () => {
-  const d = decks.observations
-  const bump = (r: ChoiceRecord) => ({ ...r, signs: r.signs ? { ...r.signs, impacts: r.signs.impacts + 1 } : { job: 0, impacts: 1, full: 0, relocked: 0 } })
-  const resigned = { ...d, choiceRecords: (w: Wave) => d.choiceRecords!(w).map((r, i) => (i ? r : bump(r))) }
-  expect(await edition(resigned)).not.toBe(await edition(d))
+it('the edition changes when a row or the world changes', async () => {
+  const base = await edition(world, rows)
+  expect(base).toMatch(/^world:[0-9a-f]{12}$/)
+  expect(await edition(world, rows.map((r, i) => (i ? r : { ...r, values: [...r.values.slice(1), 'moved'] })))).not.toBe(base)
+  expect(await edition({ ...world, key: world.key + 1 }, rows)).not.toBe(base)
 })

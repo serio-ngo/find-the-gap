@@ -1,27 +1,15 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { MODEL, band, canonical, content, stepBody, wave } from '../src/game/engine.ts'
-import type { AiRun, Deck, Decision } from '../src/game/engine.ts'
+import { MODEL, canonical, content, encounters, rooms } from '../src/game/engine.ts'
+import type { AiRun } from '../src/game/engine.ts'
 import { sha256 } from '../src/game/eval/version.ts'
-import { decks } from '../src/game/levels/index.ts'
-import { stepRequest } from '../src/game/net.ts'
+import { rows } from '../src/game/levels/rows.ts'
+import type { Row, World } from '../src/game/levels/observations.ts'
+import { world } from '../src/game/levels/world.ts'
 
 export const RUN = fileURLToPath(new URL('../src/game/eval/ai-run.json', import.meta.url))
 
-export const hashContent = (d: Deck): Promise<string> =>
-  sha256(canonical([content(d), jobsFor(d).map(({ level, index, past }) => stepBody(d, wave(d, d.levels.find((l) => l.id === level)!.sequence[index]!),
-    past.map((x) => ({ w: wave(d, x.spec), hit: x.hit, tempo: band(x.secs) }))))]))
-
-export type Job = { level: number; index: number; past: Decision[] }
-
-export const jobsFor = (d: Deck): Job[] =>
-  d.levels.flatMap(({ id, sequence, anchors }) => {
-    const played = sequence.map((spec, i): Decision => {
-      const w = wave(d, spec)
-      return { spec, pick: w.answers[0] ?? 0, hit: w.answers.length > 0, anchor: anchors.includes(i), secs: 5 }
-    })
-    return sequence.map((_, index) => ({ level: id, index, past: played.slice(0, index) }))
-  })
+export const hashContent = (w: World, rs: Row[]): Promise<string> => sha256(canonical(content(w, rs)))
 
 export const loadRun = (path: string): AiRun | undefined => {
   try {
@@ -31,15 +19,13 @@ export const loadRun = (path: string): AiRun | undefined => {
   }
 }
 
-export const checkRun = (run: AiRun | undefined, hash: string, d: Deck): string | null => {
+export const checkRun = (run: AiRun | undefined, hash: string, w: World): string | null => {
   if (!run) return 'ai run missing: run npm run ai'
   if (run.hash !== hash || run.model !== MODEL) return 'ai run stale: run npm run ai'
-  for (const l of d.levels) {
-    const picks = run.standard?.[l.id]
-    if (!Array.isArray(picks) || picks.length !== l.sequence.length) return `ai run incomplete: level ${l.id}`
-    for (const [i, p] of picks.entries()) {
-      if (p !== null && !(Number.isInteger(p) && p >= 0 && p < wave(d, l.sequence[i]!).symbols.length)) return `ai run invalid: level ${l.id}, wave ${i + 1}`
-    }
+  for (const r of encounters(w)) {
+    const p = run.picks?.[r.id]
+    if (p === undefined) return `ai run incomplete: room ${r.id}`
+    if (p !== null && !(Number.isInteger(p) && p >= 0 && p < r.monsters.length)) return `ai run invalid: room ${r.id}`
   }
   return null
 }
@@ -65,17 +51,11 @@ export const ask = async (api: string, body: unknown, wait = sleep): Promise<num
 
 const main = async () => {
   const api = process.env.GAME_API ?? 'http://localhost:4321/api/game'
-  const d = decks.observations
-  const v = Object.values(decks).indexOf(d)
-  const standard: AiRun['standard'] = {}
-  for (const { level, index, past } of jobsFor(d)) {
-    const spec = d.levels.find((l) => l.id === level)!.sequence[index]!
-    ;(standard[level] ??= [])[index] = await ask(api, { ...stepRequest(d, v, level, spec, past), mode: 0 })
-  }
-  const run: AiRun = { hash: await hashContent(d), model: MODEL, date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }), standard }
+  const picks: AiRun['picks'] = {}
+  for (const { id } of encounters(world)) picks[id] = await ask(api, { v: 0, room: rooms(world).findIndex((r) => r.id === id) })
+  const run: AiRun = { hash: await hashContent(world, rows), model: MODEL, date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }), picks }
   writeFileSync(RUN, JSON.stringify(run, null, 2) + '\n')
-  const picks = Object.values(standard).flat()
-  console.log(`waves ${picks.length}, stable ${picks.filter((p) => p !== null).length}`)
+  console.log(`rooms ${Object.keys(picks).length}, stable ${Object.values(picks).filter((p) => p !== null).length}`)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

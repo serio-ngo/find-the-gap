@@ -1,84 +1,189 @@
 import { expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { aiPick, begin, report, shoot, upcoming, wave } from '../../src/game/engine.ts'
-import type { AiRun, Deck, Game, Mode } from '../../src/game/engine.ts'
-import { presentObjects } from '../../src/game/objects.ts'
+import { hit, report, rooms, rowMap } from '../../src/game/engine.ts'
+import type { AiRun, Visit } from '../../src/game/engine.ts'
 import { label } from '../../src/game/chart.ts'
 import type { Labels } from '../../src/game/chart.ts'
-import { describe } from '../../src/game/debrief.ts'
-import { decks } from '../../src/game/levels/index.ts'
+import { hash } from '../../src/game/gen.ts'
+import { rows } from '../../src/game/levels/rows.ts'
+import { world } from '../../src/game/levels/world.ts'
+import { BINDINGS } from '../../src/game/levels/observations.ts'
+import type { Room } from '../../src/game/levels/observations.ts'
+import { entry, layout, passable, reach, step } from '../../src/game/view.ts'
+import type { Gate, Spot } from '../../src/game/view.ts'
 
 export type Lang = 'pl' | 'en'
-export const deck = decks.observations!
 export const run = JSON.parse(readFileSync('src/game/eval/ai-run.json', 'utf8')) as AiRun
 export const strings = JSON.parse(readFileSync('src/game/strings.json', 'utf8')) as {
   visible: Record<Lang, Record<string, string>>
   labels: Record<Lang, Record<string, string>>
 }
 
-export const urlPath = (lang: Lang, level = 1, query = '') => `${lang === 'en' ? '/en' : ''}/game/${level}/${query}`
-export const levelUrl = (lang: Lang, level = 1) => `https://serio.org.pl${lang === 'en' ? '/en' : ''}/game/${level}`
+export const all = rooms(world)
+export const byId = new Map(all.map((r) => [r.id, r]))
+export const rowsById = rowMap(rows)
+export const trunk = all.filter((r) => r.certain)
 
-export const right = (d: Deck, g: Game) => wave(d, upcoming(d, g)!).answers[0] ?? 0
-export const wrong = (d: Deck, g: Game) => {
-  const w = wave(d, upcoming(d, g)!)
-  return Math.max(0, w.symbols.findIndex((_, i) => !w.answers.includes(i)))
+export const right = (room: Room) => Math.max(0, room.monsters.findIndex((_, i) => hit(rowsById, room, i)))
+export const wrong = (room: Room) => (right(room) ? 0 : 1)
+
+const short = (s: string) => (s.length > 7 ? hash(s).toString(16).padEnd(7, '0').slice(0, 7) : s)
+export const named = (room: Room, lang: Lang) => {
+  const l = strings.labels[lang]
+  return room.monsters.map((id, i) => {
+    const m = rowsById.get(id)!
+    const c = m.context?.criteria ?? 0
+    return l.monster!.replace('{n}', String(i + 1)).replace('{s}', `${m.values.map(short).join(', ')}; ${l.eyes!.replace('{n}', String(c <= 3 ? 1 : c === 4 ? 2 : 3))}`)
+  })
 }
 
-export const displayed = (d: Deck, g: Game, i = g.decisions.length) =>
-  presentObjects(d, wave(d, g.decisions[i]?.spec ?? upcoming(d, g)!))
-
-export const rockNames = (d: Deck, g: Game, lang: Lang) => {
-  const labels = strings.labels[lang]
-  return displayed(d, g).map((o, k) => `${labels.rock.replace('{n}', String(k + 1)).replace('{s}', labels[o.shape.family]!)}. ${describe(o.shape.facts, labels)}`)
-}
-
-export const chartName = (g: Game, lang: Lang = 'en') => {
-  const played = { ...g, decisions: g.decisions.map((d, i) => ({ ...d, ai: aiPick(run, deck, g, i) })) }
-  return label(report(deck, played), { ...strings.visible[lang], chart: strings.labels[lang].chart } as Labels)
-}
-
-export const open = (page: Page, lang: Lang = 'en', level = 1, query = '') => page.goto(urlPath(lang, level, query))
-export const playButton = (page: Page, lang: Lang = 'en') => page.getByRole('button', { name: strings.visible[lang].play, exact: true })
-
-type Options = {
-  deck?: Deck
-  level?: number
-  mode?: Mode
-  lang?: Lang
-  by?: 'click' | 'keys'
-  pick?: (g: Game) => number
-  limit?: number
-  begun?: boolean
-  start?: Game
-  live?: { hit: number; miss: number }
-}
-
-export async function play(page: Page, o: Options = {}) {
-  const { deck: d = deck, level = 1, mode = 'standard', lang = 'en', by = 'click', pick = (g: Game) => right(d, g), limit = Infinity, begun = false, live } = o
-  if (!begun) await playButton(page, lang).click()
-  let g = o.start ?? begin(d, level, mode)
-  for (let spec = upcoming(d, g); spec && g.decisions.length < limit; spec = upcoming(d, g)) {
-    const i = pick(g)
-    const objects = displayed(d, g)
-    const slot = objects.findIndex((o) => o.sourceIndex === i)
-    const names = rockNames(d, g, lang)
-    await expect.poll(() => page.locator('.ftg-rocks button').evaluateAll((bs) => bs.map((b) => b.ariaLabel))).toEqual(names)
-    const before = await page.locator('.ftg-wave').textContent()
-    if (by === 'keys') {
-      for (let k = 0; k < slot; k++) await page.keyboard.press('ArrowRight')
-      await page.keyboard.press(slot % 2 ? 'Enter' : 'Space')
-    } else await page.locator(`[data-rock="${slot}"]`).dispatchEvent('click')
-    g = shoot(d, g, i, 0, live)
-    await page.waitForFunction(
-      (b) => document.querySelector('.ftg')!.getAttribute('data-phase') === 'end' || document.querySelector('.ftg-wave')!.textContent !== b,
-      before,
-    )
-  }
-  return g
-}
-
+export const urlPath = (lang: Lang, level = 1) => `${lang === 'en' ? '/en' : ''}/game/${level}/`
+export const open = (page: Page, lang: Lang = 'en', level = 1) => page.goto(urlPath(lang, level))
+export const playButton = (page: Page, lang: Lang = 'en') => page.getByRole('button', { name: strings.labels[lang].play, exact: true })
 export const expectEnd = (page: Page) => expect(page.locator('.ftg')).toHaveAttribute('data-phase', 'end')
 
 export const collected = (page: Page, scope: string) =>
   page.locator(`${scope} .ftg-count`).evaluateAll((counts) => counts.reduce((n, c) => n + Number(c.textContent), 0))
+
+export const chartName = (visits: Visit[], lang: Lang = 'en') =>
+  label(report(world, rowsById, visits, run.picks), { ...strings.visible[lang], chart: strings.labels[lang].chart } as Labels)
+
+const KEYS: Record<string, string> = { '1,0': 'ArrowRight', '-1,0': 'ArrowLeft', '0,1': 'ArrowDown', '0,-1': 'ArrowUp' }
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
+type Move = readonly [number, number]
+
+const tiles = (lay: ReturnType<typeof layout>, from: Spot, goal: (p: Spot) => boolean, door?: Gate) => {
+  const seen = new Set([`${from.x},${from.y}`])
+  const queue = [{ p: from, m: [] as Move[] }]
+  for (const { p, m } of queue) {
+    if (goal(p)) return m
+    for (const d of DIRS) {
+      const r = step(lay, p, d[0], d[1])
+      if ('to' in r) {
+        if (r === door) return [...m, d]
+      } else if (!seen.has(`${r.x},${r.y}`)) {
+        seen.add(`${r.x},${r.y}`)
+        queue.push({ p: r, m: [...m, d] })
+      }
+    }
+  }
+  throw new Error('no path')
+}
+
+const route = (from: string, to: string) => {
+  const prev = new Map([[from, '']])
+  for (const id of prev.keys())
+    for (const d of world.doors) {
+      const n = d.a === id ? d.b : d.b === id ? d.a : ''
+      if (n && !prev.has(n) && (n !== world.gate || n === to)) prev.set(n, id)
+    }
+  const out = [to]
+  while (out[0] !== from) out.unshift(prev.get(out[0]!)!)
+  return out.slice(1)
+}
+
+export const near = new Map([[world.start, 0]])
+for (const id of near.keys())
+  for (const d of world.doors) {
+    const n = d.a === id ? d.b : d.b === id ? d.a : ''
+    if (n && d.kind === 'open' && n !== world.gate && !near.has(n)) near.set(n, near.size)
+  }
+export const suites = [...near.keys()].filter((id) => byId.get(id)!.monsters.length && !byId.get(id)!.certain).slice(0, world.key - trunk.length)
+
+export class Run {
+  page: Page
+  keys: boolean
+  pick: (room: Room) => number
+  room = byId.get(world.start)!
+  lay = layout(world, this.room)
+  at: Spot = entry(this.lay)
+  found = new Set<string>()
+  accused = new Set<string>()
+  reads = new Map<string, number[]>()
+  visits: Visit[] = []
+
+  constructor(page: Page, keys = false, pick = right) {
+    this.page = page
+    this.keys = keys
+    this.pick = pick
+  }
+
+  private see() {
+    const near = reach(this.lay, this.at)
+    near.hidden.forEach((d) => this.found.add(d.id))
+    if (near.station < 0) return
+    const k = BINDINGS.findIndex((b) => b.field === this.lay.stations[near.station]!.field)
+    const list = this.reads.get(this.room.id) ?? []
+    if (!list.includes(k)) this.reads.set(this.room.id, [...list, k])
+  }
+
+  private enter(to: string) {
+    const from = this.room.id
+    this.room = byId.get(to)!
+    this.lay = layout(world, this.room)
+    this.at = entry(this.lay, from)
+    this.see()
+  }
+
+  private open(d: Gate) {
+    return passable(d, { found: this.found, accused: this.accused, room: this.room, world })
+  }
+
+  async move([dx, dy]: Move) {
+    await this.page.keyboard.press(KEYS[`${dx},${dy}`]!)
+    const r = step(this.lay, this.at, dx, dy)
+    if (!('to' in r)) {
+      this.at = r
+      this.see()
+    } else if (this.open(r)) this.enter(r.to)
+  }
+
+  async walk(goal: (p: Spot) => boolean, door?: Gate) {
+    for (const m of tiles(this.lay, this.at, goal, door)) await this.move(m)
+  }
+
+  station = (k: number) => this.walk((p) => reach(this.lay, p).station === k)
+  monster = (i: number) => this.walk((p) => reach(this.lay, p).monsters.includes(i))
+  beside = (id: string) => this.walk((p) => reach(this.lay, p).hidden.some((d) => d.to === id))
+
+  async door(to: string) {
+    const i = this.lay.doors.findIndex((d) => d.to === to)
+    const d = this.lay.doors[i]!
+    if (this.keys) return this.walk(() => false, d)
+    await this.page.locator(`[data-walk="d${i}"]`).dispatchEvent('click')
+    const m = tiles(this.lay, this.at, () => false, d)
+    for (const [dx, dy] of m.slice(0, -1)) this.at = step(this.lay, this.at, dx, dy) as Spot
+    this.see()
+    if (this.open(d)) this.enter(to)
+  }
+
+  async accuse(i: number) {
+    await expect(this.page.locator('.ftg')).toHaveAttribute('data-room', this.room.id)
+    await this.monster(i)
+    const stamp = this.page.locator(`[data-accuse="${i}"]`)
+    if (this.keys) {
+      await stamp.focus()
+      await this.page.keyboard.press('Enter')
+    } else await stamp.dispatchEvent('click')
+    await expect(this.page.locator('.ftg-mon').nth(i)).toHaveAttribute('data-picked', '')
+    this.accused.add(this.room.id)
+    this.visits.push({ room: all.indexOf(this.room), pick: i, ms: 0 })
+  }
+
+  async go(id: string) {
+    for (const to of route(this.room.id, id)) {
+      if (this.lay.doors.find((d) => d.to === to)!.trunk && !this.accused.has(this.room.id)) await this.accuse(this.pick(this.room))
+      await this.door(to)
+    }
+  }
+
+  async accuseIn(id: string) {
+    await this.go(id)
+    if (!this.accused.has(id)) await this.accuse(this.pick(this.room))
+  }
+
+  async finish() {
+    for (const id of [...suites, ...trunk.map((r) => r.id)]) await this.accuseIn(id)
+    await this.go(world.gate)
+  }
+}

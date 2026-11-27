@@ -1,171 +1,209 @@
-import { decks } from './levels/index.ts'
-import { aiPick, asks, begin, forecast, upcoming, wave, shoot, score } from './engine.ts'
-import type { AiRun, Game, Mode, Wave } from './engine.ts'
+import { hit, rowMap, rooms, score, scoreOf } from './engine.ts'
+import type { AiRun } from './engine.ts'
 import stored from './eval/ai-run.json'
-import { askBoard, askStep, boardRequest, resultRequest, resultRow, sendResult, stepRequest } from './net.ts'
-import type { Board, Step } from './net.ts'
-import { presentObjects } from './objects.ts'
-import { createField } from './render.ts'
+import { decks } from './levels/index.ts'
+import { BINDINGS } from './levels/observations.ts'
+import type { Row, World } from './levels/observations.ts'
+import { askBoard, boardRequest, resultRequest, sendResult, visitRow } from './net.ts'
+import type { Board, VisitRecord } from './net.ts'
 import { aimTracker } from './aim.ts'
 import { bindInput } from './input.ts'
 import { load, save } from './stats.ts'
-import { describe, showResult } from './debrief.ts'
-import { collection, icon, itemOf } from './items.ts'
-import { esc } from './chart.ts'
+import { showResult } from './debrief.ts'
+import { itemOf } from './items.ts'
 import type { Item } from './items.ts'
-import type { Rounds, Text } from './debrief.ts'
+import { esc } from './chart.ts'
+import { f } from './cards.ts'
+import { entry, layout, paint, passable, reach, step } from './view.ts'
+import type { Scene, Spot } from './view.ts'
+import type { Text } from './debrief.ts'
+
+type Rec = VisitRecord & { t0: number; aimed: number; hit: boolean; gain: number; aim: ReturnType<typeof aimTracker> }
 
 const root = document.querySelector<HTMLElement>('.ftg')!
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!
+const json = <T>(s: string) => JSON.parse($(s).textContent!) as T
 const text = JSON.parse(root.dataset.strings!) as Text
 const { l } = text
-const query = new URLSearchParams(location.search)
-const deck = decks[query.get('deck') === 'fixture' ? 'fixture' : 'observations']
-const edition = JSON.parse(root.dataset.editions!)[deck.id] as string
-const level = deck.levels.find((x) => x.id === Number(root.dataset.level))?.id ?? 1
-const total = deck.levels.find((x) => x.id === level)!.sequence.length
-const ai: AiRun | undefined = deck.question ? stored : undefined
+const world = json<World>('.ftg-world')
+const rows = rowMap(json<Row[]>('.ftg-rows'))
+const all = rooms(world)
+const byId = new Map(all.map((r) => [r.id, r]))
+const level = Number(root.dataset.level)
+const edition = root.dataset.edition!
 const api = root.dataset.api
-const deckIdx = Object.values(decks).indexOf(deck)
+const ai = (stored as AiRun).picks
+const hasNext = decks.observations.levels.some((x) => x.id === level + 1)
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
 
-const fieldEl = $('.ftg-field')
-const rocksEl = $('.ftg-rocks')
 const pauseEl = $('.ftg-pause')
 const live = $('.ftg-sr')
-const modeBtn = $<HTMLButtonElement>('.ftg-mode')
 const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
 const boardEl = $<HTMLFormElement>('.ftg-board')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
-const aim = aimTracker()
-const onAim = (i: number) => aim.lock(i, root.dataset.phase === 'paused' ? pausedAt : performance.now(), root.dataset.phase === 'play')
-const field = createField($('canvas') as HTMLCanvasElement, { calm: motion.matches, onAim })
 
-let mode: Mode = ai && query.get('mode') === 'adaptive' ? 'adaptive' : 'standard'
-let g: Game
-let busy = false
-let t0 = 0
+let room = byId.get(world.start)!
+let lay = layout(world, room)
+let at: Spot = entry(lay)
+let found = new Set<string>()
+let accused = new Set<string>()
+let visited = new Set<string>()
+let recs = new Map<string, Rec>()
+let order: Rec[] = []
+let bag = new Map<Item, number>()
+let lost = 0
 let pausedAt = 0
 let toggled = false
 let first = false
-let rounds: Rounds = []
-let answer: Step | null = null
-let waves: number[][] = []
 let sent = false
-let bag = new Map<Item, number>()
 
-const showBag = () => root.querySelectorAll('.ftg-items').forEach((e) => (e.innerHTML = collection(bag, l)))
+const clock = () => (root.dataset.phase === 'paused' ? pausedAt : performance.now()) - lost
+const rec = () => recs.get(room.id)
 
-const phase = (p: string) => {
-  root.dataset.phase = p
-  modeBtn.disabled = p === 'play' || p === 'paused'
+const scene = (): Scene => {
+  const r = rec()
+  return {
+    world, room, lay, monsters: room.monsters.map((id) => rows.get(id)!), at, read: r?.stations.map((k) => BINDINGS[k]!.field) ?? [], pick: r?.pick ?? -1,
+    hit: r?.hit ?? false, gain: r?.gain ?? 0, score: score(world, rows, order), found, accused, visited, bag, l,
+  }
 }
+
+const phase = (p: string) => (root.dataset.phase = p)
 
 const setCalm = (b: boolean) => {
   calmBtn.setAttribute('aria-pressed', String(b))
   if (b) root.dataset.calm = ''
   else delete root.dataset.calm
-  field.setCalm(b)
-}
-
-const setMode = (m: Mode) => {
-  mode = m
-  modeBtn.setAttribute('aria-pressed', String(m === 'adaptive'))
 }
 
 const setPause = (p: boolean) => {
   if (root.dataset.phase !== (p ? 'play' : 'paused')) return
   if (p) pausedAt = performance.now()
-  else {
-    t0 += performance.now() - pausedAt
-    aim.resume(performance.now() - pausedAt)
-  }
+  else lost += performance.now() - pausedAt
   phase(p ? 'paused' : 'play')
   pauseEl.hidden = !p
-  if (p) field.pause()
-  else field.resume()
+  if (!p) root.focus({ preventScroll: true })
 }
 
-const nextWave = () => {
-  const spec = upcoming(deck, g)
-  if (!spec) return end()
-  const w = wave(deck, spec)
-  const i = g.decisions.length
-  const objects = presentObjects(deck, w)
-  rounds[i] = objects
-  const names = objects.map((o, k) => `${l.rock.replace('{n}', String(k + 1)).replace('{s}', l[o.shape.family] ?? l.object)}. ${describe(o.shape.facts, l)}`)
-  rocksEl.replaceChildren(...objects.map((_, k) => {
-    const b = Object.assign(document.createElement('button'), { className: 'ftg-rock', onclick: () => pick(k, w) })
-    b.dataset.rock = String(k)
-    b.setAttribute('aria-label', names[k]!)
-    return b
-  }))
-  field.show(objects, names)
-  $('.ftg-hits').textContent = String(score(g))
-  $('.ftg-wave').textContent = `${i + 1}/${total}`
-  answer = null
-  if (api && asks(deck, g, i)) {
-    askStep(api, stepRequest(deck, deckIdx, level, w, g.decisions)).then((a) => { if (!a) { const down = root.querySelector<HTMLElement>('.ftg-down'); if (down?.hidden) { down.hidden = false; live.textContent = down.textContent!.trim() } } if (rounds[i] === objects && g.decisions.length === i) answer = a })
+const fin = (r: Rec) => {
+  r.aim.lock(-1, clock(), false)
+  Object.assign(r, r.aim.read(all[r.room]!.monsters.map((_, i) => i)))
+}
+
+const arrive = () => {
+  const r = rec()
+  const near = reach(lay, at)
+  near.hidden.forEach((d) => found.add(d.id))
+  let heard = false
+  const k = near.station >= 0 ? BINDINGS.findIndex((b) => b.field === lay.stations[near.station]!.field) : -1
+  if (r && k >= 0 && !r.stations.includes(k)) {
+    r.stations.push(k)
+    heard = true
   }
-  busy = false
-  rocksEl.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
-  field.lock(-1)
-  t0 = performance.now()
-  aim.reset(t0)
+  if (r && r.pick < 0) {
+    const i = near.monsters.includes(r.aimed) ? r.aimed : (near.monsters[0] ?? -1)
+    if (i !== r.aimed) {
+      r.aimed = i
+      r.aim.lock(i, clock(), true)
+    }
+  }
+  paint(root, scene())
+  if (!root.contains(document.activeElement)) root.focus({ preventScroll: true })
+  if (heard) live.textContent = root.querySelector('.ftg-sheet')?.getAttribute('aria-label') ?? live.textContent
 }
 
-const pick = async (i: number, w: Wave) => {
-  if (busy || root.dataset.phase !== 'play') return
-  busy = true
-  const objects = rounds[g.decisions.length]!
-  const rule = g.rule
-  const got = answer
-  onAim(i)
-  const item = itemOf(objects[i]!)
+const go = (to: string) => {
+  const from = room.id
+  room = byId.get(to)!
+  if (to === world.gate) return end()
+  lay = layout(world, room)
+  at = entry(lay, from)
+  visited.add(to)
+  if (room.monsters.length && !recs.has(to)) {
+    const r: Rec = { room: all.indexOf(room), route: order.length, pick: -1, ms: 0, switches: 0, first, doors: found.size, stations: [], dwell: [], t0: clock(), aimed: -1, hit: false, gain: 0, aim: aimTracker() }
+    recs.set(to, r)
+    order.push(r)
+  }
+  arrive()
+}
+
+const move = (dx: number, dy: number) => {
+  const r = step(lay, at, dx, dy)
+  if (!('to' in r)) {
+    at = r
+    return arrive()
+  }
+  if (passable(r, { found, accused, room, world })) go(r.to)
+}
+
+const near = (a: Spot, b: Spot) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= 1
+
+const walk = (kind: string, i: number) => {
+  const door = kind === 'd' ? lay.doors[i] : undefined
+  const goal = (p: Spot) => (kind === 'm' ? reach(lay, p).monsters.includes(i) : kind === 's' && near(lay.stations[i]!, p))
+  const seen = new Set([`${at.x},${at.y}`])
+  const queue = [{ p: at, m: [] as (readonly number[])[] }]
+  for (const { p, m } of queue) {
+    if (goal(p)) return m.forEach(([dx, dy]) => move(dx!, dy!))
+    for (const d of DIRS) {
+      const r = step(lay, p, d[0], d[1])
+      if ('to' in r) {
+        if (r === door) return [...m, d].forEach(([dx, dy]) => move(dx!, dy!))
+      } else if (!seen.has(`${r.x},${r.y}`)) {
+        seen.add(`${r.x},${r.y}`)
+        queue.push({ p: r, m: [...m, d] })
+      }
+    }
+  }
+}
+
+const stamp = (i: number) => {
+  const r = rec()
+  if (!r || r.pick >= 0) return
+  const close = reach(lay, at).monsters
+  const k = i < 0 ? (close.includes(r.aimed) ? r.aimed : (close[0] ?? -1)) : i
+  if (!close.includes(k)) return
+  r.pick = k
+  r.ms = clock() - r.t0
+  fin(r)
+  accused.add(room.id)
+  r.hit = hit(rows, room, k)
+  r.gain = room.certain ? scoreOf(r.hit, r.ms) : 0
+  const item = itemOf(rows.get(room.monsters[k]!)!)
   bag.set(item, (bag.get(item) ?? 0) + 1)
-  showBag()
-  const at = field.at(i)
-  const drop = Object.assign(document.createElement('span'), { className: 'ftg-drop', innerHTML: icon(item) })
-  drop.style.left = `${at.x}px`
-  drop.style.top = `${at.y}px`
-  fieldEl.append(drop)
-  setTimeout(() => drop.remove(), 1500)
-  const aimed = { ms: performance.now() - t0, ...aim.read(objects.map((o) => o.sourceIndex)) }
-  g = shoot(deck, g, objects[i]!.sourceIndex, (performance.now() - t0) / 1000, got ? { hit: got.hit, miss: got.miss } : undefined)
-  const d = g.decisions.at(-1)!
-  d.ai = got ? got.ai : ai && aiPick(ai, deck, g, g.decisions.length - 1)
-  const p = g.mode === 'adaptive' ? forecast(deck, { ...g, rule }, got ?? undefined) : 0
-  waves.push(resultRow(deck, d, p, got, first, aimed))
-  const switched = g.mode === 'adaptive' && g.rule !== rule
-  $('.ftg-switch').hidden = !switched
-  live.textContent = [d.anchor ? (d.hit ? l.hit : l.miss) : `${l.wave} ${g.decisions.length}`, l.dropped.replace('{item}', l[item]), switched ? l.switch : ''].filter(Boolean).join('. ')
-  const answers = d.anchor ? objects.flatMap((o, index) => w.answers.includes(o.sourceIndex) ? [index] : []) : undefined
-  await field.shoot(i, d.anchor ? d.hit : null, answers)
-  nextWave()
+  paint(root, scene())
+  root.focus({ preventScroll: true })
+  live.textContent = [room.certain ? (r.hit ? l.hit : l.miss) : '', f(l.dropped, l[item])].filter(Boolean).join('. ')
 }
 
 const start = () => {
-  g = begin(deck, level, mode)
-  first = !load(deck.id, level, undefined, edition)?.plays
-  rounds = []
-  waves = []
-  sent = false
+  found = new Set()
+  accused = new Set()
+  visited = new Set([world.start])
+  recs = new Map()
+  order = []
   bag = new Map()
-  showBag()
-  $('.ftg-switch').hidden = true
+  sent = false
+  lost = 0
+  first = !load('observations', level, undefined, edition)?.plays
+  room = byId.get(world.start)!
+  lay = layout(world, room)
+  at = entry(lay)
+  delete root.dataset.room
   $('.ftg-end').hidden = true
-  fieldEl.hidden = false
   $('.ftg-start').hidden = true
   phase('play')
-  field.resume()
-  nextWave()
+  root.focus({ preventScroll: true })
+  arrive()
 }
 
 const study = () => { try { return localStorage.getItem('ftg:study') === '1' } catch { return false } }
+const rowsOut = () => order.map(visitRow)
 const contribute = () => {
   if (!api || sent || !study()) return
   sent = true
-  sendResult(api, resultRequest(deckIdx, level, g.mode, waves, edition))
+  sendResult(api, resultRequest(rowsOut(), edition))
 }
 
 const showBoard = (b: Board, name: string) => {
@@ -179,13 +217,14 @@ const showBoard = (b: Board, name: string) => {
 }
 
 const end = () => {
+  order.filter((r) => r.pick < 0).forEach((r) => {
+    r.ms = clock() - r.t0
+    fin(r)
+  })
   phase('end')
-  field.pause()
-  fieldEl.hidden = true
-  rocksEl.replaceChildren()
   $('.ftg-end').hidden = false
-  save(deck.id, level, score(g), { edition, mode: g.mode, picks: g.decisions.map((d) => d.pick), decisions: g.decisions.map(({ hit, ...d }) => (d.anchor ? { ...d, hit } : d)) })
-  showResult(root, deck, g, text, rounds)
+  save('observations', level, score(world, rows, order), { mode: 'world', picks: order.map((r) => r.pick), edition })
+  showResult(root, world, rows, order, ai, text, hasNext)
   boardEl.hidden = !api
   boardEl.querySelectorAll('input, button').forEach((e) => ((e as HTMLInputElement).disabled = false))
   $('.ftg-top').replaceChildren()
@@ -195,15 +234,11 @@ const end = () => {
 
 setCalm(motion.matches)
 motion.onchange = (e) => !toggled && setCalm(e.matches)
-setMode(mode)
-modeBtn.hidden = !ai
 phase('start')
-bindInput(root, field, { togglePause: () => setPause(root.dataset.phase === 'play'), focus: (i) => field.focus(i), aim: (x, y) => field.aim(x, y), lock: (i) => field.lock(i) })
+root.tabIndex = -1
+bindInput(root, { pause: () => setPause(root.dataset.phase === 'play'), move, walk, stamp })
 $('.ftg-play').onclick = start
 $('.ftg-again').onclick = start
-$('.ftg-resume').onclick = () => setPause(false)
-$('.ftg-pausebtn').onclick = () => setPause(root.dataset.phase === 'play')
-modeBtn.onclick = () => setMode(mode === 'adaptive' ? 'standard' : 'adaptive')
 calmBtn.onclick = () => (toggled = true) && setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')
 studyBtn.hidden = !api
 studyBtn.setAttribute('aria-pressed', String(study()))
@@ -218,11 +253,11 @@ boardEl.onsubmit = async (e) => {
   const name = (boardEl.elements.namedItem('nick') as HTMLInputElement).value.trim()
   if (!api || !name) return
   boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = true))
-  const game = g
+  const game = order
   const was = sent
   sent = true
-  const b = await askBoard(api, boardRequest(deckIdx, level, g.mode, waves, edition, name, was))
-  if (g !== game) return
+  const b = await askBoard(api, boardRequest(rowsOut(), edition, name, was))
+  if (order !== game) return
   if (!b) {
     sent = was
     boardEl.querySelectorAll('input, button').forEach((x) => ((x as HTMLInputElement).disabled = false))
@@ -230,7 +265,7 @@ boardEl.onsubmit = async (e) => {
     setTimeout(() => (live.textContent = l.notSaved!), 50)
     return (boardEl.elements.namedItem('nick') as HTMLInputElement).focus()
   }
-  showResult(root, deck, g, text, rounds)
+  showResult(root, world, rows, order, ai, text, hasNext)
   showBoard(b, name)
 }
 document.addEventListener('visibilitychange', () => document.hidden && setPause(true))

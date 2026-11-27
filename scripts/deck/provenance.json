@@ -1,9 +1,13 @@
 {
   "observations": "482b2b0341910669a82c1f0397f4432bf31e9dbe",
+  "commit": "2a096c8",
   "taken": {
     "lifecycle-sandbox": "2026-11-25T21:19:12Z",
     "serio-focus": "2026-11-25T21:18:18Z"
   },
-  "rows": 63,
+  "public": 291,
+  "rows": 241,
+  "holdout": 50,
+  "other": 0,
   "excluded": 0
 }

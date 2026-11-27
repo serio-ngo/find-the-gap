@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { route } from '../../src/game/worker/route.ts'
-import { ORIGIN, fakeEnv, send, stepReq, stubFetch } from './route-env.ts'
+import { ENC, ORIGIN, RS, fakeEnv, odds, send, stepReq, stubFetch } from './route-env.ts'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -17,26 +17,25 @@ describe('route checks', () => {
     expect(get.status).toBe(405)
   })
 
-  it('rejects a streamed body over 2048 bytes without content-length', async () => {
+  it('rejects a streamed body over 8192 bytes without content-length', async () => {
     const { env } = fakeEnv()
-    const stream = new ReadableStream({ start: (c) => (c.enqueue(new TextEncoder().encode(' '.repeat(2049))), c.close()) })
+    const stream = new ReadableStream({ start: (c) => (c.enqueue(new TextEncoder().encode(' '.repeat(8193))), c.close()) })
     const req = new Request(ORIGIN + '/api/game/step', { method: 'POST', body: stream, headers: { origin: ORIGIN }, duplex: 'half' } as any)
     expect((await route(req, env, { waitUntil() {} })).status).toBe(400)
   })
 
-  it('rejects a 2049-byte body', async () => {
+  it('rejects an 8193-byte body', async () => {
     const { env } = fakeEnv()
-    expect((await send('/api/game/step', ' '.repeat(2049), env)).status).toBe(400)
+    expect((await send('/api/game/step', ' '.repeat(8193), env)).status).toBe(400)
   })
 
   it.each([
-    ['unknown rule', { ...stepReq, wave: [9, 2, 1] }],
-    ['unknown step', { ...stepReq, wave: [0, 9, 1] }],
-    ['wrong standard seed', { ...stepReq, wave: [0, 2, 7] }],
-    ['string field', { ...stepReq, level: '1' }],
-    ['string in wave', { ...stepReq, wave: [0, 2, '1'] }],
+    ['unknown room', { ...stepReq, room: 9999 }],
+    ['room without monsters', { ...stepReq, room: RS.findIndex((r) => !r.monsters.length) }],
+    ['another world', { ...stepReq, v: 1 }],
+    ['string field', { ...stepReq, room: '1' }],
     ['extra key', { ...stepReq, note: 1 }],
-    ['adaptive seed outside pool', { ...stepReq, mode: 1, wave: [0, 2, 5], past: [] }],
+    ['old wave field', { v: 0, room: stepReq.room, wave: [0, 2, 1] }],
   ])('400 on %s without echo', async (_, body) => {
     const { env } = fakeEnv()
     const f = stubFetch()
@@ -85,21 +84,16 @@ describe('step', () => {
 
   it('gives no AI pick when the two model passes disagree', async () => {
     let n = 0
-    const answer = (choice: string) => ({ answers: {
-      ai: { choice, probabilities: { r0: 0.5, r1: 0.5, r2: 0, r3: 0, r4: 0 } },
-      if_hit: { choice: 'hit', probabilities: { hit: 0.8, miss: 0.2 } },
-      if_miss: { choice: 'miss', probabilities: { hit: 0.4, miss: 0.6 } },
-    } })
-    stubFetch(async () => new Response(JSON.stringify(answer(n++ ? 'r1' : 'r0'))))
+    stubFetch(async () => new Response(JSON.stringify(odds(ENC[0]!.monsters.length, n++ ? 'r1' : 'r0'))))
     const { env } = fakeEnv()
-    expect(await (await send('/api/game/step', stepReq, env)).json()).toMatchObject({ ai: null, hit: 0.8, miss: 0.4 })
+    expect(await (await send('/api/game/step', stepReq, env)).json()).toMatchObject({ ai: null })
   })
 
-  it('rounds floats, caches, and sends no client strings to Liquid', async () => {
+  it('caches, and sends no client strings to Liquid', async () => {
     const { env, cache } = fakeEnv()
     const f = stubFetch()
     const first = await (await send('/api/game/step', stepReq, env)).json()
-    expect(first).toEqual({ ai: 1, hit: 0.85, miss: 0.4, cached: false })
+    expect(first).toEqual({ ai: 1, cached: false })
     expect(cache.size).toBe(1)
     const second = await (await send('/api/game/step', stepReq, env)).json()
     expect(second).toEqual({ ...first, cached: true })
@@ -108,6 +102,6 @@ describe('step', () => {
     expect(f.mock.calls[0][1].headers.authorization).toBe('Bearer k')
     const sent = JSON.parse(f.mock.calls[0][1].body)
     expect(JSON.stringify(sent)).not.toMatch(/example|1\.2\.3\.4/)
-    expect(sent.state).not.toHaveProperty('rule')
+    expect(JSON.stringify(sent)).not.toMatch(/"gap"|if_hit|if_miss/)
   })
 })

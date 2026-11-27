@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_MS, aiPick, asks, begin, forecast, shoot, upcoming, wave } from '../../src/game/engine.ts'
-import type { AiRun, Mode } from '../../src/game/engine.ts'
-import { resultRequest, resultRow, stepRequest } from '../../src/game/net.ts'
-import { decks } from '../../src/game/levels/index.ts'
-import run from '../../src/game/eval/ai-run.json'
+import { MAX_MS, encounters, rooms } from '../../src/game/engine.ts'
+import { boardRequest, resultRequest, visitRow } from '../../src/game/net.ts'
+import type { VisitRecord } from '../../src/game/net.ts'
+import { BINDINGS } from '../../src/game/levels/observations.ts'
+import { rows } from '../../src/game/levels/rows.ts'
+import { world } from '../../src/game/levels/world.ts'
 import { edition } from '../../src/game/eval/version.ts'
 import { route } from '../../src/game/worker/route.ts'
 import type { GameEnv } from '../../src/game/worker/route.ts'
@@ -17,65 +18,39 @@ const env: GameEnv = {
   KEY: 'k',
 }
 vi.stubGlobal('fetch', async (_u: string, init: RequestInit) => {
-  const ks = JSON.parse(init.body as string).state.rocks.map((_: unknown, i: number) => `r${i}`)
-  const probabilities = Object.fromEntries(ks.map((k: string) => [k, 1 / ks.length]))
-  return new Response(JSON.stringify({ answers: {
-    ai: { choice: 'r0', probabilities },
-    if_hit: { choice: 'hit', probabilities: { hit: 0.8, miss: 0.2 } },
-    if_miss: { choice: 'miss', probabilities: { hit: 0.4, miss: 0.6 } },
-  } }))
+  const ks = Object.keys(JSON.parse(init.body as string).questions.ai.criteria)
+  return new Response(JSON.stringify({ answers: { ai: { choice: 'r0', probabilities: Object.fromEntries(ks.map((k) => [k, 1 / ks.length])) } } }))
 })
 
 const send = (path: string, body: unknown) =>
   route(new Request(ORIGIN + path, { method: 'POST', body: JSON.stringify(body), headers: { origin: ORIGIN } }), env, { waitUntil() {} })
 
-const play = async (name: 'observations' | 'fixture', mode: Mode) => {
-  const d = decks[name]!
-  const v = Object.values(decks).indexOf(d)
-  const ai = d.question ? (run as AiRun) : undefined
-  let g = begin(d, 1, mode)
-  const waves: number[][] = []
-  let asked = 0
-  for (let spec = upcoming(d, g); spec; spec = upcoming(d, g)) {
-    let live = null
-    if (asks(d, g, g.decisions.length)) {
-      asked++
-      const res = await send('/api/game/step', stepRequest(d, v, 1, spec, g.decisions))
-      expect(res.status).toBe(200)
-      live = await res.json()
-      expect(live).toMatchObject({ ai: 0, hit: 0.8, miss: 0.4 })
-    }
-    const rule = g.rule
-    g = shoot(d, g, g.decisions.length % 2, 2, live ? { hit: live.hit, miss: live.miss } : undefined)
-    const x = g.decisions.at(-1)!
-    x.ai = live ? live.ai : ai && aiPick(ai, d, g, g.decisions.length - 1)
-    const p = mode === 'adaptive' ? forecast(d, { ...g, rule }, live ?? undefined) : 0
-    waves.push(resultRow(d, x, p, live, true, { ms: 2345.6, dwell: wave(d, spec).symbols.map(() => 812), switches: 3 }))
-  }
-  return { body: resultRequest(v, 1, mode, waves, await edition(d)), waves, g, asked }
-}
+const RS = rooms(world)
+const ENC = encounters(world)
+const record = (room: (typeof ENC)[number], route: number): VisitRecord => ({
+  room: RS.indexOf(room), route, pick: room.monsters.length - 1, ms: 2345.6, switches: 3, first: true, doors: 0,
+  stations: BINDINGS.flatMap((b, k) => (room.clues.includes(b.field) ? [k] : [])), dwell: room.monsters.map(() => 812.4),
+})
+const played = ENC.map((r, i) => visitRow(record(r, i)))
 
 describe('client bodies are accepted by the route', () => {
-  it.each([['observations', 'standard'], ['observations', 'adaptive'], ['fixture', 'standard']] as const)('%s %s game', async (name, mode) => {
-    const { body, waves, g, asked } = await play(name, mode)
-    expect(asked).toBe(mode === 'adaptive' ? 4 : 0)
-    expect(waves).toHaveLength(g.decisions.length)
-    expect(JSON.stringify(body)).toMatch(/^[\d,.[\]{}":a-z-]*$/)
+  it('a full run is accepted as a result and a board entry, and asks the model for every room', async () => {
+    const body = resultRequest(played, await edition(world, rows))
+    expect(JSON.stringify(body)).toMatch(/^[\d,[\]{}":a-z-]*$/)
     expect((await send('/api/game/result', body)).status).toBe(204)
-    const lie = waves.map((r, i) => (i ? r : [...r.slice(0, 4), g.decisions[0].hit ? 0 : 1, ...r.slice(5)]))
-    expect((await send('/api/game/result', { ...body, waves: lie })).status).toBe(400)
+    expect((await send('/api/game/board', boardRequest(played, body.edition, 'Ada', false))).status).toBe(200)
+    for (const r of ENC) expect(await (await send('/api/game/step', { v: 0, room: RS.indexOf(r) })).json()).toMatchObject({ ai: 0 })
   })
 
   it('a worst-case body stays under the byte limit', async () => {
-  const d = decks.observations!
-  const x = { spec: d.levels[0]!.sequence[0]!, pick: 6, hit: true, anchor: true, secs: 9 }
-  const row = resultRow(d, x, 1, { ai: 6, hit: 1, miss: 1, cached: true }, true, { ms: MAX_MS, dwell: Array(7).fill(MAX_MS), switches: 99 })
-  expect(JSON.stringify(resultRequest(0, 1, 'adaptive', Array(21).fill(row), await edition(d))).length).toBeLessThan(2048)
-})
+    const x = visitRow({ ...record(ENC[0]!, 99), ms: MAX_MS * 2, switches: 999, stations: [4, 3, 2, 1, 0], dwell: Array(5).fill(MAX_MS * 2) })
+    const body = boardRequest(ENC.map(() => x), await edition(world, rows), 'x'.repeat(20), true)
+    expect(JSON.stringify(body).length).toBeLessThan(8192)
+  })
 
-it('wave bodies are integers and the fixture sends no AI pick as -1', async () => {
-    const { waves, g } = await play('fixture', 'standard')
-    expect(waves.flat().every(Number.isInteger)).toBe(true)
-    expect(waves.every((r, i) => r[6] === -1 && r[7] === 0 && r[10] === 1 && r[11] === 2346 && r[12] === 3 && r[13] === +g.decisions[i]!.anchor && r.slice(14).every((x) => x === 812))).toBe(true)
+  it('visit rows are 17 integers, padded, clamped and match what the route reads', () => {
+    expect(played.every((r) => r.length === 17 && r.every(Number.isInteger))).toBe(true)
+    const r = visitRow({ room: 3, route: 0, pick: -1, ms: 1e9, switches: 500, first: false, doors: 2, stations: [1], dwell: [5.4, 6] })
+    expect(r).toEqual([3, 0, -1, MAX_MS, 99, 0, 2, 1, -1, -1, -1, -1, 5, 6, 0, 0, 0])
   })
 })

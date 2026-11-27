@@ -1,6 +1,4 @@
-import type { Decision } from './engine.ts'
-
-export type Save = { plays: number; best: number; top: number[]; last: { mode: string; picks: number[]; edition?: string; decisions?: (Omit<Decision, 'hit'> & { hit?: boolean })[] } }
+export type Save = { plays: number; best: number; top: number[]; last: { mode: string; picks: number[]; edition?: string; decisions?: number[][] } }
 
 const P = 'ftg:'
 const ls = (): Storage | undefined => { try { return globalThis.localStorage } catch { return undefined } }

@@ -8,6 +8,6 @@ export default defineConfig({
   use: { baseURL: process.env.GAME_URL ?? 'http://localhost:4321', reducedMotion: 'reduce' },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    { name: 'touch', use: { ...devices['Pixel 7'] }, testIgnore: 'research.spec.ts' },
+    { name: 'phone', use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } } },
   ],
 })

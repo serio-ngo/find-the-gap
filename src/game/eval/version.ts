@@ -1,12 +1,12 @@
-import { canonical, content } from '../engine.ts'
-import type { Deck } from '../engine.ts'
+import { canonical } from '../engine.ts'
+import type { Row, World } from '../levels/observations.ts'
 
 export const sha256 = async (s: string) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((x) => x.toString(16).padStart(2, '0')).join('')
 
-export const LAYOUT = 1
-const editions = new Map<Deck, Promise<string>>()
-export const edition = (d: Deck) => {
-  if (!editions.has(d)) editions.set(d, sha256(canonical([LAYOUT, content(d, true)])).then((h) => `${d.id}:${h.slice(0, 12)}`))
-  return editions.get(d)!
+export const LAYOUT = 2
+const editions = new Map<World, [Row[], Promise<string>]>()
+export const edition = (w: World, rows: Row[]) => {
+  if (editions.get(w)?.[0] !== rows) editions.set(w, [rows, sha256(canonical([LAYOUT, w, rows])).then((h) => `world:${h.slice(0, 12)}`)])
+  return editions.get(w)![1]
 }

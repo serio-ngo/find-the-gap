@@ -1,100 +1,28 @@
-import { ANCHOR_POOL, rng } from '../engine.ts'
-import type { ChoiceRecord, Deck, Rule, Wave } from '../engine.ts'
-import { shape } from '../gen.ts'
-import type { Signs } from '../gen.ts'
-import { rows } from './rows.ts'
-
 export type Context = { locks: number | null; impacts: number | null; agent: number | null; job: string | null; share: number | null; tests: number | null; criteria: number | null }
 export type Row = { id: string; rule: string; roles: string[]; values: string[]; gap: boolean; research: boolean; run: string; context: Context | null }
 
+export type RoomId = string
+export type Relation = 'odd_revision' | 'lock_only' | 'missing_link' | 'pair'
+export type Room = { id: RoomId; cell: [number, number]; relation?: Relation; monsters: string[]; certain: boolean; herring: boolean; stage: string[]; clues: string[] }
+export type Suite = { id: string; prs: number[]; origin: [number, number]; rooms: Room[] }
+export type Wing = { id: string; repo: string; trunk: RoomId[]; grid: number[]; suites: Suite[] }
+export type Door = { a: RoomId; b: RoomId; kind: 'open' | 'hidden'; git: 'parent' | 'merge' | 'defect' | 'fix' | 'vault' }
+export type Binding = { field: 'job' | 'locks' | 'share' | 'agent' | 'impacts'; station: 'lamp' | 'padlock' | 'ring' | 'drone' | 'crack' }
+export type World = { edition: string; archive: { commit: string }; seed: number; key: number; start: RoomId; gate: RoomId; wings: Wing[]; doors: Door[]; bindings: Binding[] }
+
 export const gapOf: Record<string, (values: string[]) => boolean> = {
   odd_revision: (v) => v[0] !== v[1],
+  lock_only: (v) => v[0] === 'passed' && v[1] === 'fail',
+  missing_link: (v) => v.includes('missing'),
+  pair: (v) => { const t = v.filter((x) => x !== '-'); return new Set(t).size < t.length },
 }
 
-export const FULL = 5
-export const LOCKS = 1
-
-export const level = {
-  job: (c: Context | null) => (c?.job === 'success' ? 2 : c?.job ? 1 : 0),
-  impacts: (c: Context | null) => Math.min(1, c?.impacts ?? 0),
-  full: (c: Context | null) => +((c?.criteria ?? 0) >= FULL),
-  relocked: (c: Context | null) => +((c?.locks ?? 0) > LOCKS),
+export const clueOf = (field: Binding['field'], c: Context) => {
+  const v = c[field]
+  return field === 'share' ? Math.round((v as number) * 10) : field === 'locks' ? Math.min(v as number, 2) : field === 'impacts' ? Math.min(v as number, 1) : v
 }
 
-export const signs = (r: Row): Signs | null => r.context && (Object.fromEntries(Object.entries(level).map(([k, f]) => [k, f(r.context)])) as Signs)
-
-const order = ['odd_revision']
-export const CERTAIN = [4, 9, 14, 19]
-const counts = [4, 5, 6, 6, 7]
-const WAVES = 20
-export const UNSEEN = 900
-export const unseen = (seed: number) => seed >= UNSEEN && seed < UNSEEN + 100
-
-for (const r of rows) {
-  if (gapOf[r.rule]?.(r.values) !== r.gap) throw new Error(`row ${r.id} breaks its rule`)
-}
-
-export const clue = (r: Row) => r.roles.map((role, i) => `${role} ${r.values[i]}`).join(' · ')
-
-const described = new Map<string, string>()
-export const seen = (r: Row) => described.get(r.id) ?? described.set(r.id, describeRock(r)).get(r.id)!
-
-const describeRock = (r: Row) => {
-  const f = shape({ rule: r.rule, values: r.values, signs: signs(r) }, 'iron').facts
-  return [
-    ...f.sides.map((s, i) => `${i ? 'right' : 'left'} half: ${s.crystals} ${s.tint} crystals, longest ${s.reach}`),
-    ...(f.signs ? [`halo: ${f.arcs} arcs, ${f.lit ? 'lit' : 'dark'}`, `craters: ${f.craters}`, `alien: ${f.bright ? 'bright' : 'dim'}`] : []),
-  ].join('; ')
-}
-
-export const pattern = (r: Row) => (r.values[0] === r.values[1] ? 'same' : 'differ')
-
-const scored = rows.filter((r) => !r.research)
-
-const key = (r: Row) => JSON.stringify(signs(r))
-const base = scored.filter((r) => r.gap).length / scored.length
-const looks = new Map([...new Set(scored.map(key))].map((k) => { const s = scored.filter((r) => key(r) === k); return [k, s.filter((r) => r.gap).length / s.length > base] }))
-export const typical = (r: Row) => (looks.get(key(r)) ?? false) === r.gap
-
-const shuffle = <T>(r: () => number, a: T[]) => a.map((x) => [r(), x] as const).sort((p, q) => p[0] - q[0]).map((p) => p[1])
-
-const CERTAIN_GAPS = ['obs:4d1ddd54e43b', 'obs:5896e69ff1aa', 'obs:ae9a03b0bffa', 'obs:2461a2cc9478']
-const shown: Record<string, Row[]> = { odd_revision: CERTAIN_GAPS.map((id) => rows.find((r) => r.id === id)!) }
-
-const wave = (rule: string, step: number, seed: number) => {
-  const from = rows.filter((x) => x.rule === rule && x.research === unseen(seed))
-  const certain = shown[rule]!
-  const gap = seed >= ANCHOR_POOL ? certain[seed % certain.length] : seed < UNSEEN ? certain[CERTAIN.indexOf(seed % 100)] : undefined
-  const r = rng(seed)
-  const n = counts[step - 1]!
-  const choice = gap ? shuffle(r, [gap, ...shuffle(r, from.filter((x) => !x.gap)).slice(0, n - 1)]) : shuffle(r, from.filter((x) => !certain.includes(x))).slice(0, n)
-  return { symbols: choice.map(seen), answers: choice.flatMap((x, i) => (x.gap ? [i] : [])), ids: choice.map((x) => x.id) }
-}
-
-const byId = new Map(rows.map((r) => [r.id, r]))
-export const rowOf = (id: string) => byId.get(id)!
-export const gapRow = (w: Wave) => rowOf(w.ids![w.answers[0]!]!)
-
-export const observations: Deck = {
-  id: 'observations',
-  steps: 5,
-  policy: { high: 0.6, low: 0.5, window: 4, confirm: 2 },
-  rules: order.map((id): Rule => ({ id, make: (step, seed) => wave(id, step, seed) })),
-  choiceRecords: (w): ChoiceRecord[] => w.ids!.map((id) => {
-    const r = byId.get(id)!
-    return { id, clue: clue(r), rule: r.rule, values: r.values, url: r.run, signs: signs(r) }
-  }),
-  poolSize: 20,
-  question: 'Each rock is one public gate run, described as it is drawn: its left and right half, its halo, craters and alien. Which rock does not fit with the others? Pick one.',
-  typical: (w) => typical(gapRow(w)),
-  levels: order.map((rule, k) => ({
-    id: k + 1,
-    start: { rule, step: 1 },
-    anchors: CERTAIN,
-    tail: 1,
-    sequence: [
-      ...Array.from({ length: WAVES }, (_, i) => ({ rule, step: 1 + Math.floor(i / 4), seed: k * 100 + i })),
-      { rule, step: 1, seed: UNSEEN + k },
-    ],
-  })),
-}
+export const BINDINGS: Binding[] = [
+  { field: 'job', station: 'lamp' }, { field: 'locks', station: 'padlock' }, { field: 'share', station: 'ring' },
+  { field: 'agent', station: 'drone' }, { field: 'impacts', station: 'crack' },
+]

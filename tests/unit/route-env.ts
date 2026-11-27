@@ -1,8 +1,25 @@
 import { vi } from 'vitest'
+import { encounters, rooms, rowMap } from '../../src/game/engine.ts'
+import { edition } from '../../src/game/eval/version.ts'
+import { BINDINGS } from '../../src/game/levels/observations.ts'
+import { rows } from '../../src/game/levels/rows.ts'
+import { world } from '../../src/game/levels/world.ts'
 import { route } from '../../src/game/worker/route.ts'
 import type { GameEnv } from '../../src/game/worker/route.ts'
 
-export const FIXTURE = 1
+export const RS = rooms(world)
+export const ENC = encounters(world)
+export const CERTAIN = ENC.filter((r) => r.certain)
+export const ROWS = rowMap(rows)
+export const ED = await edition(world, rows)
+export const gapSlot = (room: (typeof ENC)[number]) => room.monsters.findIndex((id) => ROWS.get(id)!.gap)
+export const visitRow = (room: (typeof ENC)[number], i: number, pick = gapSlot(room), ms = 2345) => {
+  const read = BINDINGS.flatMap((b, k) => (room.clues.includes(b.field) ? [k] : [])).slice(0, 5)
+  return [RS.indexOf(room), i, pick, ms, 3, 1, 0, ...read, ...Array(5 - read.length).fill(-1), ...Array.from({ length: 5 }, (_, k) => (k < room.monsters.length ? 812 : 0))]
+}
+export const visits = (rooms = ENC, pick?: (r: (typeof ENC)[number]) => number) => rooms.map((r, i) => visitRow(r, i, pick?.(r)))
+export const resultBody = (v: number[][], edition = ED) => ({ v: 0, level: 1, visits: v, edition })
+export const allRooms = (pick?: (r: (typeof ENC)[number]) => number) => visits([...CERTAIN, ...ENC.filter((r) => !r.certain)], pick)
 export const ORIGIN = 'https://example.org'
 
 export const fakeEnv = (over: Partial<GameEnv> = {}) => {
@@ -55,14 +72,9 @@ export const send = async (path: string, body: unknown, env: GameEnv, headers: R
   return res
 }
 
-export const stepReq = { v: FIXTURE, level: 1, mode: 0, wave: [0, 2, 1], past: [[0, 1, 0, 0, 1]] }
-export const liquid = {
-  answers: {
-    ai: { choice: 'r1', probabilities: { r0: 0.1, r1: 0.62, r2: 0.18, r3: 0.05, r4: 0.05 } },
-    if_hit: { choice: 'hit', probabilities: { hit: 0.83, miss: 0.17 } },
-    if_miss: { choice: 'miss', probabilities: { hit: 0.41, miss: 0.59 } },
-  },
-}
+export const stepReq = { v: 0, room: RS.indexOf(ENC[0]!) }
+export const odds = (n: number, choice: string) => ({ answers: { ai: { choice, probabilities: Object.fromEntries(Array.from({ length: n }, (_, i) => [`r${i}`, i === +choice.slice(1) ? 0.6 : 0.4 / (n - 1)])) } } })
+export const liquid = odds(ENC[0]!.monsters.length, 'r1')
 export const stubFetch = (impl?: (...a: any[]) => any) => {
   const f = vi.fn(impl ?? (async () => new Response(JSON.stringify(liquid))))
   vi.stubGlobal('fetch', f)

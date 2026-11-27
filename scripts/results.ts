@@ -1,17 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { wave } from '../src/game/engine.ts'
-import { objectsFor } from '../src/game/objects.ts'
+import { hit, rooms, rowMap, typicalOf } from '../src/game/engine.ts'
 import { wilson } from '../src/game/stats.ts'
 import { edition } from '../src/game/eval/version.ts'
-import { decks } from '../src/game/levels/index.ts'
-import { gapRow, pattern, rowOf, typical } from '../src/game/levels/observations.ts'
-import type { Row } from '../src/game/levels/observations.ts'
+import ai from '../src/game/eval/ai-run.json'
+import { BINDINGS, clueOf } from '../src/game/levels/observations.ts'
+import { rows } from '../src/game/levels/rows.ts'
+import { world } from '../src/game/levels/world.ts'
 
-const params = (r: Row) => {
-  return { arity: r.values.length, breaks: +(r.values[0] !== r.values[1]), pattern: pattern(r) }
-}
-
+const RS = rooms(world)
+const ROWS = rowMap(rows)
+const typical = typicalOf(ROWS)
+const station = (field: string) => BINDINGS.find((b) => b.field === field)!.station
 
 type Stat = { shown: number; human: number; ai: number; aiShown: number }
 const add = (m: Map<string, Stat>, k: string, human: boolean, ai: boolean | null) => {
@@ -46,80 +46,76 @@ const tally = (t: Tally, values: object, rocks: number, picked: boolean) => {
 }
 const lift = (t: Tally) => Object.fromEntries(Object.entries(t).map(([f, vs]) => [f, Object.fromEntries(Object.entries(vs).map(([v, s]) => [v, { picks: s.picks, expected: round3(s.expected), lift: ratio(s.picks, s.expected) }]))]))
 
-export const summarize = async (rows: { version: string; level: number; mode: number; waves: string }[]) => {
-  const d = decks.observations
-  const current = await edition(d)
-  const mine = rows.filter((r) => r.version === current)
-  const byRule = new Map<string, Stat>()
+export const summarize = async (stored: { version: string; level: number; mode: number; waves: string }[], picks: Record<string, number | null> = ai.picks) => {
+  const current = await edition(world, rows)
+  const mine = stored.filter((r) => r.version === current)
   const byPattern = new Map<string, Stat>()
   const byGap = new Map<string, Stat>()
+  const byStation = new Map<string, Stat>()
   const peers = new Map<string, number[]>()
-  const seen = new Set<string>()
   const certain = new Map<string, Stat>()
-  const research: Record<string, { picks: number; waves: Record<number, number>; aim: { waves: number; dwell: number; expected: number }; drawn: Tally; data: Tally }> = {}
+  const research: Record<string, { picks: number; aim: { visits: number; dwell: number; expected: number }; evidence: Tally; gap: Tally; clues: Tally; read: Tally }> = {}
   const aim: Record<'hit' | 'miss', number[][]> = { hit: [], miss: [] }
   for (const row of mine) {
-    for (const [r, step, seed, pick, , , ai, , , , first, ms, switches, isCertain, ...dwell] of JSON.parse(row.waves) as number[][]) {
-      const rule = d.rules[r!]?.id
-      if (!rule) continue
-      const w = wave(d, { rule, step: step!, seed: seed! })
-      const hit = w.answers.includes(pick!)
-      const aiHit = ai === -1 ? null : w.answers.includes(ai!)
-      if (isCertain) {
-        add(byRule, rule, hit, aiHit)
-        add(certain, 'certain', hit, aiHit)
-        if (w.answers.length === 1) {
-          const right = w.answers[0]!
-          const gap = gapRow(w)
-          add(byPattern, typical(gap) ? 'typical' : 'atypical', hit, aiHit)
-          add(byGap, gap.id, hit, aiHit)
-          if (ms !== undefined) aim[hit ? 'hit' : 'miss'].push([ms, dwell[right]!, mean(dwell.filter((_, k) => k !== right)), switches!])
-        }
+    for (const [at, , pick, ms, switches, first, , ...rest] of JSON.parse(row.waves) as number[][]) {
+      const room = RS[at!]
+      if (!room || pick! < 0) continue
+      const stations = rest.slice(0, 5).filter((x) => x >= 0)
+      const dwell = rest.slice(5)
+      const recs = room.monsters.map((id) => ROWS.get(id)!)
+      const ok = hit(ROWS, room, pick!)
+      const a = picks[room.id]
+      const aiHit = typeof a === 'number' ? hit(ROWS, room, a) : null
+      const n = recs.length
+      const right = recs.findIndex((r) => r.gap)
+      if (room.certain) {
+        add(certain, 'certain', ok, aiHit)
+        const gap = recs[right]!
+        add(byPattern, typical(gap) ? 'typical' : 'atypical', ok, aiHit)
+        add(byGap, gap.id, ok, aiHit)
+        for (const b of BINDINGS) if (room.clues.includes(b.field)) add(byStation, `${b.station} ${stations.includes(BINDINGS.indexOf(b)) ? 'read' : 'unread'}`, ok, aiHit)
+        aim[ok ? 'hit' : 'miss'].push([ms!, dwell[right]!, mean(dwell.slice(0, n).filter((_, k) => k !== right)), switches!])
       } else {
-        const res = (research[rule] ??= { picks: 0, waves: {}, aim: { waves: 0, dwell: 0, expected: 0 }, drawn: {}, data: {} })
-        const objects = objectsFor(d, w)
+        const res = (research[room.relation!] ??= { picks: 0, aim: { visits: 0, dwell: 0, expected: 0 }, evidence: {}, gap: {}, clues: {}, read: {} })
         res.picks++
-        if (!seen.has(`${rule}:${step}:${seed}`)) res.waves[w.answers.length] = (res.waves[w.answers.length] ?? 0) + 1
-        seen.add(`${rule}:${step}:${seed}`)
-        objects.forEach((o, k) => {
-          const rec = rowOf(w.ids![k]!)
-          const { arity, breaks } = params(rec)
-          tally(res.drawn, { ...o.shape.facts, sides: o.shape.facts.sides.map((s) => `${s.crystals} ${s.tint} ${s.reach}`).join(' | ') }, objects.length, k === pick)
-          tally(res.data, { gap: rec.gap, typical: typical(rec), arity, breaks, locks: rec.context?.locks, job: rec.context?.job, share: rec.context?.share, impacts: rec.context?.impacts, agent: rec.context?.agent, tests: rec.context?.tests, criteria: rec.context?.criteria }, objects.length, k === pick)
+        recs.forEach((rec, k) => {
+          const clue = (fields: string[], name: (f: string) => string) => Object.fromEntries(fields.filter(() => rec.context).map((f) => [name(f), clueOf(f as never, rec.context!)]))
+          tally(res.evidence, Object.fromEntries(rec.roles.map((r, i) => [r, rec.values[i]])), n, k === pick)
+          tally(res.gap, { gap: rec.gap, typical: typical(rec) }, n, k === pick)
+          tally(res.clues, clue(room.clues, (f) => f), n, k === pick)
+          tally(res.read, clue(stations.map((x) => BINDINGS[x]!.field), station), n, k === pick)
         })
-        if (ms !== undefined && w.answers.length) {
-          res.aim.waves++
-          res.aim.dwell += w.answers.reduce((t, a) => t + dwell[a]!, 0)
-          res.aim.expected += (dwell.reduce((t, x) => t + x, 0) * w.answers.length) / objects.length
+        const gaps = recs.flatMap((r, k) => (r.gap ? [k] : []))
+        if (gaps.length) {
+          res.aim.visits++
+          res.aim.dwell += gaps.reduce((t, g) => t + dwell[g]!, 0)
+          res.aim.expected += (dwell.reduce((t, x) => t + x, 0) * gaps.length) / n
         }
       }
-      if (row.mode === 0 && first === 1) {
-        const k = `${row.level}:${rule}:${step}:${seed}`
-        const c = peers.get(k) ?? w.symbols.map(() => 0)
-        c[pick!]!++
-        peers.set(k, c)
+      if (first === 1) {
+        const c = peers.get(room.id) ?? Array(n).fill(0)
+        c[pick!]++
+        peers.set(room.id, c)
       }
     }
   }
   return {
     edition: current,
     games: mine.length,
-    otherEditions: rows.length - mine.length,
-    rules: Object.fromEntries([...byRule].map(([k, s]) => [k, rate(s)])),
+    otherEditions: stored.length - mine.length,
     certain: [...certain.values()].map(rate)[0] ?? null,
     research: Object.fromEntries(Object.entries(research).map(([k, r]) => [k, {
       picks: r.picks,
-      waves: r.waves,
-      aim: { waves: r.aim.waves, dwell: r.aim.dwell, expected: round3(r.aim.expected), lift: ratio(r.aim.dwell, r.aim.expected) },
-      lift: { drawn: lift(r.drawn), data: lift(r.data) },
+      aim: { visits: r.aim.visits, dwell: r.aim.dwell, expected: round3(r.aim.expected), lift: ratio(r.aim.dwell, r.aim.expected) },
+      lift: { evidence: lift(r.evidence), gap: lift(r.gap), fields: lift(r.clues), stations: lift(r.read) },
     }])),
     aim: Object.fromEntries(Object.entries(aim).map(([k, xs]) => [k, { n: xs.length, ms: median(xs.map((x) => x[0]!)), gap: median(xs.map((x) => x[1]!)), others: median(xs.map((x) => x[2]!)), switches: median(xs.map((x) => x[3]!)) }])),
+    read: Object.fromEntries([...byStation].map(([k, s]) => [k, rate(s)])),
     patterns: Object.fromEntries([...byPattern].map(([k, s]) => [k, rate(s)])),
-    hardest: [...byGap].map(([id, s]) => ({ id, ...params(rowOf(id)), typical: typical(rowOf(id)), ...rate(s) }))
-      .sort((a, b) => a.human - b.human).slice(0, 10),
+    hardest: [...byGap].map(([id, s]) => ({ id, typical: typical(ROWS.get(id)!), ...rate(s) })).sort((a, b) => a.human - b.human).slice(0, 10),
     peers: [...peers].map(([k, c]) => {
       const n = c.reduce((t, x) => t + x, 0)
-      return n < ENOUGH ? { wave: k, n, enough: false } : { wave: k, n, enough: true, options: c.map((x) => ({ picked: x, share: x / n, ci: wilson(x, n) })) }
+      return n < ENOUGH ? { room: k, n, enough: false } : { room: k, n, enough: true, options: c.map((x) => ({ picked: x, share: x / n, ci: wilson(x, n) })) }
     }),
   }
 }

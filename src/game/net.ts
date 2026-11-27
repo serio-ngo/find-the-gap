@@ -1,47 +1,23 @@
-import { MAX_MS, band } from './engine.ts'
-import type { Deck, Decision, Mode, Spec } from './engine.ts'
+import { MAX_MS } from './engine.ts'
 
-export type Step = { ai: number | null; hit: number; miss: number; cached: boolean }
+export type VisitRecord = { room: number; route: number; pick: number; ms: number; switches: number; first: boolean; doors: number; stations: number[]; dwell: number[] }
+export type Board = { top: [string, number][]; n: number; below: number; score: number }
 
 const post = (api: string, path: string, body: unknown, init: RequestInit) =>
   fetch(`${api}/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), ...init })
 
-export const askStep = async (api: string, body: unknown, ms = 1500): Promise<Step | null> => {
-  try {
-    const r = await post(api, 'step', body, { signal: AbortSignal.timeout(ms) })
-    const a = await r.json()
-    const ok = r.ok && (a?.ai === null || Number.isInteger(a?.ai)) && typeof a.hit === 'number' && typeof a.miss === 'number'
-    return ok ? a : null
-  } catch {
-    return null
-  }
-}
+const ms = (x: number) => Math.min(MAX_MS, Math.max(0, Math.round(x)))
+const pad = (xs: number[], fill: number) => Array.from({ length: 5 }, (_, i) => xs[i] ?? fill)
+
+export const visitRow = (v: VisitRecord) => [
+  v.room, v.route, v.pick, ms(v.ms), Math.min(99, v.switches), +v.first, v.doors, ...pad(v.stations, -1), ...pad(v.dwell, 0).map(ms),
+]
 
 export const sendResult = (api: string, body: unknown) => post(api, 'result', body, { keepalive: true }).then(() => {}, () => {})
 
-const ruleIdx = (d: Deck, r: string) => d.rules.findIndex((x) => x.id === r)
-const u = (x: number) => Math.round(20 * x)
+export const resultRequest = (visits: number[][], edition: string) => ({ v: 0, level: 1, visits, edition })
 
-export const stepRequest = (d: Deck, v: number, level: number, w: Spec, past: Decision[]) => ({
-  v,
-  level,
-  mode: 1,
-  wave: [ruleIdx(d, w.rule), w.step, w.seed],
-  past: past.map((x) => [ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, band(x.secs)]),
-})
-
-export type Aim = { ms: number; dwell: number[]; switches: number }
-const ms = (x: number) => Math.min(MAX_MS, Math.max(0, Math.round(x)))
-
-export const resultRow = (d: Deck, x: Decision, p: number, live: Step | null, first: boolean, aim: Aim) => [
-  ruleIdx(d, x.spec.rule), x.spec.step, x.spec.seed, x.pick, +x.hit, band(x.secs),
-  typeof x.ai === 'number' ? x.ai : -1, u(p), live ? 1 : 0, +!!live?.cached, +first,
-  ms(aim.ms), Math.min(99, aim.switches), +x.anchor, ...aim.dwell.map(ms),
-]
-
-export const boardRequest = (v: number, level: number, mode: Mode, waves: number[][], edition: string, name: string, sent: boolean) => ({ ...resultRequest(v, level, mode, waves, edition), name, sent: +sent })
-
-export type Board = { top: [string, number][]; n: number; below: number; score: number }
+export const boardRequest = (visits: number[][], edition: string, name: string, sent: boolean) => ({ ...resultRequest(visits, edition), name, sent: +sent })
 
 export const askBoard = async (api: string, body: unknown): Promise<Board | null> => {
   try {
@@ -52,5 +28,3 @@ export const askBoard = async (api: string, body: unknown): Promise<Board | null
     return null
   }
 }
-
-export const resultRequest = (v: number, level: number, mode: Mode, waves: number[][], edition: string) => ({ v, level, mode: mode === 'adaptive' ? 1 : 0, waves, edition })

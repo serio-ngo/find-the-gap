@@ -1,38 +1,74 @@
 ---
 import './game.css'
 import strings from './strings.json'
-import { decks } from './levels/index.ts'
+import { rows } from './levels/rows.ts'
+import { world } from './levels/world.ts'
+import { hash } from './gen.ts'
 import { edition } from './eval/version.ts'
 
 interface Props { level: number; lang: 'pl' | 'en'; api?: string; privacy?: string }
 const { level, lang, api, privacy } = Astro.props
 const v = strings.visible[lang]
 const l = strings.labels[lang]
-const editions = Object.fromEntries(await Promise.all(Object.values(decks).map(async (deck) => [deck.id, await edition(deck)])))
 const path = `${lang === 'en' ? '/en' : ''}/game`
-const total = decks.observations.levels.find((x) => x.id === level)?.sequence.length ?? 0
+const short = (s: string) => (s.length > 7 ? hash(s).toString(16).padEnd(7, '0').slice(0, 7) : s)
+const slim = rows.map(({ id, rule, values, gap, research, context }) => ({ id, rule, values: values.map(short), gap, research, context }))
+const json = (x: unknown) => JSON.stringify(x).replace(/</g, '\\u003c')
 const paths = {
-  play: 'M7 4l13 8-13 8z', pause: 'M8 5v14M16 5v14', calm: 'M3 12c3-4 6-4 9 0s6 4 9 0', adaptive: 'M4 18l5-6 4 3 7-10',
-  again: 'M4 12a8 8 0 1 0 3-6M4 4v5h5', next: 'M5 12h14M13 6l6 6-6 6', switch: 'M3 7h4l10 10h4M3 17h4l3-3m4-4l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3', study: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  play: 'M7 4l13 8-13 8z', pause: 'M8 5v14M16 5v14', calm: 'M3 12c3-4 6-4 9 0s6 4 9 0',
+  again: 'M4 12a8 8 0 1 0 3-6M4 4v5h5', next: 'M5 12h14M13 6l6 6-6 6', study: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
 }
 ---
-<section class="ftg" data-phase="start" data-level={level} data-lang={lang} data-api={api} data-editions={JSON.stringify(editions)} data-next={`${path}/${level + 1}`} data-strings={JSON.stringify({ v, l })}>
+<section class="ftg" data-phase="start" data-level={level} data-lang={lang} data-api={api} data-edition={await edition(world, rows)} data-next={`${path}/${level + 1}`} data-strings={JSON.stringify({ v, l })}>
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false"><defs>
+<pattern id="rg-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#2B2620" stroke-width="0.9" opacity="0.5"></line></pattern>
+<symbol id="rg-i-lamp" viewBox="0 0 24 24"><circle cx="12" cy="14" r="10" fill="#F2A65A" opacity="0.22"></circle><line x1="12" y1="24" x2="12" y2="19" stroke="#2B2620" stroke-width="2"></line><rect x="7" y="9" width="10" height="10" rx="2" fill="#F4ECD8" stroke="#2B2620" stroke-width="1.8"></rect><polygon points="6,9 18,9 12,4" fill="#2B2620"></polygon><path d="M12,10.5 C14.8,12.8 14.8,15.2 12,17 C9.2,15.2 9.2,12.8 12,10.5 Z" fill="#F2A65A" stroke="#B5651D" stroke-width="0.8"></path></symbol>
+<symbol id="rg-i-smoke" viewBox="0 0 24 24"><line x1="12" y1="24" x2="12" y2="19" stroke="#2B2620" stroke-width="2"></line><rect x="7" y="9" width="10" height="10" rx="2" fill="#DCD3BF" stroke="#2B2620" stroke-width="1.8"></rect><polygon points="6,9 18,9 12,4" fill="#2B2620"></polygon><path d="M12,4 c-3,-1.5 2.5,-2.5 0,-4" stroke="#7D746A" stroke-width="1.4" fill="none"></path><path d="M10,15 h4" stroke="#7D746A" stroke-width="1.4"></path></symbol>
+<symbol id="rg-i-lock" viewBox="0 0 24 24"><path d="M8,11 V8 a4,4 0 0 1 8,0 V11" stroke="#2B2620" stroke-width="2" fill="none"></path><rect x="6" y="11" width="12" height="9" rx="2" fill="#D8C9A3" stroke="#2B2620" stroke-width="1.8"></rect><circle cx="12" cy="15" r="1.4" fill="#2B2620"></circle></symbol>
+<symbol id="rg-i-crack" viewBox="0 0 24 24"><path d="M3,6 L8,11 L6,14 L12,17 L15,13 L21,19" stroke="#2B2620" stroke-width="2" fill="none"></path></symbol>
+<symbol id="rg-i-drone" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6" stroke="#2B2620" stroke-width="2"></line><line x1="12" y1="6" x2="12" y2="9" stroke="#2B2620" stroke-width="2"></line><circle cx="12" cy="14" r="5" fill="#D8C9A3" stroke="#2B2620" stroke-width="1.8"></circle><circle cx="12" cy="14" r="1.8" fill="#127C80"></circle><line x1="9" y1="18.5" x2="8" y2="21.5" stroke="#2B2620" stroke-width="1.4"></line><line x1="15" y1="18.5" x2="16" y2="21.5" stroke="#2B2620" stroke-width="1.4"></line></symbol>
+<symbol id="rg-i-ring10" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#127C80" stroke-width="1" stroke-dasharray="1.5 2"></circle><g fill="#127C80" stroke="#2B2620" stroke-width="0.6"><circle cx="20" cy="12" r="1.9"></circle><circle cx="18.47" cy="16.7" r="1.9"></circle><circle cx="14.47" cy="19.61" r="1.9"></circle><circle cx="9.53" cy="19.61" r="1.9"></circle><circle cx="5.53" cy="16.7" r="1.9"></circle><circle cx="4" cy="12" r="1.9"></circle><circle cx="5.53" cy="7.3" r="1.9"></circle><circle cx="9.53" cy="4.39" r="1.9"></circle><circle cx="14.47" cy="4.39" r="1.9"></circle><circle cx="18.47" cy="7.3" r="1.9"></circle></g></symbol>
+<symbol id="rg-i-unknown" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#2B2620" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.45"></circle></symbol>
+<symbol id="rg-i-eye" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="6" fill="#FFFDF5" stroke="#2B2620" stroke-width="1.6"></ellipse><circle cx="12" cy="12" r="3" fill="#127C80"></circle></symbol>
+<symbol id="rg-i-seal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="#A8326E" stroke="#6E1F47" stroke-width="1.5"></circle><circle cx="12" cy="12" r="7" fill="none" stroke="#F4ECD8" stroke-width="1.2"></circle><path d="M10,8.5 V15.5 M10,10.5 C10,13 14.5,12 14.5,13.5" stroke="#F4ECD8" stroke-width="1.5" fill="none"></path><circle cx="10" cy="8" r="1.4" fill="#F4ECD8"></circle><circle cx="10" cy="16" r="1.4" fill="#F4ECD8"></circle><circle cx="14.5" cy="14" r="1.4" fill="#F4ECD8"></circle></symbol>
+<symbol id="rg-i-robot" viewBox="0 0 24 24"><line x1="12" y1="8" x2="12" y2="4.5" stroke="#2B2620" stroke-width="1.6"></line><circle cx="12" cy="3.5" r="1.5" fill="#2B2620"></circle><rect x="4.5" y="8" width="15" height="11" rx="3" fill="#A9C6FF" stroke="#2B2620" stroke-width="1.6"></rect><circle cx="9.5" cy="13.5" r="1.7" fill="#2B2620"></circle><circle cx="14.5" cy="13.5" r="1.7" fill="#2B2620"></circle></symbol>
+<symbol id="rg-i-gem" viewBox="0 0 24 24"><polygon points="12,3 20.5,9 12,21 3.5,9" fill="#E8C26A" stroke="#2B2620" stroke-width="1.6"></polygon><path d="M3.5,9 H20.5 M9,9 L12,3 L15,9 L12,21" stroke="#2B2620" stroke-width="0.9" fill="none"></path></symbol>
+<symbol id="rg-i-up" viewBox="0 0 24 24"><polygon points="12,5 20,17 4,17" fill="#2B2620"></polygon></symbol>
+<symbol id="rg-i-plinth" viewBox="0 0 48 30"><path d="M4,8 V22 A20,7 0 0 0 44,22 V8 Z" fill="#CDBE9C" stroke="#2B2620" stroke-width="2"></path><ellipse cx="24" cy="8" rx="20" ry="7" fill="#E3D6B6" stroke="#2B2620" stroke-width="2"></ellipse><circle cx="24" cy="20" r="2.4" fill="#127C80" stroke="#2B2620" stroke-width="1"></circle></symbol>
+<pattern id="rg-minor" x="56" y="56" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M8 0H0V8" fill="none" stroke="#D3DDE0" stroke-width="0.7"></path></pattern>
+<pattern id="rg-major" x="56" y="56" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#AFC3CA" stroke-width="1.2"></path></pattern>
+<pattern id="rg-brick" width="60" height="32" patternUnits="userSpaceOnUse"><path d="M0 0H60M0 16H60M0 0V16M30 16V32" fill="none" stroke="#3A3328" stroke-width="1.2"></path></pattern>
+<pattern id="rg-wallhatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#8A7B62" stroke-width="0.8" opacity="0.5"></line></pattern>
+<g id="rg-door"><path d="M-24,0 V-34 A24,22 0 0 1 24,-34 V0 Z" fill="#CDB98F" stroke="#2B2620" stroke-width="2.5"></path><path d="M-10,-6 C-10,-16 0,-16 0,-24 M10,-6 C10,-16 0,-16 0,-24 M0,-24 V-36" stroke="#127C80" stroke-width="2.5" fill="none"></path><g fill="#F4ECD8" stroke="#127C80" stroke-width="1.8"><circle cx="-10" cy="-6" r="2.6"></circle><circle cx="10" cy="-6" r="2.6"></circle><circle cx="0" cy="-36" r="2.6"></circle></g></g>
+<symbol id="rg-hero" viewBox="0 0 36 46"><ellipse cx="18" cy="42" rx="11" ry="4" fill="#2B2620" opacity="0.3"></ellipse><circle cx="32" cy="33" r="8" fill="#6FD3C8" opacity="0.28"></circle><path d="M8,40 L11,22 Q18,17 25,22 L28,40 Z" fill="#3D6B73" stroke="#2B2620" stroke-width="2"></path><circle cx="18" cy="16" r="8.5" fill="#2F5960" stroke="#2B2620" stroke-width="2"></circle><ellipse cx="18" cy="18" rx="4.2" ry="3.4" fill="#E8D3B5" stroke="#2B2620" stroke-width="1"></ellipse><line x1="26" y1="26" x2="30" y2="30" stroke="#2B2620" stroke-width="1.6"></line><rect x="29" y="29" width="6" height="8" rx="1.5" fill="#F4ECD8" stroke="#2B2620" stroke-width="1.4"></rect><circle cx="32" cy="33" r="1.8" fill="#127C80"></circle><circle cx="6" cy="28" r="3.6" fill="#DDEFF0" stroke="#2B2620" stroke-width="1.6"></circle><line x1="4" y1="31" x2="2" y2="34" stroke="#2B2620" stroke-width="1.6"></line></symbol>
+  </defs></svg>
+  <script type="application/json" class="ftg-world" set:html={json(world)} />
+  <script type="application/json" class="ftg-rows" set:html={json(slim)} />
   <div class="ftg-hud">
-    <span class="ftg-stat"><span role="group" aria-label={v.score}><output class="ftg-hits">0</output></span>
-    <span class="ftg-wave" role="group" aria-label={l.wave}>1/{total}</span>
-    <span class="ftg-switch" role="img" aria-label={l.switch} hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.switch} /></svg></span></span>
+    <span class="ftg-branch"></span>
+    <span class="ftg-stat"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><use href="#rg-i-gem" /></svg><span role="group" aria-label={v.score}><output class="ftg-hits">0</output></span></span>
     <span class="ftg-btns">
-    <button class="ftg-pausebtn" aria-label={l.pause}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.pause} /></svg></button>
-    <button class="ftg-mode" aria-pressed="false" aria-label={l.adaptive}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.adaptive} /></svg></button>
+    <button class="ftg-pausebtn" data-act="pause" aria-label={l.pause}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.pause} /></svg></button>
     <button class="ftg-calm" aria-pressed="false" aria-label={l.calm}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.calm} /></svg></button>
     </span>
     <span class="ftg-items" role="group" aria-label={l.items}></span>
   </div>
   <div class="ftg-field">
-    <canvas aria-hidden="true"></canvas>
-    <div class="ftg-rocks"></div>
-    <div class="ftg-start"><button class="ftg-play"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg> {v.play}</button></div>
-    <div class="ftg-pause" hidden><strong>{v.paused}</strong><button class="ftg-resume" aria-label={l.resume}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg> {v.resume}</button></div>
+    <div class="ftg-room"></div>
+    <div class="ftg-start"><button class="ftg-play" aria-label={l.play}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg></button></div>
+    <div class="ftg-pause" hidden><button class="ftg-resume" data-act="pause" aria-label={l.resume}><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={paths.play} /></svg></button></div>
+  </div>
+  <div class="ftg-lower">
+    <div class="ftg-deck"></div>
+    <div class="ftg-panel"></div>
+    <div class="ftg-controls">
+      <button class="ftg-pad ftg-up" data-move="0,-1" aria-label={l.up}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#rg-i-up" /></svg></button>
+      <button class="ftg-pad ftg-left" data-move="-1,0" aria-label={l.left}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#rg-i-up" /></svg></button>
+      <button class="ftg-pad ftg-right" data-move="1,0" aria-label={l.right}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#rg-i-up" /></svg></button>
+      <button class="ftg-pad ftg-down" data-move="0,1" aria-label={l.down}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#rg-i-up" /></svg></button>
+      <svg class="ftg-compass" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="#F6EFDD" stroke="#2B2620" stroke-width="2"></circle><polygon points="16,6 19,16 16,26 13,16" fill="#A8326E" stroke="#2B2620" stroke-width="1"></polygon></svg>
+    </div>
+    <div class="ftg-map"></div>
   </div>
   <div class="ftg-sr" role="status" aria-live="polite"></div>
   <section class="ftg-end" role="region" aria-label={`${v.title} ${v.level} ${level}`} tabindex="-1" hidden>
