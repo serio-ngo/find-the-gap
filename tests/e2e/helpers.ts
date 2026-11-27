@@ -82,7 +82,7 @@ const route = (from: string, to: string) => {
   return out.slice(1)
 }
 
-const near = new Map([[world.start, 0]])
+export const near = new Map([[world.start, 0]])
 for (const id of near.keys())
   for (const d of world.doors) {
     const n = d.a === id ? d.b : d.b === id ? d.a : ''

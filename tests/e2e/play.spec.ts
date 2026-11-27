@@ -3,7 +3,7 @@ import { ICON } from '../../src/game/cards.ts'
 import { hit } from '../../src/game/engine.ts'
 import { BINDINGS, clueOf } from '../../src/game/levels/observations.ts'
 import { world } from '../../src/game/levels/world.ts'
-import { Run, byId, chartName, collected, expectEnd, open, playButton, right, rowsById, run, strings, suites, trunk, wrong } from './helpers.ts'
+import { Run, byId, chartName, collected, expectEnd, near, open, playButton, right, rowsById, run, strings, suites, trunk, wrong } from './helpers.ts'
 
 const l = strings.labels.en
 const [t1] = trunk
@@ -132,7 +132,7 @@ test('the game region contains no words', async ({ page }) => {
   await expect(page.locator('.ftg-sha')).toBeVisible()
   expect(await words()).toEqual([])
   for (const relation of ['pair', 'missing_link', 'lock_only']) {
-    await r.accuseIn(suites.find((id) => byId.get(id)!.relation === relation)!)
+    await r.accuseIn([...near.keys()].find((id) => byId.get(id)!.relation === relation && !byId.get(id)!.certain)!)
     await expect(page.locator('.ftg-sha')).toBeVisible()
     expect(await words()).toEqual([])
   }
