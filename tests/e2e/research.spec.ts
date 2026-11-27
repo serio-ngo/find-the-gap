@@ -77,12 +77,12 @@ test('a stored visit carries the route, the stations read in order, the pick, an
   await expect.poll(() => results.length).toBe(1)
   const body = results[0]!
   expect(body).toMatchObject({ v: 0, level: 1, edition: await edition(world, rows) })
-  expect(body.visits.every((v) => v.length === 17)).toBe(true)
+  expect(body.visits.every((v) => v.length === 23)).toBe(true)
   const [room, route, pick, ms, , first, doors, ...rest] = body.visits[0]!
   expect([room, route, pick, first, doors]).toEqual([all.indexOf(t1!), 0, 2, 1, 0])
   const read = r.reads.get(t1!.id)!
   expect(rest.slice(0, read.length)).toEqual(read)
-  expect(rest.slice(5).reduce((t, x) => t + x, 0)).toBeLessThanOrEqual(ms!)
+  expect(rest.slice(12).reduce((t, x) => t + x, 0)).toBeLessThanOrEqual(ms!)
   expect(body.visits.map((v) => v[1])).toEqual(body.visits.map((_, i) => i))
   await again(page).click()
   await new Run(page).finish()
@@ -104,7 +104,8 @@ test('aim data: moving between monsters is a switch, and paused time counts neit
   await r.accuse(1)
   await r.finish()
   await expect.poll(() => results.length).toBe(1)
-  const [, , pick, ms, switches, , , , , , , , ...dwell] = results[0]!.visits[0]!
+  const [, , pick, ms, switches] = results[0]!.visits[0]!
+  const dwell = results[0]!.visits[0]!.slice(19)
   expect(pick).toBe(1)
   expect(switches).toBeGreaterThanOrEqual(1)
   expect(dwell.reduce((t, x) => t + x, 0)).toBeLessThanOrEqual(ms!)

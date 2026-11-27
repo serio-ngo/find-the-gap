@@ -35,26 +35,14 @@ const clue = (b: Binding, m: Slim, l: Scene['l']) => {
   const n = b.field === 'locks' || b.field === 'share' ? v : ''
   const say = b.field === 'job' ? (on ? l.lit : l.smoking) : b.field === 'share' ? f(l.ringOf, v ?? 0) : b.field === 'locks' ? String(v) : on ? l.yes : l.no
   const name = l[b.station]!
-  return { name, say, svg: (size: string) => `<svg class="${size}" viewBox="0 0 24 24" style="opacity:${on || b.field === 'share' ? 1 : 0.2}"><use href="#rg-i-${b.field === 'job' && !on ? 'smoke' : ICON[b.station]}"/>${n === '' ? '' : `<text x="23" y="23" text-anchor="end">${n}</text>`}</svg>` }
+  return { name, say, svg: (size: string) => `<svg class="${size}" viewBox="0 0 24 24" opacity="${on || b.field === 'share' ? 1 : 0.2}"><use href="#rg-i-${b.field === 'job' && !on ? 'smoke' : ICON[b.station]}"/>${n === '' ? '' : `<text x="23" y="23" text-anchor="end">${n}</text>`}</svg>` }
 }
-
-const unknown = '<svg class="ftg-clue" viewBox="0 0 24 24"><use href="#rg-i-unknown"/></svg>'
-
-export const dyn = (s: Scene, i: number) => {
-  const m = s.monsters[i]!
-  const read = s.lay.stations.filter((b) => s.read.includes(b.field))
-  const said = read.map((b) => { const c = clue(b, m, s.l); return `${c.name} ${c.say}` })
-  return `<div class="ftg-notes" role="img" aria-label="${said.length ? f(s.l.note, said.join(', ')) : s.l.noNote}">${s.lay.stations.map((b) => (s.read.includes(b.field) ? clue(b, m, s.l).svg('ftg-clue') : unknown)).join('')}</div><div class="ftg-foot">${s.pick >= 0 ? foot(m) : '•••••••'}</div>`
-}
-
-export const cards = (s: Scene) => s.monsters.map((m, i) =>
-  `<div class="ftg-card" data-i="${i}"><div class="ftg-head">${monster(m)}<span class="ftg-num">${i + 1}</span><button class="ftg-stamp" data-accuse="${i}" aria-label="${f(s.l.accuse, i + 1)}" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#rg-i-seal"/></svg></button></div><div class="ftg-dyn"></div></div>`).join('')
 
 export const panel = (s: Scene, k: number) => {
-  const st = s.lay.stations[k]
+  const st = s.lay.items[k]
   if (!st) return `<div class="ftg-idle" role="img" aria-label="${s.l.idle}"><svg viewBox="0 0 24 24"><use href="#rg-i-unknown"/></svg><svg viewBox="0 0 24 24"><use href="#rg-i-unknown"/></svg></div>`
-  const cs = s.monsters.map((m) => clue(st, m, s.l))
-  return `<div class="ftg-sheet" role="group" aria-label="${f(s.l.reading, cs[0]!.name, cs.map((c, i) => `${f(s.l.pick, i + 1)} ${c.say}`).join(', '))}"><div class="ftg-base"><svg viewBox="0 0 24 24"><use href="#rg-i-${ICON[st.station]}"/></svg><svg viewBox="0 0 48 30"><use href="#rg-i-plinth"/></svg></div>${s.monsters.map((m, i) => `<div class="ftg-col">${monster(m)}${cs[i]!.svg('ftg-clue')}</div>`).join('')}</div>`
+  const c = clue(st, s.monsters[st.m]!, s.l)
+  return `<div class="ftg-sheet" role="group" aria-label="${f(s.l.reading, c.name, `${f(s.l.pick, st.m + 1)} ${c.say}`)}"><div class="ftg-base"><svg viewBox="0 0 24 24"><use href="#rg-i-${ICON[st.station]}"/></svg><svg viewBox="0 0 48 30"><use href="#rg-i-plinth"/></svg></div><div class="ftg-col">${monster(s.monsters[st.m]!)}${c.svg('ftg-clue')}</div></div>`
 }
 
 export const result = (s: Scene) => {

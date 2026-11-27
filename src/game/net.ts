@@ -7,10 +7,10 @@ const post = (api: string, path: string, body: unknown, init: RequestInit) =>
   fetch(`${api}/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), ...init })
 
 const ms = (x: number) => Math.min(MAX_MS, Math.max(0, Math.round(x)))
-const pad = (xs: number[], fill: number) => Array.from({ length: 5 }, (_, i) => xs[i] ?? fill)
+const pad = (xs: number[], n: number, fill: number) => Array.from({ length: n }, (_, i) => xs[i] ?? fill)
 
 export const visitRow = (v: VisitRecord) => [
-  v.room, v.route, v.pick, ms(v.ms), Math.min(99, v.switches), +v.first, v.doors, ...pad(v.stations, -1), ...pad(v.dwell, 0).map(ms),
+  v.room, v.route, v.pick, ms(v.ms), Math.min(99, v.switches), +v.first, v.doors, ...pad(v.stations, 12, -1), ...pad(v.dwell, 4, 0).map(ms),
 ]
 
 export const sendResult = (api: string, body: unknown) => post(api, 'result', body, { keepalive: true }).then(() => {}, () => {})

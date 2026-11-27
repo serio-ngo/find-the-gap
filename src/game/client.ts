@@ -2,7 +2,6 @@ import { hit, rowMap, rooms, score, scoreOf } from './engine.ts'
 import type { AiRun } from './engine.ts'
 import stored from './eval/ai-run.json'
 import { decks } from './levels/index.ts'
-import { BINDINGS } from './levels/observations.ts'
 import type { Row, World } from './levels/observations.ts'
 import { askBoard, boardRequest, resultRequest, sendResult, visitRow } from './net.ts'
 import type { Board, VisitRecord } from './net.ts'
@@ -44,7 +43,7 @@ const boardEl = $<HTMLFormElement>('.ftg-board')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
 
 let room = byId.get(world.start)!
-let lay = layout(world, room)
+let lay = layout(world, room, rows)
 let at: Spot = entry(lay)
 let found = new Set<string>()
 let accused = new Set<string>()
@@ -64,7 +63,7 @@ const rec = () => recs.get(room.id)
 const scene = (): Scene => {
   const r = rec()
   return {
-    world, room, lay, monsters: room.monsters.map((id) => rows.get(id)!), at, read: r?.stations.map((k) => BINDINGS[k]!.field) ?? [], pick: r?.pick ?? -1,
+    world, room, lay, monsters: room.monsters.map((id) => rows.get(id)!), at, read: r?.stations ?? [], pick: r?.pick ?? -1,
     hit: r?.hit ?? false, gain: r?.gain ?? 0, score: score(world, rows, order), found, accused, visited, bag, l,
   }
 }
@@ -96,7 +95,7 @@ const arrive = () => {
   const near = reach(lay, at)
   near.hidden.forEach((d) => found.add(d.id))
   let heard = false
-  const k = near.station >= 0 ? BINDINGS.findIndex((b) => b.field === lay.stations[near.station]!.field) : -1
+  const k = near.station >= 0 ? lay.items[near.station]!.code : -1
   if (r && k >= 0 && !r.stations.includes(k)) {
     r.stations.push(k)
     heard = true
@@ -117,7 +116,7 @@ const go = (to: string) => {
   const from = room.id
   room = byId.get(to)!
   if (to === world.gate) return end()
-  lay = layout(world, room)
+  lay = layout(world, room, rows)
   at = entry(lay, from)
   visited.add(to)
   if (room.monsters.length && !recs.has(to)) {
@@ -140,8 +139,9 @@ const move = (dx: number, dy: number) => {
 const near = (a: Spot, b: Spot) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= 1
 
 const walk = (kind: string, i: number) => {
+  if (kind === 'm' && reach(lay, at).monsters.includes(i)) return stamp(i)
   const door = kind === 'd' ? lay.doors[i] : undefined
-  const goal = (p: Spot) => (kind === 'm' ? reach(lay, p).monsters.includes(i) : kind === 's' && near(lay.stations[i]!, p))
+  const goal = (p: Spot) => (kind === 'm' ? reach(lay, p).monsters.includes(i) : kind === 's' && near(lay.items[i]!, p))
   const seen = new Set([`${at.x},${at.y}`])
   const queue = [{ p: at, m: [] as (readonly number[])[] }]
   for (const { p, m } of queue) {
@@ -188,7 +188,7 @@ const start = () => {
   lost = 0
   first = !load('observations', level, undefined, edition)?.plays
   room = byId.get(world.start)!
-  lay = layout(world, room)
+  lay = layout(world, room, rows)
   at = entry(lay)
   delete root.dataset.room
   $('.ftg-end').hidden = true

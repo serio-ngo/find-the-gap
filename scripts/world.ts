@@ -55,10 +55,10 @@ const draw = (pool: Placed[], seed: number) => {
   const r = rng(seed)
   const gaps = shuffle(r, pool.filter((x) => x.gap)).slice(0, 4)
   const controls = shuffle(r, pool.filter((x) => !x.gap))
-  return gaps.map((g, k) => shuffle(r, [g, ...controls.splice(0, 2 + Math.floor(r() * 3))]))
+  return gaps.map((g, k) => shuffle(r, [g, ...controls.splice(0, 2 + Math.floor(r() * 2))]))
 }
 
-const split = (n: number) => { const k = Math.ceil(n / 5); return Array.from({ length: k }, (_, i) => Math.floor(n / k) + +(i < n % k)) }
+const split = (n: number) => { const k = Math.ceil(n / 4); return Array.from({ length: k }, (_, i) => Math.floor(n / k) + +(i < n % k)) }
 
 const certainRooms = (pool: Placed[], all: Row[]) => {
   const why = new Map<string, number>()
@@ -100,7 +100,7 @@ export const buildWorld = ({ observations, cases, snapshots = {} }: { observatio
     const order = [...new Set(mine.map(prOf))].sort((a, b) => when(repo, a).localeCompare(when(repo, b)) || a - b)
     const ok = (prs: number[]) => {
       const part = mine.filter((r) => prs.includes(prOf(r)))
-      return new Set(part.map((r) => r.run)).size >= 3 && RELATIONS.every((rel) => { const n = part.filter((r) => r.rule === rel).length; return n === 0 || n >= 3 })
+      return new Set(part.map((r) => r.run)).size >= 3 && RELATIONS.every((rel) => { const n = part.filter((r) => r.rule === rel).length; return n === 0 || 3 * Math.ceil(n / 4) <= n })
     }
     const sets: number[][] = []
     let cur: number[] = []

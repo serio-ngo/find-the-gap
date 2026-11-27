@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { failed, gateReport } from '../../scripts/gates.ts'
-import { BINDINGS } from '../../src/game/levels/observations.ts'
+import { BINDINGS, place } from '../../src/game/levels/observations.ts'
 import type { Room, Row } from '../../src/game/levels/observations.ts'
 import { rows as real } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
@@ -40,6 +40,13 @@ describe('gates catch a context leak and a gap reuse', () => {
 
   it('counts a row placed twice', () => {
     expect(check([...rooms, room('again', gaps[0]!, controls[0]!, controls[1]!)], rows).reused).toBe(3)
+  })
+
+  it('catches a place that reads the gap and never reads it itself', () => {
+    const leaky = rows.map((r) => r.gap ? { ...r, context: { ...r.context!, share: 1, locks: 0, impacts: 0 } } : { ...r, context: { ...r.context!, share: 0.5, locks: 3, impacts: 0 } })
+    expect(failed(check(rooms, leaky))).toEqual(expect.arrayContaining(['field y']))
+    const r = controls[0]!
+    expect(place({ ...r, gap: true })).toEqual(place(r))
   })
 
   it('passes on the committed world, whose clues never make the gap obvious', () => {

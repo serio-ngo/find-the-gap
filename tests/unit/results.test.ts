@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { encounters, rooms, rowMap, typicalOf } from '../../src/game/engine.ts'
 import { summarize } from '../../scripts/results.ts'
 import { edition } from '../../src/game/eval/version.ts'
-import { BINDINGS } from '../../src/game/levels/observations.ts'
+import { BINDINGS, place } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
 
@@ -12,10 +12,10 @@ const ROWS = rowMap(rows)
 const certain = ENC.filter((r) => r.certain)
 const research = ENC.filter((r) => !r.certain)
 const gap = (r: (typeof ENC)[number]) => r.monsters.findIndex((id) => ROWS.get(id)!.gap)
-const read = (r: (typeof ENC)[number]) => BINDINGS.flatMap((b, k) => (r.clues.includes(b.field) ? [k] : [])).slice(0, 5)
+const read = (r: (typeof ENC)[number]) => r.monsters.flatMap((id, m) => place(ROWS.get(id)!).items.map((f) => m * BINDINGS.length + BINDINGS.findIndex((b) => b.field === f))).slice(0, 12)
 const row = (r: (typeof ENC)[number], pick: number, o: { first?: number; ms?: number; stations?: number[]; dwell?: (k: number) => number } = {}) => {
   const st = o.stations ?? read(r)
-  return [RS.indexOf(r), 0, pick, o.ms ?? 1000, 1, o.first ?? 1, 0, ...st, ...Array(5 - st.length).fill(-1), ...Array.from({ length: 5 }, (_, k) => (k < r.monsters.length ? (o.dwell ?? (() => 100))(k) : 0))]
+  return [RS.indexOf(r), 0, pick, o.ms ?? 1000, 1, o.first ?? 1, 0, ...st, ...Array(12 - st.length).fill(-1), ...Array.from({ length: 4 }, (_, k) => (k < r.monsters.length ? (o.dwell ?? (() => 100))(k) : 0))]
 }
 const play = async (waves: number[][], ai = {} as Record<string, number | null>) =>
   summarize([{ version: await edition(world, rows), level: 1, mode: 0, waves: JSON.stringify(waves) }], ai)
@@ -44,12 +44,12 @@ it('compares read against unread stations on certain rooms', async () => {
   const r = certain[0]!
   const right = gap(r)
   const wrong = (right + 1) % r.monsters.length
-  const [k0, ...rest] = read(r)
+  const [k0] = read(r)
   const out = await play([row(r, right, { stations: [k0!] }), row(r, wrong, { stations: [] })])
-  const s0 = BINDINGS[k0!]!.station
+  const n = read(r).filter((x) => x % BINDINGS.length === k0! % BINDINGS.length).length
+  const s0 = BINDINGS[k0! % BINDINGS.length]!.station
   expect(out.read[`${s0} read`]).toMatchObject({ shown: 1, human: 1 })
-  expect(out.read[`${s0} unread`]).toMatchObject({ shown: 1, human: 0 })
-  for (const k of rest) expect(out.read[`${BINDINGS[k]!.station} unread`]).toMatchObject({ shown: 2, human: 0.5 })
+  expect(out.read[`${s0} unread`]).toMatchObject({ shown: 2 * n - 1, human: (n - 1) / (2 * n - 1) })
 })
 
 describe('research summary', () => {
@@ -75,7 +75,7 @@ describe('research summary', () => {
     const out = await play([row(r, pick, { stations: [k] })])
     const res = out.research[r.relation!]!
     expect(res.lift.gap.gap!['true']!.lift).toBe(round3(r.monsters.length / r.monsters.filter((id) => ROWS.get(id)!.gap).length))
-    expect(Object.keys(res.lift.stations)).toEqual([BINDINGS[k]!.station])
+    expect(Object.keys(res.lift.stations)).toEqual([BINDINGS[k % BINDINGS.length]!.station])
     expect(JSON.stringify(out.research)).not.toContain('"human"')
     expect([out.certain, out.patterns, out.hardest]).toEqual([null, {}, []])
   })

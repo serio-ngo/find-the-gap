@@ -1,4 +1,4 @@
-import { clueOf } from '../src/game/levels/observations.ts'
+import { clueOf, place } from '../src/game/levels/observations.ts'
 import type { Binding, Room, Row } from '../src/game/levels/observations.ts'
 
 export const CEILING = 0.65
@@ -11,16 +11,20 @@ export const rng = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 }
 
+const placed = { y: (r: Row) => place(r).y, band: (r: Row) => place(r).band, count: (r: Row) => place(r).items.length }
+const read = (f: string, r: Row) => f in placed ? placed[f as keyof typeof placed](r) : clueOf(f as Binding['field'], r.context!)
+
 type Part = { wings: { suites: { rooms: Room[] }[] }[]; bindings: Binding[] }
 
 export const gateReport = (world: Part, rows: Row[]) => {
   const byId = new Map(rows.map((r) => [r.id, r]))
   const certain = world.wings.flatMap((w) => w.suites.flatMap((s) => s.rooms)).filter((r) => r.certain)
-  const fields = world.bindings.map((b) => b.field)
+  const fields: string[] = world.bindings.map((b) => b.field)
+  const channels = [...fields, ...Object.keys(placed)]
   const learn = rows.filter((r) => !r.research && r.context)
   const tallies = new Map<string, [number, number]>()
-  const key = (f: string, r: Row) => `${r.rule}|${f}|${clueOf(f as Binding['field'], r.context!)}`
-  for (const r of learn) for (const f of fields) { const t = tallies.get(key(f, r)) ?? [0, 0]; t[r.gap ? 0 : 1]++; tallies.set(key(f, r), t) }
+  const key = (f: string, r: Row) => `${r.rule}|${f}|${read(f, r)}`
+  for (const r of learn) for (const f of channels) { const t = tallies.get(key(f, r)) ?? [0, 0]; t[r.gap ? 0 : 1]++; tallies.set(key(f, r), t) }
   const odds = (f: string, r: Row) => { const [g, c] = tallies.get(key(f, r)) ?? [0, 0]; const p = (g + 0.5) / (g + c + 1); return Math.log(p / (1 - p)) }
   const monsters = (room: Room) => room.monsters.map((id) => byId.get(id)!)
   const hit = (room: Room, score: (r: Row) => number, sign: number) => {
@@ -41,13 +45,13 @@ export const gateReport = (world: Part, rows: Row[]) => {
     const draws = Array.from({ length: 2000 }, () => ws.reduce((t, w) => t + score(w, Math.floor(r() * w.s.length)), 0))
     return Math.min(1, (2 * Math.min(draws.filter((x) => x >= seen).length + 1, draws.filter((x) => x <= seen).length + 1)) / 2001)
   }
-  const value = (f: string) => (r: Row) => String(clueOf(f as Binding['field'], r.context!))
+  const value = (f: string) => (r: Row) => String(read(f, r))
   const sides = (f: string, gap: boolean) => new Set(certain.flatMap((room) => monsters(room).filter((r) => r.gap === gap).map(value(f))))
-  const placed = world.wings.flatMap((w) => w.suites.flatMap((s) => s.rooms.flatMap((r) => r.monsters)))
+  const used = world.wings.flatMap((w) => w.suites.flatMap((s) => s.rooms.flatMap((r) => r.monsters)))
   const all = sum(fields)
   const herringIn = (room: Room) => monsters(room).some((r) => !r.gap && all(r) >= all(monsters(room).find((x) => x.gap)!) - 1e-12)
   return {
-    fields: Object.fromEntries(fields.map((f) => [f, mean(sum([f]))])),
+    fields: Object.fromEntries(channels.map((f) => [f, mean(sum([f]))])),
     reader: mean(all),
     anti: mean(all, -1),
     chance: certain.reduce((t, room) => t + 1 / room.monsters.length, 0) / certain.length,
@@ -56,7 +60,7 @@ export const gateReport = (world: Part, rows: Row[]) => {
     p: Math.min(odd((r) => fields.map((f) => value(f)(r)).join('|')), ...fields.map((f) => odd(value(f)))),
     mixed: certain.every((room) => monsters(room).every((r) => fields.every((f) => tallies.get(key(f, r))!.every((n) => n > 0)))),
     mirrored: fields.every((f) => { const [yes, no] = [sides(f, true), sides(f, false)]; return yes.size === no.size && [...yes].every((v) => no.has(v)) }),
-    reused: placed.length - new Set(placed).size,
+    reused: used.length - new Set(used).size,
   }
 }
 

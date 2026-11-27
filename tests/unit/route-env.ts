@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import { encounters, rooms, rowMap } from '../../src/game/engine.ts'
 import { edition } from '../../src/game/eval/version.ts'
-import { BINDINGS } from '../../src/game/levels/observations.ts'
+import { BINDINGS, place } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
 import { route } from '../../src/game/worker/route.ts'
@@ -13,9 +13,11 @@ export const CERTAIN = ENC.filter((r) => r.certain)
 export const ROWS = rowMap(rows)
 export const ED = await edition(world, rows)
 export const gapSlot = (room: (typeof ENC)[number]) => room.monsters.findIndex((id) => ROWS.get(id)!.gap)
+export const readCodes = (room: (typeof ENC)[number]) =>
+  room.monsters.flatMap((id, m) => place(ROWS.get(id)!).items.map((f) => m * BINDINGS.length + BINDINGS.findIndex((b) => b.field === f)))
 export const visitRow = (room: (typeof ENC)[number], i: number, pick = gapSlot(room), ms = 2345) => {
-  const read = BINDINGS.flatMap((b, k) => (room.clues.includes(b.field) ? [k] : [])).slice(0, 5)
-  return [RS.indexOf(room), i, pick, ms, 3, 1, 0, ...read, ...Array(5 - read.length).fill(-1), ...Array.from({ length: 5 }, (_, k) => (k < room.monsters.length ? 812 : 0))]
+  const read = readCodes(room).slice(0, 12)
+  return [RS.indexOf(room), i, pick, ms, 3, 1, 0, ...read, ...Array(12 - read.length).fill(-1), ...Array.from({ length: 4 }, (_, k) => (k < room.monsters.length ? 812 : 0))]
 }
 export const visits = (rooms = ENC, pick?: (r: (typeof ENC)[number]) => number) => rooms.map((r, i) => visitRow(r, i, pick?.(r)))
 export const resultBody = (v: number[][], edition = ED) => ({ v: 0, level: 1, visits: v, edition })

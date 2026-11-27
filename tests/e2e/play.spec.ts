@@ -3,7 +3,7 @@ import { ICON } from '../../src/game/cards.ts'
 import { hit } from '../../src/game/engine.ts'
 import { BINDINGS, clueOf } from '../../src/game/levels/observations.ts'
 import { world } from '../../src/game/levels/world.ts'
-import { Run, byId, chartName, collected, expectEnd, near, open, playButton, right, rowsById, run, strings, suites, trunk, wrong } from './helpers.ts'
+import { Run, byId, chartName, collected, expectEnd, near, open, phone, playButton, right, rowsById, run, strings, suites, trunk, wrong } from './helpers.ts'
 
 const l = strings.labels.en
 const [t1] = trunk
@@ -15,25 +15,23 @@ const begin = async (page: Page, keys = false) => {
   return new Run(page, keys)
 }
 
-const expected = (k: number) =>
-  t1!.monsters.map((id) => {
-    const b = BINDINGS.find((x) => x.field === t1!.clues[k])!
-    const v = clueOf(b.field, rowsById.get(id)!.context!)
-    const on = b.field === 'job' ? v === 'success' : Number(v) > 0
-    return { icon: b.field === 'job' && !on ? 'smoke' : ICON[b.station], on: on || b.field === 'share' }
-  })
+const expected = (field: string, id: string) => {
+  const b = BINDINGS.find((x) => x.field === field)!
+  const v = clueOf(b.field, rowsById.get(id)!.context!)
+  const on = b.field === 'job' ? v === 'success' : Number(v) > 0
+  return { icon: b.field === 'job' && !on ? 'smoke' : ICON[b.station], on: on || b.field === 'share' }
+}
 
-test('walking to a station shows its clue icon for every monster', async ({ page }) => {
+test('walking to an item shows its clue icon for its own monster only', async ({ page }) => {
   const r = await begin(page)
   await r.go(t1!.id)
-  for (let k = 0; k < t1!.clues.length; k++) {
+  for (const [k, it] of r.lay.items.entries()) {
     await r.station(k)
     const cols = page.locator('.ftg-sheet .ftg-col')
-    await expect(cols).toHaveCount(t1!.monsters.length)
-    for (const [i, want] of expected(k).entries()) {
-      await expect(cols.nth(i).locator('.ftg-clue use')).toHaveAttribute('href', `#rg-i-${want.icon}`)
-      await expect(cols.nth(i).locator('.ftg-clue')).toHaveAttribute('style', want.on ? /opacity:\s*1/ : /opacity:\s*0\.2/)
-    }
+    await expect(cols).toHaveCount(1)
+    const want = expected(it.field, t1!.monsters[it.m]!)
+    await expect(cols.locator('.ftg-clue use')).toHaveAttribute('href', `#rg-i-${want.icon}`)
+    await expect(cols.locator('.ftg-clue')).toHaveAttribute('opacity', want.on ? '1' : '0.2')
     await expect(page.locator('.ftg-st').nth(k)).toHaveAttribute('data-read', '')
   }
 })
@@ -42,13 +40,19 @@ test('stamping a monster beside you adds one key part, once per room', async ({ 
   const r = await begin(page)
   await r.go(t1!.id)
   await expect(page.locator('.ftg-branch svg')).toHaveAccessibleName(branch(0))
-  await r.accuse(0)
+  await r.monster(0)
+  if (phone()) await page.locator('[data-walk="m0"]').tap()
+  else {
+    await page.locator('.ftg').focus()
+    await page.keyboard.press(' ')
+  }
   await expect(page.locator('.ftg-branch svg')).toHaveAccessibleName(branch(1))
-  await expect(page.locator('.ftg-card [data-accuse]:enabled')).toHaveCount(0)
-  await expect(page.locator('.ftg-card[data-picked]')).toHaveCount(1)
+  await expect(page.locator('.ftg-mon[data-picked]')).toHaveCount(1)
+  await page.keyboard.press('Enter')
   await expect(page.locator('.ftg-mon[data-picked]')).toHaveCount(1)
   expect(await collected(page, '.ftg-hud')).toBe(1)
-  await expect(page.locator('.ftg-sr')).toContainText(right(t1!) === 0 ? l.hit! : l.miss!)
+  const k = await page.locator('.ftg-mon').evaluateAll((ms) => ms.findIndex((m) => m.hasAttribute('data-picked')))
+  await expect(page.locator('.ftg-sr')).toContainText(right(t1!) === k ? l.hit! : l.miss!)
 })
 
 test('a trunk door stays shut until the room has an accusation', async ({ page }) => {

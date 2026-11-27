@@ -22,13 +22,12 @@ export const bindInput = (root: HTMLElement, h: Handlers) => {
   }
 
   const onClick = (e: MouseEvent) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act], [data-move], [data-walk], [data-accuse]')
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act], [data-move], [data-walk]')
     if (!el) return
     if (el.dataset.act) h.pause()
     else if (!playing()) return
     else if (el.dataset.move) h.move(...(el.dataset.move.split(',').map(Number) as [number, number]))
     else if (el.dataset.walk) h.walk(el.dataset.walk[0]!, Number(el.dataset.walk.slice(1)))
-    else h.stamp(Number(el.dataset.accuse))
   }
 
   root.addEventListener('keydown', onKey)

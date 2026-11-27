@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BINDINGS } from '../../src/game/levels/observations.ts'
-import { CERTAIN, ED, ENC, fakeEnv, gapSlot, resultBody, send, visitRow, visits } from './route-env.ts'
+import { CERTAIN, ED, ENC, fakeEnv, gapSlot, resultBody, send, readCodes, visitRow, visits } from './route-env.ts'
 
 const one = visitRow(CERTAIN[0]!, 0)
 const bent = (i: number, x: number) => one.map((c, k) => (k === i ? x : c))
@@ -17,7 +17,7 @@ describe('result', () => {
     expect([version, level, mode]).toEqual([ED, 1, 0])
     expect(JSON.parse(waves as string)).toEqual([one])
     const bad = async (v: number[]) => expect((await send('/api/game/result', resultBody([v]), env)).status).toBe(400)
-    await bad(one.slice(0, 16))
+    await bad(one.slice(0, 22))
     await bad([...one, 0])
     await bad(bent(0, 99_999))
     await bad(bent(1, 1))
@@ -28,10 +28,13 @@ describe('result', () => {
     await bad(bent(6, 99))
     await bad(bent(7, 9))
     await bad(bent(8, one[7]!))
-    await bad(bent(12, 600_001))
-    await bad(visitRow(ENC.find((r) => r.monsters.length < 5)!, 0).map((x, i) => (i === 16 ? 812 : x)))
-    const k = BINDINGS.findIndex((b) => !CERTAIN[0]!.clues.includes(b.field))
-    if (k >= 0) await bad(bent(7, k))
+    await bad(bent(19, 600_001))
+    const small = ENC.find((r) => r.monsters.length < 4)!
+    await bad(visitRow(small, 0).map((x, i) => (i === 19 + small.monsters.length ? 812 : x)))
+    const carried = readCodes(CERTAIN[0]!)
+    const k = Array.from({ length: BINDINGS.length }, (_, b) => b).find((b) => !carried.includes(b))
+    if (k !== undefined) await bad(bent(7, k))
+    await bad(bent(7, CERTAIN[0]!.monsters.length * BINDINGS.length))
     await bad(one.map((x, i) => (i === 7 ? -1 : i === 8 ? 0 : x)))
     expect(results).toHaveLength(1)
   })
