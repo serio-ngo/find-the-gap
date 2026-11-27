@@ -36,4 +36,12 @@ describe('the monster carries the evidence', () => {
       expect(svg.startsWith('<svg')).toBe(true)
     }
   })
+
+  it('draws no mouth or fang, and varies the body by family from the values alone', () => {
+    const shapes = new Set(rows.map((r) => monster(r).match(/<path d="([^"]*)"/)![1]))
+    expect(shapes.size).toBeGreaterThanOrEqual(3)
+    for (const r of rows) expect(monster(r)).not.toMatch(/Q0,16|<polygon points="-3,12\.4/)
+    const gap = rows.find((r) => r.gap)!
+    expect(monster({ ...gap, gap: false, id: 'x' } as typeof gap)).toBe(monster(gap))
+  })
 })

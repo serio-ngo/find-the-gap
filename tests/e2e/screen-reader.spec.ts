@@ -41,14 +41,14 @@ test('Enter and Space stamp the monster beside the hero', async ({ page }) => {
   await expect(page.locator('.ftg-branch svg')).toHaveAccessibleName(parts(2))
 })
 
-test('reading a station is announced with its clue for every monster', async ({ page }) => {
+test('reading an item is announced with its clue for its monster', async ({ page }) => {
   await open(page)
   await playButton(page).click()
   const r = new Run(page)
   await r.go(t1!.id)
   await r.station(0)
-  await expect(live(page)).toContainText(l.lamp!)
-  await expect(live(page)).toContainText(l.pick!.replace('{n}', '1'))
+  await expect(live(page)).toContainText(l[r.lay.items[0]!.station]!)
+  await expect(live(page)).toContainText(l.pick!.replace('{n}', String(r.lay.items[0]!.m + 1)))
 })
 
 test('an accusation outside the certain rooms announces only the dropped item', async ({ page }) => {

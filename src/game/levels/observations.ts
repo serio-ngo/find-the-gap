@@ -26,3 +26,10 @@ export const BINDINGS: Binding[] = [
   { field: 'job', station: 'lamp' }, { field: 'locks', station: 'padlock' }, { field: 'share', station: 'ring' },
   { field: 'agent', station: 'drone' }, { field: 'impacts', station: 'crack' },
 ]
+
+export const place = (row: Row) => {
+  const c = row.context!
+  const band = (c.agent ?? 0) * 2 + Number(c.job === 'success')
+  const n = Math.min((c.locks ?? 0) + (c.impacts ?? 0), 3)
+  return { y: Math.min(Math.round((1 - (c.share ?? 1)) * 30), 3), band, items: Array.from({ length: n }, (_, i) => BINDINGS[(band + i) % BINDINGS.length]!.field) }
+}

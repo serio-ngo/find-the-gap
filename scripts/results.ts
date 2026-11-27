@@ -4,13 +4,14 @@ import { hit, rooms, rowMap, typicalOf } from '../src/game/engine.ts'
 import { wilson } from '../src/game/stats.ts'
 import { edition } from '../src/game/eval/version.ts'
 import ai from '../src/game/eval/ai-run.json'
-import { BINDINGS, clueOf } from '../src/game/levels/observations.ts'
+import { BINDINGS, clueOf, place } from '../src/game/levels/observations.ts'
 import { rows } from '../src/game/levels/rows.ts'
 import { world } from '../src/game/levels/world.ts'
 
 const RS = rooms(world)
 const ROWS = rowMap(rows)
 const typical = typicalOf(ROWS)
+const index = (field: string) => BINDINGS.findIndex((b) => b.field === field)
 const station = (field: string) => BINDINGS.find((b) => b.field === field)!.station
 
 type Stat = { shown: number; human: number; ai: number; aiShown: number }
@@ -60,8 +61,8 @@ export const summarize = async (stored: { version: string; level: number; mode: 
     for (const [at, , pick, ms, switches, first, , ...rest] of JSON.parse(row.waves) as number[][]) {
       const room = RS[at!]
       if (!room || pick! < 0) continue
-      const stations = rest.slice(0, 5).filter((x) => x >= 0)
-      const dwell = rest.slice(5)
+      const stations = rest.slice(0, 12).filter((x) => x >= 0)
+      const dwell = rest.slice(12)
       const recs = room.monsters.map((id) => ROWS.get(id)!)
       const ok = hit(ROWS, room, pick!)
       const a = picks[room.id]
@@ -73,7 +74,7 @@ export const summarize = async (stored: { version: string; level: number; mode: 
         const gap = recs[right]!
         add(byPattern, typical(gap) ? 'typical' : 'atypical', ok, aiHit)
         add(byGap, gap.id, ok, aiHit)
-        for (const b of BINDINGS) if (room.clues.includes(b.field)) add(byStation, `${b.station} ${stations.includes(BINDINGS.indexOf(b)) ? 'read' : 'unread'}`, ok, aiHit)
+        recs.forEach((rec, m) => place(rec).items.forEach((f) => add(byStation, `${station(f)} ${stations.includes(m * BINDINGS.length + index(f)) ? 'read' : 'unread'}`, ok, aiHit)))
         aim[ok ? 'hit' : 'miss'].push([ms!, dwell[right]!, mean(dwell.slice(0, n).filter((_, k) => k !== right)), switches!])
       } else {
         const res = (research[room.relation!] ??= { picks: 0, aim: { visits: 0, dwell: 0, expected: 0 }, evidence: {}, gap: {}, clues: {}, read: {} })
@@ -82,8 +83,8 @@ export const summarize = async (stored: { version: string; level: number; mode: 
           const clue = (fields: string[], name: (f: string) => string) => Object.fromEntries(fields.filter(() => rec.context).map((f) => [name(f), clueOf(f as never, rec.context!)]))
           tally(res.evidence, Object.fromEntries(rec.roles.map((r, i) => [r, rec.values[i]])), n, k === pick)
           tally(res.gap, { gap: rec.gap, typical: typical(rec) }, n, k === pick)
-          tally(res.clues, clue(room.clues, (f) => f), n, k === pick)
-          tally(res.read, clue(stations.map((x) => BINDINGS[x]!.field), station), n, k === pick)
+          tally(res.clues, clue(place(rec).items, (f) => f), n, k === pick)
+          tally(res.read, clue(place(rec).items.filter((f) => stations.includes(k * BINDINGS.length + index(f))), station), n, k === pick)
         })
         const gaps = recs.flatMap((r, k) => (r.gap ? [k] : []))
         if (gaps.length) {

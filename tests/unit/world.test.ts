@@ -7,6 +7,7 @@ import { buildWorld } from '../../scripts/world.ts'
 import { gapOf } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
+import { layout, reach } from '../../src/game/view.ts'
 
 const archive = 'C:/Users/Lenovo/Repos/lifecycle-runs'
 const levels = (name: string) => fileURLToPath(new URL(`../../src/game/levels/${name}`, import.meta.url))
@@ -21,25 +22,25 @@ describe('world', () => {
     for (const [name, text] of Object.entries(files)) expect(text).toBe(readFileSync(levels(name), 'utf8'))
   })
 
-  it('gives each certain room on the trunk exactly one gap, 3 to 5 monsters and one relation', () => {
+  it('gives each certain room on the trunk exactly one gap, 3 to 4 monsters and one relation', () => {
     expect(certain).toHaveLength(4)
     const trunk = world.wings.find((w) => w.repo.endsWith('serio-focus'))!.trunk
     for (const r of certain) {
       expect(trunk).toContain(r.id)
       expect(r.monsters.length).toBeGreaterThanOrEqual(3)
-      expect(r.monsters.length).toBeLessThanOrEqual(5)
+      expect(r.monsters.length).toBeLessThanOrEqual(4)
       expect(r.monsters.filter((id) => gapOf[byId.get(id)!.rule]!(byId.get(id)!.values))).toHaveLength(1)
       expect(new Set(r.monsters.map((id) => byId.get(id)!.rule)).size).toBe(1)
     }
   })
 
-  it('places every row in exactly one room of 3 to 5 monsters of one relation', () => {
+  it('places every row in exactly one room of 3 to 4 monsters of one relation', () => {
     const placed = rooms.flatMap((r) => r.monsters)
     expect(new Set(placed).size).toBe(placed.length)
     expect([...placed].sort()).toEqual(rows.map((r) => r.id).sort())
     for (const r of rooms) {
       expect(r.monsters.length).toBeGreaterThanOrEqual(3)
-      expect(r.monsters.length).toBeLessThanOrEqual(5)
+      expect(r.monsters.length).toBeLessThanOrEqual(4)
       expect(new Set(r.monsters.map((id) => byId.get(id)!.rule)).size).toBe(1)
     }
   })
@@ -50,6 +51,15 @@ describe('world', () => {
     expect(g.reader).toBeLessThanOrEqual(0.65)
     expect(g.herrings).toBeGreaterThanOrEqual(2)
     expect(g.p).toBeGreaterThanOrEqual(0.05)
+  })
+
+  it('lays out every item so that some free cell reads it', () => {
+    for (const room of rooms) {
+      const lay = layout(world, room, byId)
+      const free = Array.from({ length: lay.w * lay.h }, (_, i) => ({ x: i % lay.w, y: Math.floor(i / lay.w) })).filter((c) => ![...lay.monsters, ...lay.items].some((o) => o.x === c.x && o.y === c.y))
+      const read = new Set(free.map((c) => reach(lay, c).station))
+      expect(lay.items.every((_, k) => read.has(k))).toBe(true)
+    }
   })
 
   it('places no row of the curation list', () => {

@@ -1,7 +1,7 @@
 import { MAX_MS, URL_AI, canonical, encounters, roomBody, rooms, rowMap, score as engineScore, validate } from '../engine.ts'
 import type { AiPick } from '../engine.ts'
 import { edition, sha256 } from '../eval/version.ts'
-import { BINDINGS } from '../levels/observations.ts'
+import { BINDINGS, place } from '../levels/observations.ts'
 import { rows } from '../levels/rows.ts'
 import { world } from '../levels/world.ts'
 
@@ -111,17 +111,18 @@ const checked = async (b: Record<string, unknown>) => {
   const given = Array.isArray(b.visits) && b.visits.length <= ENC.length ? b.visits : bad()
   const entered = new Set<number>()
   const visits = given.map((r, i) => {
-    const a = list(r, 17)
+    const a = list(r, 23)
     const at = int(a[0], RS.length - 1)
     const n = RS[at]!.monsters.length
     if (!n || a[1] !== i || entered.has(at)) bad()
     entered.add(at)
-    const stations = a.slice(7, 12).map((x) => (x === -1 ? -1 : int(x, BINDINGS.length - 1)))
+    const stations = a.slice(7, 19).map((x) => (x === -1 ? -1 : int(x, 4 * BINDINGS.length - 1)))
     stations.forEach((x, k) => {
-      if (x !== -1 && (!RS[at]!.clues.includes(BINDINGS[x]!.field) || stations.indexOf(x) !== k)) bad()
+      const m = Math.floor(x / BINDINGS.length)
+      if (x !== -1 && (m >= n || !place(ROWS.get(RS[at]!.monsters[m]!)!).items.includes(BINDINGS[x % BINDINGS.length]!.field) || stations.indexOf(x) !== k)) bad()
       if (x === -1 && stations[k + 1] !== undefined && stations[k + 1] !== -1) bad()
     })
-    const dwell = a.slice(12).map((x, k) => (k < n ? int(x, MAX_MS) : x === 0 ? 0 : bad()))
+    const dwell = a.slice(19).map((x, k) => (k < n ? int(x, MAX_MS) : x === 0 ? 0 : bad()))
     const pick = a[2] === -1 ? -1 : int(a[2], n - 1)
     return [at, i, pick, int(a[3], MAX_MS), int(a[4], 99), int(a[5], 1), int(a[6], HIDDEN), ...stations, ...dwell] as number[]
   })

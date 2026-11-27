@@ -17,6 +17,7 @@
   --rose: #e3a6c3;
   --teal: #127c80;
   --gold: #c9962b;
+  --vw: 960;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
@@ -45,7 +46,7 @@
 
 .ftg-field { position: relative; background: #e8dcc0; color: var(--k); }
 .ftg-room { position: relative; overflow: hidden; margin: 0 auto; width: min(100%, calc(60vh * var(--w, 1) / var(--h, 1))); }
-.ftg-slide { position: relative; width: 100%; }
+.ftg-slide { position: relative; width: calc(100% * max(var(--w, 560), var(--vw)) / var(--vw)); transform: translateX(clamp(calc(100% * var(--vw) / max(var(--w, 560), var(--vw)) - 100%), calc(-100% * var(--cx, 0.5) + 50% * var(--vw) / max(var(--w, 560), var(--vw))), 0%)); transition: transform 0.15s; }
 .ftg-floor { display: block; width: 100%; height: auto; }
 .ftg-hero { transition: transform 0.15s; pointer-events: none; }
 .ftg-hot, .ftg .ftg-hot { position: absolute; min-width: 0; min-height: 0; padding: 0; border: 2px solid transparent; border-radius: 40px; background: transparent; }
@@ -58,22 +59,8 @@
 .ftg-door[data-lock] .ftg-arch { opacity: 0.45; }
 
 .ftg-lower { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; padding: 0.5rem; background: #e8dcc0; border-top: 3px double var(--k); }
-.ftg-deck { grid-column: 1 / -1; display: flex; gap: 0.5rem; }
-.ftg-card { flex: 1 1 0; min-width: 0; max-width: 160px; display: flex; flex-direction: column; gap: 2px; padding: 3px 6px 6px; border: 3px solid var(--k); border-radius: 12px; background: var(--sheet); box-shadow: 3px 3px 0 var(--rose); }
-.ftg-card[data-near] { border-color: var(--gold); }
-.ftg-head { display: flex; align-items: flex-start; justify-content: space-between; }
-.ftg-head > svg { width: 70%; max-width: 80px; height: auto; }
-.ftg-num { font: 600 12px var(--mono); color: #6b5f4b; }
-.ftg .ftg-stamp { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; }
-.ftg .ftg-stamp:disabled { opacity: 0.25; cursor: default; filter: grayscale(1); }
-.ftg-stamp svg { width: 36px; height: 36px; }
-.ftg-head > .ftg-num { margin-left: auto; margin-right: 2px; }
-.ftg-notes { display: flex; justify-content: space-between; }
 .ftg-clue { width: 21px; height: 21px; }
 .ftg-clue text { font: 700 8px var(--mono); fill: var(--k); }
-.ftg-foot { margin-top: auto; border-top: 1px dashed #bfaf8c; padding-top: 3px; text-align: center; font: 500 10.5px var(--mono); color: #6b5f4b; overflow: hidden; white-space: nowrap; }
-.ftg-card[data-picked] .ftg-foot { color: #a8326e; }
-
 .ftg-panel { grid-column: 1; min-width: 0; min-height: 120px; }
 .ftg-col { min-width: 0; }
 .ftg-sheet, .ftg-idle, .ftg-done { height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 3px solid var(--k); border-radius: 12px; background: var(--sheet); box-shadow: 3px 3px 0 #9fd3ce; }
@@ -133,17 +120,12 @@
 
 @media (min-width: 701px) {
   .ftg-lower { grid-template-columns: 1fr auto 200px; }
-  .ftg-deck { grid-column: 1 / -1; }
   .ftg-map { grid-column: 3; }
   .ftg-controls { grid-column: 2; }
 }
 @media (max-width: 700px) {
+  .ftg { --vw: 560; }
   .ftg-room { width: 100%; }
-  .ftg-slide { width: calc(100% * max(var(--w, 560), 560) / 560); transform: translateX(clamp(calc(100% * 560 / max(var(--w, 560), 560) - 100%), calc(-100% * var(--cx, 0.5) + 50% * 560 / max(var(--w, 560), 560)), 0%)); transition: transform 0.15s; }
-  .ftg-card { padding: 3px 4px 4px; border-radius: 11px; }
-  .ftg-foot { font-size: 9px; }
-  .ftg-clue { width: 16px; height: 16px; }
-  .ftg-notes { flex-wrap: wrap; gap: 1px 4px; justify-content: center; }
   .ftg-col > svg:first-child { width: 44px; }
   .ftg-col .ftg-clue { width: 24px; height: 24px; }
   .ftg-sheet { gap: 6px; padding: 8px; }

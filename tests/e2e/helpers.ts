@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { hit, report, rooms, rowMap } from '../../src/game/engine.ts'
 import type { AiRun, Visit } from '../../src/game/engine.ts'
@@ -7,12 +7,16 @@ import type { Labels } from '../../src/game/chart.ts'
 import { hash } from '../../src/game/gen.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
-import { BINDINGS } from '../../src/game/levels/observations.ts'
 import type { Room } from '../../src/game/levels/observations.ts'
 import { entry, layout, passable, reach, step } from '../../src/game/view.ts'
 import type { Gate, Spot } from '../../src/game/view.ts'
 
 export type Lang = 'pl' | 'en'
+export const phone = () => test.info().project.name === 'phone'
+const shown = async (el: Locator) => {
+  const [b, r] = [await el.boundingBox(), await el.page().locator('.ftg-room').boundingBox()]
+  return !!b && !!r && b.x >= r.x && b.x + b.width <= r.x + r.width
+}
 export const run = JSON.parse(readFileSync('src/game/eval/ai-run.json', 'utf8')) as AiRun
 export const strings = JSON.parse(readFileSync('src/game/strings.json', 'utf8')) as {
   visible: Record<Lang, Record<string, string>>
@@ -95,7 +99,7 @@ export class Run {
   keys: boolean
   pick: (room: Room) => number
   room = byId.get(world.start)!
-  lay = layout(world, this.room)
+  lay = layout(world, this.room, rowsById)
   at: Spot = entry(this.lay)
   found = new Set<string>()
   accused = new Set<string>()
@@ -112,7 +116,7 @@ export class Run {
     const near = reach(this.lay, this.at)
     near.hidden.forEach((d) => this.found.add(d.id))
     if (near.station < 0) return
-    const k = BINDINGS.findIndex((b) => b.field === this.lay.stations[near.station]!.field)
+    const k = this.lay.items[near.station]!.code
     const list = this.reads.get(this.room.id) ?? []
     if (!list.includes(k)) this.reads.set(this.room.id, [...list, k])
   }
@@ -120,7 +124,7 @@ export class Run {
   private enter(to: string) {
     const from = this.room.id
     this.room = byId.get(to)!
-    this.lay = layout(world, this.room)
+    this.lay = layout(world, this.room, rowsById)
     this.at = entry(this.lay, from)
     this.see()
   }
@@ -150,7 +154,8 @@ export class Run {
     const i = this.lay.doors.findIndex((d) => d.to === to)
     const d = this.lay.doors[i]!
     if (this.keys) return this.walk(() => false, d)
-    await this.page.locator(`[data-walk="d${i}"]`).dispatchEvent('click')
+    const hot = this.page.locator(`[data-walk="d${i}"]`)
+    await (phone() && (await shown(hot)) ? hot.tap() : hot.dispatchEvent('click'))
     const m = tiles(this.lay, this.at, () => false, d)
     for (const [dx, dy] of m.slice(0, -1)) this.at = step(this.lay, this.at, dx, dy) as Spot
     this.see()
@@ -160,11 +165,11 @@ export class Run {
   async accuse(i: number) {
     await expect(this.page.locator('.ftg')).toHaveAttribute('data-room', this.room.id)
     await this.monster(i)
-    const stamp = this.page.locator(`[data-accuse="${i}"]`)
+    const stamp = this.page.locator(`[data-walk="m${i}"]`)
     if (this.keys) {
       await stamp.focus()
       await this.page.keyboard.press('Enter')
-    } else await stamp.dispatchEvent('click')
+    } else await (phone() ? stamp.tap() : stamp.click())
     await expect(this.page.locator('.ftg-mon').nth(i)).toHaveAttribute('data-picked', '')
     this.accused.add(this.room.id)
     this.visits.push({ room: all.indexOf(this.room), pick: i, ms: 0 })
