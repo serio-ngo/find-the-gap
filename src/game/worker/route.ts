@@ -130,11 +130,13 @@ const checked = async (b: Record<string, unknown>) => {
 }
 
 const receipt = (x: unknown) => (int(x, Number.MAX_SAFE_INTEGER) >= 2 ** 32 ? (x as number) : bad())
+const fresh = async (env: GameEnv, id: unknown) =>
+  !(await env.DB.prepare('SELECT 1 AS n FROM game_results WHERE id = ?').bind(id).first()) && (await used(env, 'result')) > RESULT_CAP
 const capped = () => new Response(null, { status: 429, headers: { 'retry-after': '3600' } })
 
 const store = async (b: Record<string, unknown>, env: GameEnv, { version, visits }: Awaited<ReturnType<typeof checked>>) => {
   await env.DB.prepare(
-    'INSERT INTO game_results (id, day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET day = excluded.day, waves = excluded.waves WHERE version = excluded.version AND json_array_length(excluded.waves) >= json_array_length(waves)',
+    'INSERT INTO game_results (id, day, version, level, mode, waves) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET day = excluded.day, waves = excluded.waves WHERE version = excluded.version AND (json_array_length(excluded.waves), (SELECT count(*) FROM json_each(excluded.waves) WHERE value ->> 2 >= 0)) >= (json_array_length(waves), (SELECT count(*) FROM json_each(waves) WHERE value ->> 2 >= 0))',
   )
     .bind(b.receipt, new Date().toISOString().slice(0, 10), version, b.level, 0, JSON.stringify(visits))
     .run()
@@ -144,7 +146,7 @@ const store = async (b: Record<string, unknown>, env: GameEnv, { version, visits
 const result = async (b: Record<string, unknown>, env: GameEnv) => {
   const c = await checked(exact(b, ['v', 'level', 'visits', 'edition', 'receipt']))
   receipt(b.receipt)
-  if ((await used(env, 'result')) > RESULT_CAP) return capped()
+  if (await fresh(env, b.receipt)) return capped()
   await store(b, env, c)
   return new Response(null, { status: 204 })
 }
@@ -159,7 +161,7 @@ const board = async (b: Record<string, unknown>, env: GameEnv) => {
   const c = await checked(exact(b, ['v', 'level', 'visits', 'edition', 'name', 'receipt']))
   const name = typeof b.name === 'string' && NAME.test(b.name.trim()) ? b.name.trim() : bad()
   receipt(b.receipt)
-  if ((await used(env, 'result')) > RESULT_CAP) return capped()
+  if (await fresh(env, b.receipt)) return capped()
   const picked = c.visits.filter((a) => a[2]! >= 0)
   if (picked.length < world.key || ENC.some((r) => r.certain && !picked.some((a) => RS[a[0]!] === r))) bad()
   const score = engineScore(world, ROWS, c.visits.map((a) => ({ room: a[0]!, pick: a[2]!, ms: a[3]! })))

@@ -178,6 +178,7 @@ const stamp = (i: number) => {
 }
 
 const start = () => {
+  contribute()
   found = new Set()
   accused = new Set()
   visited = new Set([world.start])

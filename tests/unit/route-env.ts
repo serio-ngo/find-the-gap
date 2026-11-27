@@ -25,6 +25,11 @@ export const resultBody = (v: number[][], edition = ED, receipt = RECEIPT) => ({
 export const allRooms = (pick?: (r: (typeof ENC)[number]) => number) => visits([...CERTAIN, ...ENC.filter((r) => !r.certain)], pick)
 export const ORIGIN = 'https://example.org'
 
+const weight = (row: unknown[]) => {
+  const w = JSON.parse(row[4] as string) as number[][]
+  return w.length * 100 + w.filter((a) => a[2]! >= 0).length
+}
+
 export const fakeEnv = (over: Partial<GameEnv> = {}) => {
   const cache = new Map<string, { body: string; created: number }>()
   const use = { step: 0, result: 0 }
@@ -42,6 +47,8 @@ export const fakeEnv = (over: Partial<GameEnv> = {}) => {
           first: async () =>
             (sql.includes('COUNT(*)')
               ? { n: mine(v).length, below: mine(v).filter((x) => x.score < (v[0] as number)).length }
+              : sql.includes('FROM game_results')
+              ? (ids.includes(v[0]) ? { n: 1 } : null)
               : sql.includes('game_use')
               ? { n: (use[sql.includes('(day, step)') ? 'step' : 'result'] += v[1] as number) }
               : cache.get(v[0] as string) ?? null) as any,
@@ -56,7 +63,7 @@ export const fakeEnv = (over: Partial<GameEnv> = {}) => {
               const at = ids.indexOf(v[0])
               const row = v.slice(1)
               if (at < 0) ids.push(v[0]), results.push(row)
-              else if (results[at]![1] === row[1] && JSON.parse(row[4] as string).length >= JSON.parse(results[at]![4] as string).length) results[at] = row
+              else if (results[at]![1] === row[1] && weight(row) >= weight(results[at]!)) results[at] = row
             }
           },
         }),

@@ -76,8 +76,19 @@ describe('result', () => {
     expect((await send('/api/game/result', resultBody(full.slice(0, 1)), env)).status).toBe(204)
     expect((await send('/api/game/result', resultBody(full), env)).status).toBe(204)
     expect((await send('/api/game/result', resultBody(full.slice(0, 2)), env)).status).toBe(204)
+    const late = full.map((a, i) => (i === full.length - 1 ? [...a.slice(0, 2), -1, ...a.slice(3)] : a))
+    expect((await send('/api/game/result', resultBody(late), env)).status).toBe(204)
     expect(results).toHaveLength(1)
     expect(JSON.parse(results[0]![4] as string)).toEqual(full)
+  })
+
+  it('counts a play once against the daily cap, so resends of a stored play pass the cap', async () => {
+    const { env, results, use } = fakeEnv()
+    expect((await send('/api/game/result', resultBody([one]), env)).status).toBe(204)
+    use.result = 5000
+    expect((await send('/api/game/result', resultBody(visits(CERTAIN)), env)).status).toBe(204)
+    expect(use.result).toBe(5000)
+    expect(JSON.parse(results[0]![4] as string)).toHaveLength(CERTAIN.length)
   })
 
   it('answers 429 without storing past the daily cap or the rate limit, and a retry stores the play', async () => {
