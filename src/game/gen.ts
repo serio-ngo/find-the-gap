@@ -65,7 +65,7 @@ export const monster = ({ rule, values, context }: Pick<Row, 'rule' | 'values' |
   const segments = odd ? '' : values.map((v, i) => `<g transform="translate(${(i - (values.length - 1) / 2) * 8},19.5)">${mark(v)}</g>`).join('')
   return `<svg viewBox="-46 -48 92 82" aria-hidden="true"><path d="${shell}" fill="#E3A6C3" opacity="0.7" transform="translate(3,3)"/>` +
     (odd ? `<g stroke="${INK}" stroke-width="1.2">${horns(values[0]!, false)}${horns(values[1]!, true)}</g>` : '') +
-    `<path d="${shell}" fill="${fill}" stroke="${INK}" stroke-width="2.5"/><path d="${hatch(w, b)}" fill="url(#rg-hatch)"/>` +
+    `<path d="${shell}" fill="${fill}" stroke="${INK}" stroke-width="2.5"/><path d="${hatch(w, b)}" fill="url(#rg-hatch)"/><path d="M-${w - 9},-${t - 4} a5,8 0 1 1 0,-16 a5,8 0 1 1 0,16 Z" fill="#FFFDF5" opacity="0.35"/>` +
     `<line x1="0" y1="-${t - 1}" x2="0" y2="${b - 1}" stroke="${INK}" stroke-dasharray="2 3" opacity="0.5"/>${eyes}${segments}` +
     `<ellipse cx="-11" cy="${b + 1}" rx="6" ry="3.5" fill="${INK}"/><ellipse cx="11" cy="${b + 1}" rx="6" ry="3.5" fill="${INK}"/></svg>`
 }

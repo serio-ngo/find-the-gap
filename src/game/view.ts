@@ -25,11 +25,11 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const BAND = 7
 const mix = (s: string) => { let n = hash(s); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return (n ^ (n >>> 16)) >>> 0 }
 const DECOR = [
-  '<path d="M-22,-8 L-8,2 L-12,10 L4,6 L10,16 L22,10" stroke="#5A4E3E" stroke-width="2.5" fill="none"/>',
-  '<g stroke="#2B2620" stroke-width="1.2"><path d="M0,14 C-14,4 -16,-8 -6,-14 C-2,-4 -2,6 0,14 Z" fill="#5CB86A"/><path d="M0,14 C14,4 16,-10 6,-16 C2,-4 2,6 0,14 Z" fill="#3A9A50"/></g>',
-  '<path d="M-22,4 C-24,-8 -6,-12 4,-8 C16,-14 26,-2 20,8 C14,18 -14,16 -22,4 Z" fill="#8A6A44" opacity=".75"/>',
-  '<g fill="#A8326E" opacity=".7"><path d="M-14,-2 C-14,-14 6,-16 10,-6 C18,0 6,14 -4,10 C-14,12 -18,6 -14,-2 Z"/><circle cx="18" cy="12" r="3"/><circle cx="-20" cy="-12" r="2.5"/></g>',
-  '<g fill="#B8AE9C" stroke="#2B2620" stroke-width="1.2"><ellipse cx="-10" cy="4" rx="8" ry="6"/><ellipse cx="8" cy="8" rx="6" ry="5"/><ellipse cx="2" cy="-8" rx="7" ry="5"/></g>',
+  '<g stroke-linecap="round" fill="none"><path d="M-22,-8 L-8,2 L-12,10 L4,6 L10,16 L22,10" stroke="#5A4E3E" stroke-width="2.5"/><path d="M-8,2 L-2,-6 M4,6 L8,-2" stroke="#5A4E3E" stroke-width="1.4"/></g>',
+  '<g stroke="#2B2620" stroke-width="1.2"><ellipse cx="0" cy="15" rx="11" ry="4" fill="#A88A5E"/><path d="M0,14 C-14,4 -16,-8 -6,-14 C-2,-4 -2,6 0,14 Z" fill="#5CB86A"/><path d="M0,14 C14,4 16,-10 6,-16 C2,-4 2,6 0,14 Z" fill="#3A9A50"/><path d="M-6,-8 C-4,-2 -2,4 -1,10 M6,-10 C4,-2 2,4 1,10" fill="none" stroke-width="0.7" opacity=".6"/></g>',
+  '<g><path d="M-22,4 C-24,-8 -6,-12 4,-8 C16,-14 26,-2 20,8 C14,18 -14,16 -22,4 Z" fill="#8A6A44" opacity=".75"/><path d="M-10,-2 C-4,-5 4,-5 10,-1" stroke="#F4ECD8" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".6"/></g>',
+  '<g fill="#A8326E" opacity=".7"><path d="M-14,-2 C-14,-14 6,-16 10,-6 C18,0 6,14 -4,10 C-14,12 -18,6 -14,-2 Z"/><circle cx="18" cy="12" r="3"/><circle cx="-20" cy="-12" r="2.5"/><circle cx="14" cy="-14" r="1.6"/></g>',
+  '<g stroke="#2B2620" stroke-width="1.2"><ellipse cx="-10" cy="4" rx="8" ry="6" fill="#B8AE9C"/><ellipse cx="8" cy="8" rx="6" ry="5" fill="#A39883"/><ellipse cx="2" cy="-8" rx="7" ry="5" fill="#C6BDAA"/><path d="M-14,1 Q-11,-1 -8,0 M5,6 Q7,4 10,5 M-2,-10 Q1,-12 4,-11" fill="none" stroke="#F4ECD8" stroke-width="1.2" stroke-linecap="round"/></g>',
 ]
 const joined = (w: number, h: number, objs: Set<string>) => {
   const seen = new Set([`${w >> 1},${h - 1}`])
