@@ -13,7 +13,7 @@ import { itemOf } from './items.ts'
 import type { Item } from './items.ts'
 import { esc } from './chart.ts'
 import { f } from './cards.ts'
-import { entry, layout, paint, passable, reach, step } from './view.ts'
+import { entry, layout, paint, passable, path, reach, step } from './view.ts'
 import type { Scene, Spot } from './view.ts'
 import type { Text } from './debrief.ts'
 
@@ -33,7 +33,6 @@ const edition = root.dataset.edition!
 const api = root.dataset.api
 const ai = (stored as AiRun).picks
 const hasNext = decks.observations.levels.some((x) => x.id === level + 1)
-const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
 
 const pauseEl = $('.ftg-pause')
 const live = $('.ftg-sr')
@@ -48,6 +47,7 @@ let at: Spot = entry(lay)
 let found = new Set<string>()
 let accused = new Set<string>()
 let visited = new Set<string>()
+let dug = new Set<string>()
 let recs = new Map<string, Rec>()
 let order: Rec[] = []
 let bag = new Map<Item, number>()
@@ -66,7 +66,7 @@ const scene = (): Scene => {
   const r = rec()
   return {
     world, room, lay, monsters: room.monsters.map((id) => rows.get(id)!), at, read: r?.stations ?? [], pick: r?.pick ?? -1,
-    hit: r?.hit ?? false, gain: r?.gain ?? 0, score: score(world, rows, order), found, accused, visited, bag, l,
+    aimed: r?.aimed ?? -1, hit: r?.hit ?? false, gain: r?.gain ?? 0, score: score(world, rows, order), found, accused, visited, dug, bag, l,
   }
 }
 
@@ -92,12 +92,13 @@ const fin = (r: Rec) => {
   Object.assign(r, r.aim.read(all[r.room]!.monsters.map((_, i) => i)))
 }
 
-const arrive = () => {
+const arrive = (look = true) => {
   const r = rec()
   const near = reach(lay, at)
   near.hidden.forEach((d) => found.add(d.id))
+  if (look && lay.spots.some((p) => p.x === at.x && p.y === at.y)) dug.add(`${room.id}|${at.x},${at.y}`)
   let heard = false
-  const k = near.station >= 0 ? lay.items[near.station]!.code : -1
+  const k = look && near.station >= 0 ? lay.items[near.station]!.code : -1
   if (r && k >= 0 && !r.stations.includes(k)) {
     r.stations.push(k)
     heard = true
@@ -116,6 +117,11 @@ const arrive = () => {
 
 const go = (to: string) => {
   const from = room.id
+  const left = rec()
+  if (left && left.pick < 0 && left.aimed >= 0) {
+    left.aimed = -1
+    left.aim.lock(-1, clock(), true)
+  }
   room = byId.get(to)!
   if (to === world.gate) return end()
   lay = layout(world, room, rows)
@@ -129,11 +135,11 @@ const go = (to: string) => {
   arrive()
 }
 
-const move = (dx: number, dy: number) => {
+const move = (dx: number, dy: number, look = true) => {
   const r = step(lay, at, dx, dy)
   if (!('to' in r)) {
     at = r
-    return arrive()
+    return arrive(look)
   }
   if (passable(r, { found, accused, room, world })) go(r.to)
 }
@@ -141,22 +147,12 @@ const move = (dx: number, dy: number) => {
 const walk = (kind: string, i: number) => {
   if (kind === 'm' && reach(lay, at).monsters.includes(i)) return stamp(i)
   const door = kind === 'd' ? lay.doors[i] : undefined
-  const goal = (p: Spot) => (kind === 'm' ? reach(lay, p).monsters.includes(i) : kind === 's' && reach(lay, p).station === i)
-  const seen = new Set([`${at.x},${at.y}`])
-  const queue = [{ p: at, m: [] as (readonly number[])[] }]
-  for (const { p, m } of queue) {
-    if (goal(p)) return m.forEach(([dx, dy]) => move(dx!, dy!))
-    for (const d of DIRS) {
-      const r = step(lay, p, d[0], d[1])
-      if ('to' in r) {
-        if (r === door) return [...m, d].forEach(([dx, dy]) => move(dx!, dy!))
-      } else if (!seen.has(`${r.x},${r.y}`)) {
-        seen.add(`${r.x},${r.y}`)
-        queue.push({ p: r, m: [...m, d] })
-      }
-    }
-  }
+  const goal = (p: Spot) => (kind === 'm' ? reach(lay, p).monsters.includes(i) : kind === 'h' && p.x === lay.spots[i]!.x && p.y === lay.spots[i]!.y)
+  const m = path(lay, at, goal, door)
+  m?.forEach(([dx, dy], j) => move(dx, dy, j === m.length - 1))
 }
+
+const travel = (id: string) => visited.has(id) && id !== room.id && go(id)
 
 const stamp = (i: number) => {
   const r = rec()
@@ -182,6 +178,7 @@ const start = () => {
   found = new Set()
   accused = new Set()
   visited = new Set([world.start])
+  dug = new Set()
   recs = new Map()
   order = []
   bag = new Map()
@@ -245,7 +242,7 @@ setCalm(motion.matches)
 motion.onchange = (e) => !toggled && setCalm(e.matches)
 phase('start')
 root.tabIndex = -1
-bindInput(root, { pause: () => setPause(root.dataset.phase === 'play'), move, walk, stamp })
+bindInput(root, { pause: () => setPause(root.dataset.phase === 'play'), move, walk, stamp, travel })
 $('.ftg-play').onclick = start
 $('.ftg-again').onclick = start
 calmBtn.onclick = () => (toggled = true) && setCalm(calmBtn.getAttribute('aria-pressed') !== 'true')

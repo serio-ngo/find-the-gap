@@ -40,7 +40,7 @@ it('reads only results of the current edition and splits human and AI hits by ga
   expect(out.peers).toEqual([{ room: r.id, n: 2, enough: false }])
 })
 
-it('compares read against unread stations on certain rooms', async () => {
+it('counts one read field for every item of that field in a certain room', async () => {
   const r = certain[0]!
   const right = gap(r)
   const wrong = (right + 1) % r.monsters.length
@@ -48,8 +48,8 @@ it('compares read against unread stations on certain rooms', async () => {
   const out = await play([row(r, right, { stations: [k0!] }), row(r, wrong, { stations: [] })])
   const n = read(r).filter((x) => x % BINDINGS.length === k0! % BINDINGS.length).length
   const s0 = BINDINGS[k0! % BINDINGS.length]!.station
-  expect(out.read[`${s0} read`]).toMatchObject({ shown: 1, human: 1 })
-  expect(out.read[`${s0} unread`]).toMatchObject({ shown: 2 * n - 1, human: (n - 1) / (2 * n - 1) })
+  expect(out.read[`${s0} read`]).toMatchObject({ shown: n, human: 1 })
+  expect(out.read[`${s0} unread`]).toMatchObject({ shown: n, human: 0 })
 })
 
 describe('research summary', () => {

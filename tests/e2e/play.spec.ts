@@ -3,6 +3,7 @@ import { ICON } from '../../src/game/cards.ts'
 import { hit } from '../../src/game/engine.ts'
 import { BINDINGS, clueOf } from '../../src/game/levels/observations.ts'
 import { world } from '../../src/game/levels/world.ts'
+import { path, reach, step, type Spot } from '../../src/game/view.ts'
 import { Run, byId, chartName, collected, expectEnd, near, open, phone, playButton, right, rowsById, run, strings, suites, trunk, wrong } from './helpers.ts'
 
 const l = strings.labels.en
@@ -22,18 +23,57 @@ const expected = (field: string, id: string) => {
   return { icon: b.field === 'job' && !on ? 'smoke' : ICON[b.station], on: on || b.field === 'share' }
 }
 
-test('walking to an item shows its clue icon for its own monster only', async ({ page }) => {
+test('an item stays hidden until you step on it, then shows its clue for every monster', async ({ page }) => {
   const r = await begin(page)
   await r.go(t1!.id)
+  await expect(page.locator('.ftg-spot')).toHaveCount(3 * r.lay.items.length)
+  await expect(page.locator('.ftg-st:visible')).toHaveCount(0)
   for (const [k, it] of r.lay.items.entries()) {
     await r.station(k)
+    await expect(page.locator('.ftg-st').nth(k)).toBeVisible()
     const cols = page.locator('.ftg-sheet .ftg-col')
-    await expect(cols).toHaveCount(1)
-    const want = expected(it.field, t1!.monsters[it.m]!)
-    await expect(cols.locator('.ftg-clue use')).toHaveAttribute('href', `#rg-i-${want.icon}`)
-    await expect(cols.locator('.ftg-clue')).toHaveAttribute('opacity', want.on ? '1' : '0.2')
-    await expect(page.locator('.ftg-st').nth(k)).toHaveAttribute('data-read', '')
+    await expect(cols).toHaveCount(t1!.monsters.length)
+    await expect(cols.nth(it.m)).toHaveAttribute('data-own', '')
+    for (const [i, id] of t1!.monsters.entries()) {
+      const want = expected(it.field, id)
+      await expect(cols.nth(i).locator('.ftg-clue use')).toHaveAttribute('href', `#rg-i-${want.icon}`)
+      await expect(cols.nth(i).locator('.ftg-clue')).toHaveAttribute('opacity', want.on ? '1' : '0.2')
+    }
   }
+})
+
+test('a tap-walk reveals only the mark it ends on, never one it crosses', async ({ page }) => {
+  const r = await begin(page)
+  await r.go(t1!.id)
+  const routes = r.lay.spots.map((goal, h) => {
+    let at = r.at
+    const cells = path(r.lay, r.at, (p) => p.x === goal.x && p.y === goal.y)!.map(([dx, dy]) => (at = step(r.lay, at, dx, dy) as Spot))
+    return { h, crossed: cells.slice(0, -1).map((c) => reach(r.lay, c).station).filter((k) => k >= 0) }
+  })
+  const walk = routes.find((x) => x.crossed.length)!
+  await page.locator(`[data-walk="h${walk.h}"]`).dispatchEvent('click')
+  await expect(page.locator('.ftg-spot[data-dug]')).toHaveCount(1)
+  for (const k of walk.crossed) await expect(page.locator('.ftg-st').nth(k)).not.toHaveAttribute('data-read', '')
+})
+
+test('a monster beside you tells how many of its items are found', async ({ page }) => {
+  const r = await begin(page)
+  await r.go(t1!.id)
+  const own = r.lay.items.filter((x) => x.m === 0).length
+  await r.monster(0)
+  expect(reach(r.lay, r.at).station).toBe(-1)
+  const got = r.lay.items.filter((x) => x.m === 0 && r.reads.get(t1!.id)?.some((c) => c % BINDINGS.length === x.code % BINDINGS.length)).length
+  await expect(page.locator('.ftg-sheet')).toHaveAccessibleName(l.found!.replace('{n}', '1').replace('{a}', String(got)).replace('{t}', String(own)))
+  await expect(page.locator('.ftg-sheet .ftg-clue')).toHaveCount(own)
+})
+
+test('clicking a walked room on the map travels there, an unwalked one does not', async ({ page }) => {
+  const r = await begin(page)
+  await r.go(t1!.id)
+  await expect(page.locator('.ftg-map [data-go]')).not.toHaveCount(0)
+  await expect(page.locator(`.ftg-map [data-go="${trunk[1]!.id}"]`)).toHaveCount(0)
+  await page.locator(`.ftg-map [data-go="${world.start}"]`).click()
+  await expect(page.locator('.ftg')).toHaveAttribute('data-room', world.start)
 })
 
 test('stamping a monster beside you adds one key part, once per room', async ({ page }) => {

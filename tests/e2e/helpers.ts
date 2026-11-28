@@ -8,7 +8,7 @@ import { hash } from '../../src/game/gen.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
 import type { Room } from '../../src/game/levels/observations.ts'
-import { entry, layout, passable, reach, step } from '../../src/game/view.ts'
+import { entry, layout, passable, path, reach, step } from '../../src/game/view.ts'
 import type { Gate, Spot } from '../../src/game/view.ts'
 
 export type Lang = 'pl' | 'en'
@@ -53,25 +53,10 @@ export const chartName = (visits: Visit[], lang: Lang = 'en') =>
   label(report(world, rowsById, visits, run.picks), { ...strings.visible[lang], chart: strings.labels[lang].chart } as Labels)
 
 const KEYS: Record<string, string> = { '1,0': 'ArrowRight', '-1,0': 'ArrowLeft', '0,1': 'ArrowDown', '0,-1': 'ArrowUp' }
-const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
-type Move = readonly [number, number]
-
 const tiles = (lay: ReturnType<typeof layout>, from: Spot, goal: (p: Spot) => boolean, door?: Gate) => {
-  const seen = new Set([`${from.x},${from.y}`])
-  const queue = [{ p: from, m: [] as Move[] }]
-  for (const { p, m } of queue) {
-    if (goal(p)) return m
-    for (const d of DIRS) {
-      const r = step(lay, p, d[0], d[1])
-      if ('to' in r) {
-        if (r === door) return [...m, d]
-      } else if (!seen.has(`${r.x},${r.y}`)) {
-        seen.add(`${r.x},${r.y}`)
-        queue.push({ p: r, m: [...m, d] })
-      }
-    }
-  }
-  throw new Error('no path')
+  const m = path(lay, from, goal, door)
+  if (!m) throw new Error('no path')
+  return m
 }
 
 const route = (from: string, to: string) => {
@@ -133,7 +118,7 @@ export class Run {
     return passable(d, { found: this.found, accused: this.accused, room: this.room, world })
   }
 
-  async move([dx, dy]: Move) {
+  async move([dx, dy]: readonly [number, number]) {
     await this.page.keyboard.press(KEYS[`${dx},${dy}`]!)
     const r = step(this.lay, this.at, dx, dy)
     if (!('to' in r)) {
