@@ -11,7 +11,7 @@ export type Item = keyof typeof ICONS
 export const itemOf = ({ rule }: Pick<Row, 'rule'>): Item => rule as Item
 
 export const icon = (item: Item) =>
-  `<svg viewBox="0 0 24 24" width="24" height="24" stroke="#2B2620" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[item]}</svg>`
+  `<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[item]}</svg>`
 
 export const collection = (bag: Map<Item, number>, l: Record<Item, string>) =>
   [...bag].map(([item, n]) => `<span class="ftg-item" role="img" aria-label="${l[item]}: ${n}">${icon(item)}<span class="ftg-count" aria-hidden="true">${n}</span></span>`).join('')
