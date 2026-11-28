@@ -60,7 +60,6 @@
 .ftg-clues { display: flex; gap: 2px; }
 .ftg-map a { cursor: pointer; }
 .ftg-door:not([data-hidden]) .ftg-crack, .ftg-door[data-hidden] .ftg-arch { display: none; }
-.ftg-crack { color: #a8326e; }
 .ftg-door[data-lock] .ftg-arch { opacity: 0.45; }
 
 .ftg-lower { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; padding: 0.5rem; background: #e8dcc0; border-top: 3px double var(--k); }

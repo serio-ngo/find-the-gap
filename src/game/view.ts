@@ -1,7 +1,7 @@
 import { branch, describe, f, ICON, map, memo, panel, result } from './cards.ts'
 import { rooms } from './engine.ts'
 import { hash, monster } from './gen.ts'
-import { collection } from './items.ts'
+import { art, collection } from './items.ts'
 import type { Item } from './items.ts'
 import type { Text } from './debrief.ts'
 import { BINDINGS, place } from './levels/observations.ts'
@@ -24,13 +24,27 @@ const LEVEL = ['#E2DBC5', '#A8D8A0', '#5CB86A', '#3A9A50', '#23703A']
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const BAND = 7
 const mix = (s: string) => { let n = hash(s); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return (n ^ (n >>> 16)) >>> 0 }
-const DECOR = [
-  '<path d="M-22,-8 L-8,2 L-12,10 L4,6 L10,16 L22,10" stroke="#5A4E3E" stroke-width="2.5" fill="none"/>',
-  '<g stroke="#2B2620" stroke-width="1.2"><path d="M0,14 C-14,4 -16,-8 -6,-14 C-2,-4 -2,6 0,14 Z" fill="#5CB86A"/><path d="M0,14 C14,4 16,-10 6,-16 C2,-4 2,6 0,14 Z" fill="#3A9A50"/></g>',
-  '<path d="M-22,4 C-24,-8 -6,-12 4,-8 C16,-14 26,-2 20,8 C14,18 -14,16 -22,4 Z" fill="#8A6A44" opacity=".75"/>',
-  '<g fill="#A8326E" opacity=".7"><path d="M-14,-2 C-14,-14 6,-16 10,-6 C18,0 6,14 -4,10 C-14,12 -18,6 -14,-2 Z"/><circle cx="18" cy="12" r="3"/><circle cx="-20" cy="-12" r="2.5"/></g>',
-  '<g fill="#B8AE9C" stroke="#2B2620" stroke-width="1.2"><ellipse cx="-10" cy="4" rx="8" ry="6"/><ellipse cx="8" cy="8" rx="6" ry="5"/><ellipse cx="2" cy="-8" rx="7" ry="5"/></g>',
-]
+const DECOR = ['crack', 'sprout', 'dirt', 'stain', 'pebbles']
+const TYPES = ['archive', 'vault', 'hall', 'greenhouse', 'cavern', 'workshop']
+const CARPET: Record<string, string> = { archive: 'a', hall: 'b' }
+export const ART = [...TYPES.flatMap((t) => [`wall-${t}`, `door-${t}`, ...[...'abcd'].map((v) => `floor-${t}-${v}`)]), ...DECOR.flatMap((k) => [...'abcd'].map((v) => `mark-${k}-${v}`)), 'door-library', 'door-hidden', 'carpet-a', 'carpet-b', 'hero']
+
+export const look = (world: World, room: Room) => {
+  const vault = world.wings.flatMap((x) => x.suites.filter((u) => u.id === 'vault' && u.rooms.some((r) => r.id === room.id)).map(() => x.grid))
+  const type = vault.length ? 'vault' : TYPES[mix(`${room.id}/type`) % TYPES.length]!
+  const k = mix(`${room.id}/base`)
+  return { grid: vault[0] ?? [], type, base: k % 4, door: type === 'archive' && (k >>> 3) & 1 ? 'library' : type, carpet: CARPET[type], wall: [(k >>> 5) % 160, (k >>> 13) % 160] }
+}
+
+export const tile = (room: Room, x: number, y: number) => {
+  const k = mix(`${room.id}/${x},${y}`)
+  return { accent: k % 10 >= 7 ? k % 4 : -1, ox: (k >>> 4) % 192, oy: (k >>> 12) % 192, fx: (k >>> 20) & 1, fy: (k >>> 21) & 1 }
+}
+
+export const decal = (room: Room, x: number, y: number) => {
+  const k = mix(`${room.id}#${x},${y}`)
+  return { variant: 'abcd'[k % 4]!, size: 40 + ((k >>> 2) % 16), turn: (k >>> 6) % 360 }
+}
 const joined = (w: number, h: number, objs: Set<string>) => {
   const seen = new Set([`${w >> 1},${h - 1}`])
   const queue = [[w >> 1, h - 1]] as [number, number][]
@@ -143,21 +157,30 @@ const floor = (s: Scene) => {
   const pc = (x: number, y: number, w: number, h: number) => [x / W, y / H, w / W, h / H].map((v) => `${100 * v}%`).join(' ')
   const hot = (key: string, label: string, x: number, y: number, w: number, h: number) => `<button class="ftg-hot" data-walk="${key}" data-pc="${pc(x, y, w, h)}" aria-label="${label}"></button>`
   const rect = (fill: string, x = 0, y = 0, w = W, h = H) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`
-  const grid = world.wings.flatMap((x) => x.suites.filter((u) => u.id === 'vault' && u.rooms.some((r) => r.id === room.id)).map(() => x.grid))[0] ?? []
+  const { grid, type, base, door, carpet, wall } = look(world, room)
+  const cells = Array.from({ length: lay.w * lay.h }, (_, i) => {
+    const x = i % lay.w
+    const y = Math.floor(i / lay.w)
+    const t = tile(room, x, y)
+    return `<svg x="${P + T * x}" y="${P + T * y}" width="${T}" height="${T}" viewBox="0 0 ${T} ${T}"><use href="#ftg-f${t.accent < 0 ? base : t.accent}" transform="matrix(${t.fx ? -1 : 1} 0 0 ${t.fy ? -1 : 1} ${t.fx ? t.ox + T : -t.ox} ${t.fy ? t.oy + T : -t.oy})"/></svg>`
+  })
+  const c0 = mix(`${room.id}/carpet`)
+  const rug = carpet ? `<pattern id="ftg-rug" width="128" height="128" x="${c0 % 128}" y="${(c0 >>> 7) % 128}" patternUnits="userSpaceOnUse"><image href="${art(`carpet-${carpet}`)}" width="128" height="128"/></pattern><rect x="${P + (c0 % (lay.w - 6)) * T + 6}" y="${P + T + 6}" width="${5 * T - 12}" height="${(lay.h - 2) * T - 12}" fill="url(#ftg-rug)" stroke="#2B2620" stroke-width="2"/>` : ''
+  const lines = `<path d="${Array.from({ length: lay.w + 1 }, (_, i) => `M${P + T * i},${P}V${P + fh}`).join('')}${Array.from({ length: lay.h + 1 }, (_, j) => `M${P},${P + T * j}H${P + fw}`).join('')}" stroke="#2B2620" stroke-width="1" opacity="0.16"/>`
   const col0 = P + fw / 2 - Math.ceil(grid.length / 7) * 11
   const doors = lay.doors.map((d, i) => {
     const cx = d.dx ? (d.dx > 0 ? P + fw : P) : px(d.x)
     const cy = d.dy ? (d.dy > 0 ? P + fh : P) : px(d.y)
-    return { cx, cy, svg: `<g class="ftg-door" transform="translate(${cx},${cy}) rotate(${d.dx > 0 ? 90 : d.dx < 0 ? -90 : d.dy > 0 ? 180 : 0})"><use class="ftg-arch" href="#rg-door"/><use class="ftg-crack" href="#rg-i-crack" x="-14" y="-30" width="28" height="28"/></g>`, i }
+    return { cx, cy, svg: `<g class="ftg-door" transform="translate(${cx},${cy}) rotate(${d.dx > 0 ? 90 : d.dx < 0 ? -90 : d.dy > 0 ? 180 : 0})"><image class="ftg-arch" href="${art(`door-${door}`)}" x="-26" y="-56" width="52" height="60"/><image class="ftg-crack" href="${art('door-hidden')}" x="-26" y="-56" width="52" height="60"/></g>`, i }
   })
   const stations = lay.items.map((_, i) => `<g class="ftg-st" data-st="${i}"></g>`)
-  const spots = lay.spots.map((p, i) => `<g class="ftg-spot" data-spot="${i}" transform="translate(${px(p.x)},${px(p.y)})">${DECOR[p.kind]}</g>`)
+  const spots = lay.spots.map((p, i) => `<g class="ftg-spot" data-spot="${i}" transform="translate(${px(p.x)},${px(p.y)})">${((d) => `<image href="${art(`mark-${DECOR[p.kind]}-${d.variant}`)}" x="${-d.size / 2}" y="${-d.size / 2}" width="${d.size}" height="${d.size}"${p.kind === 1 ? '' : ` transform="rotate(${d.turn})"`}/>`)(decal(room, p.x, p.y))}</g>`)
   const mons = lay.monsters.map((m, i) => {
     const cx = px(m.x)
     const cy = px(m.y)
     return `<g class="ftg-mon" data-mon="${i}"><ellipse class="ftg-ring" cx="${cx}" cy="${cy}" rx="36" ry="34"/><ellipse cx="${cx}" cy="${cy + 6}" rx="34" ry="26" fill="#EFE5CF" stroke="#2B2620" stroke-width="1.3" stroke-dasharray="4 5"/>${monster(s.monsters[i]!).replace('<svg ', `<svg x="${cx - 32}" y="${cy - 34}" width="64" height="57" `)}<use class="ftg-seal" href="#rg-i-seal" x="${cx + 12}" y="${cy + 8}" width="22" height="22"/></g>`
   })
-  return `<div class="ftg-slide"><svg class="ftg-floor" viewBox="0 0 ${W} ${H}" aria-hidden="true">${rect('#E3D6B6')}${rect('url(#rg-wallhatch)')}${rect('url(#rg-brick)')}${rect('#F4EEDD', P, P, fw, fh)}${rect('url(#rg-minor)', P, P, fw, fh)}${rect('url(#rg-major)', P, P, fw, fh)}<rect x="${P}" y="${P}" width="${fw}" height="${fh}" fill="none" stroke="#2B2620" stroke-width="2.5"/>${grid.map((v, i) => rect(LEVEL[v]!, col0 + Math.floor(i / 7) * 22, P + fh / 2 - 77 + (i % 7) * 22, 18, 18)).join('')}${doors.map((d) => d.svg).join('')}${spots.join('')}${stations.join('')}${mons.join('')}<use class="ftg-hero" href="#rg-hero" width="36" height="46"/></svg>${s.monsters.map((m, i) => hot(`m${i}`, f(l.monster, i + 1, describe(m, l)), px(lay.monsters[i]!.x) - 34, px(lay.monsters[i]!.y) - 34, 68, 68)).join('')}${lay.spots.map((p, i) => hot(`h${i}`, l.hint!, px(p.x) - 30, px(p.y) - 30, 60, 60)).join('')}${doors.map((d) => hot(`d${d.i}`, l.door!, d.cx - 24, d.cy - 24, 48, 48)).join('')}</div>`
+  return `<div class="ftg-slide"><svg class="ftg-floor" viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs>${[...'abcd'].map((v, i) => `<image id="ftg-f${i}" href="${art(`floor-${type}-${v}`)}" width="256" height="256"/>`).join('')}</defs><pattern id="ftg-wall" width="160" height="160" x="${wall[0]}" y="${wall[1]}" patternUnits="userSpaceOnUse"><image href="${art(`wall-${type}`)}" width="160" height="160"/></pattern>${rect('#E3D6B6')}${rect('url(#ftg-wall)')}<rect width="${W}" height="${H}" fill="#2B2620" opacity="0.27"/>${cells.join('')}${rug}${lines}<rect x="${P}" y="${P}" width="${fw}" height="${fh}" fill="none" stroke="#2B2620" stroke-width="2.5"/>${grid.map((v, i) => rect(LEVEL[v]!, col0 + Math.floor(i / 7) * 22, P + fh / 2 - 77 + (i % 7) * 22, 18, 18)).join('')}${doors.map((d) => d.svg).join('')}${spots.join('')}${stations.join('')}${mons.join('')}<image class="ftg-hero" href="${art('hero')}" width="36" height="46"/></svg>${s.monsters.map((m, i) => hot(`m${i}`, f(l.monster, i + 1, describe(m, l)), px(lay.monsters[i]!.x) - 34, px(lay.monsters[i]!.y) - 34, 68, 68)).join('')}${lay.spots.map((p, i) => hot(`h${i}`, l.hint!, px(p.x) - 30, px(p.y) - 30, 60, 60)).join('')}${doors.map((d) => hot(`d${d.i}`, l.door!, d.cx - 24, d.cy - 24, 48, 48)).join('')}</div>`
 }
 
 export const paint = (root: HTMLElement, s: Scene) => {
