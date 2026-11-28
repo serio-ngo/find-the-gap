@@ -9,11 +9,11 @@ import { aimTracker } from './aim.ts'
 import { bindInput } from './input.ts'
 import { load, save } from './stats.ts'
 import { showResult } from './debrief.ts'
-import { itemOf } from './items.ts'
+import { ICONS, itemOf, keep } from './items.ts'
 import type { Item } from './items.ts'
 import { esc } from './chart.ts'
 import { f } from './cards.ts'
-import { entry, layout, paint, passable, path, reach, step } from './view.ts'
+import { ART, entry, layout, paint, passable, path, reach, step } from './view.ts'
 import type { Scene, Spot } from './view.ts'
 import type { Text } from './debrief.ts'
 
@@ -40,6 +40,7 @@ const calmBtn = $('.ftg-calm')
 const studyBtn = $('.ftg-study')
 const boardEl = $<HTMLFormElement>('.ftg-board')
 const motion = matchMedia('(prefers-reduced-motion: reduce)')
+for (const n of [...ART, ...Object.values(ICONS)]) keep(n).catch(() => {})
 
 let room = byId.get(world.start)!
 let lay = layout(world, room, rows)

@@ -7,7 +7,7 @@ import { buildWorld } from '../../scripts/world.ts'
 import { gapOf } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
-import { entry, layout, reach, step } from '../../src/game/view.ts'
+import { decal, entry, layout, look, reach, step, tile } from '../../src/game/view.ts'
 
 const archive = 'C:/Users/Lenovo/Repos/lifecycle-runs'
 const levels = (name: string) => fileURLToPath(new URL(`../../src/game/levels/${name}`, import.meta.url))
@@ -51,6 +51,22 @@ describe('world', () => {
     expect(g.reader).toBeLessThanOrEqual(0.65)
     expect(g.herrings).toBeGreaterThanOrEqual(2)
     expect(g.p).toBeGreaterThanOrEqual(0.05)
+  })
+
+  it('dresses every room from its id alone: six room types, vault suites as vaults, about 30% accent cells', () => {
+    const all = world.wings.flatMap((w) => w.suites.flatMap((s) => s.rooms.map((r) => ({ r, vault: s.id === 'vault' }))))
+    const cells = all.flatMap(({ r }) => Array.from({ length: 40 }, (_, i) => tile(r, i % 10, Math.floor(i / 10))))
+    for (const { r, vault } of all) {
+      const l = look(world, r)
+      expect(look(world, { ...r, monsters: [], certain: !r.certain })).toEqual(l)
+      if (vault) expect(l.type).toBe('vault')
+      expect(l.carpet !== undefined).toBe(l.type === 'archive' || l.type === 'hall')
+      expect([l.type, 'library']).toContain(l.door)
+      expect(tile(r, 3, 2)).toEqual(tile({ ...r, monsters: [] }, 3, 2))
+      expect(decal(r, 3, 2)).toEqual(decal({ ...r, monsters: [] }, 3, 2))
+    }
+    expect(new Set(all.map(({ r }) => look(world, r).type)).size).toBe(6)
+    expect(cells.filter((c) => c.accent >= 0).length / cells.length).toBeCloseTo(0.3, 1)
   })
 
   it('hides every item under one of three times as many reachable floor marks', () => {
