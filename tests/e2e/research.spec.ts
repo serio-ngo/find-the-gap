@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { edition } from '../../src/game/eval/version.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
+import { reach } from '../../src/game/view.ts'
 import { Run, all, open, playButton, strings, trunk, type Lang } from './helpers.ts'
 
 async function mock(page: Page) {
@@ -97,10 +98,11 @@ test('aim data: moving between monsters is a switch, and paused time counts neit
   await playButton(page).click()
   const r = new Run(page)
   await r.go(trunk[0]!.id)
-  await r.monster(0)
+  await r.walk((p) => { const n = reach(r.lay, p).monsters; return n.includes(0) && !n.includes(1) })
   await page.keyboard.press('p')
   await page.waitForTimeout(1500)
   await page.getByRole('button', { name: strings.labels.en.resume }).click()
+  await r.walk((p) => { const n = reach(r.lay, p).monsters; return n.includes(1) && !n.includes(0) })
   await r.accuse(1)
   await r.finish()
   await expect.poll(() => results.length).toBe(1)

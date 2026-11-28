@@ -7,7 +7,7 @@ import { buildWorld } from '../../scripts/world.ts'
 import { gapOf } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
-import { layout, reach } from '../../src/game/view.ts'
+import { layout, reach, step } from '../../src/game/view.ts'
 
 const archive = 'C:/Users/Lenovo/Repos/lifecycle-runs'
 const levels = (name: string) => fileURLToPath(new URL(`../../src/game/levels/${name}`, import.meta.url))
@@ -53,12 +53,17 @@ describe('world', () => {
     expect(g.p).toBeGreaterThanOrEqual(0.05)
   })
 
-  it('lays out every item so that some free cell reads it', () => {
+  it('hides every item under one of three times as many reachable floor marks', () => {
     for (const room of rooms) {
       const lay = layout(world, room, byId)
-      const free = Array.from({ length: lay.w * lay.h }, (_, i) => ({ x: i % lay.w, y: Math.floor(i / lay.w) })).filter((c) => ![...lay.monsters, ...lay.items].some((o) => o.x === c.x && o.y === c.y))
-      const read = new Set(free.map((c) => reach(lay, c).station))
-      expect(lay.items.every((_, k) => read.has(k))).toBe(true)
+      expect(lay.spots).toHaveLength(3 * lay.items.length)
+      const seen = new Set([`${lay.w >> 1},${lay.h - 1}`])
+      for (const k of seen) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const r = step(lay, { x: Number(k.split(',')[0]), y: Number(k.split(',')[1]) }, dx, dy)
+        if (!('to' in r)) seen.add(`${r.x},${r.y}`)
+      }
+      expect(lay.spots.every((p) => seen.has(`${p.x},${p.y}`))).toBe(true)
+      expect(lay.items.map((o, k) => reach(lay, o).station === k && lay.spots.some((p) => p.x === o.x && p.y === o.y))).not.toContain(false)
     }
   })
 

@@ -54,6 +54,11 @@
 .ftg-ring { fill: none; stroke: var(--gold); stroke-width: 3; stroke-dasharray: 6 5; display: none; }
 .ftg-seal, .ftg-eye { display: none; }
 [data-near] > .ftg-ring, [data-picked] > .ftg-ring, [data-picked] > .ftg-seal, [data-read] > .ftg-eye { display: inline; }
+.ftg-st:not([data-read]) { display: none; }
+.ftg-spot[data-dug] { opacity: 0.3; }
+.ftg-sheet .ftg-col[data-own] { outline: 2px dashed var(--teal); outline-offset: 2px; border-radius: 6px; }
+.ftg-clues { display: flex; gap: 2px; }
+.ftg-map a { cursor: pointer; }
 .ftg-door:not([data-hidden]) .ftg-crack, .ftg-door[data-hidden] .ftg-arch { display: none; }
 .ftg-crack { color: #a8326e; }
 .ftg-door[data-lock] .ftg-arch { opacity: 0.45; }

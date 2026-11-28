@@ -10,10 +10,10 @@ import type { Binding, Room, Row, World } from './levels/observations.ts'
 export type Slim = Pick<Row, 'id' | 'rule' | 'values' | 'context'>
 export type Spot = { x: number; y: number }
 export type Gate = Spot & { id: string; to: string; dx: number; dy: number; hidden: boolean; trunk: boolean; gate: boolean }
-export type Lay = { w: number; h: number; monsters: Spot[]; items: (Spot & Binding & { m: number; code: number })[]; doors: Gate[] }
+export type Lay = { w: number; h: number; monsters: Spot[]; items: (Spot & Binding & { m: number; code: number })[]; spots: (Spot & { kind: number })[]; doors: Gate[] }
 export type Scene = {
-  world: World; room: Room; lay: Lay; monsters: Slim[]; at: Spot; read: number[]; pick: number; hit: boolean; gain: number; score: number
-  found: Set<string>; accused: Set<string>; visited: Set<string>; bag: Map<Item, number>; l: Text['l']
+  world: World; room: Room; lay: Lay; monsters: Slim[]; at: Spot; read: number[]; pick: number; aimed: number; hit: boolean; gain: number; score: number
+  found: Set<string>; accused: Set<string>; visited: Set<string>; dug: Set<string>; bag: Map<Item, number>; l: Text['l']
 }
 
 export const T = 64
@@ -22,8 +22,15 @@ export const ROWS = 10
 const px = (v: number) => P + T * v + T / 2
 const LEVEL = ['#E2DBC5', '#A8D8A0', '#5CB86A', '#3A9A50', '#23703A']
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
-const dist = (a: Spot, b: Spot) => 100 * Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) + Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
 const BAND = 7
+const mix = (s: string) => { let n = hash(s); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return (n ^ (n >>> 16)) >>> 0 }
+const DECOR = [
+  '<path d="M-22,-8 L-8,2 L-12,10 L4,6 L10,16 L22,10" stroke="#5A4E3E" stroke-width="2.5" fill="none"/>',
+  '<g stroke="#2B2620" stroke-width="1.2"><path d="M0,14 C-14,4 -16,-8 -6,-14 C-2,-4 -2,6 0,14 Z" fill="#5CB86A"/><path d="M0,14 C14,4 16,-10 6,-16 C2,-4 2,6 0,14 Z" fill="#3A9A50"/></g>',
+  '<path d="M-22,4 C-24,-8 -6,-12 4,-8 C16,-14 26,-2 20,8 C14,18 -14,16 -22,4 Z" fill="#8A6A44" opacity=".75"/>',
+  '<g fill="#A8326E" opacity=".7"><path d="M-14,-2 C-14,-14 6,-16 10,-6 C18,0 6,14 -4,10 C-14,12 -18,6 -14,-2 Z"/><circle cx="18" cy="12" r="3"/><circle cx="-20" cy="-12" r="2.5"/></g>',
+  '<g fill="#B8AE9C" stroke="#2B2620" stroke-width="1.2"><ellipse cx="-10" cy="4" rx="8" ry="6"/><ellipse cx="8" cy="8" rx="6" ry="5"/><ellipse cx="2" cy="-8" rx="7" ry="5"/></g>',
+]
 const joined = (w: number, h: number, objs: Set<string>) => {
   const seen = new Set([`${w >> 1},${h - 1}`])
   const queue = [[w >> 1, h - 1]] as [number, number][]
@@ -47,12 +54,12 @@ export const layout = (world: World, room: Room, rows: Map<string, Slim>): Lay =
   const h = room.monsters.length ? 4 : ROWS
   const objs = new Set<string>()
   const cells = Array.from({ length: h * (w - 2) }, (_, i) => ({ x: (i % (w - 2)) + 1, y: Math.floor(i / (w - 2)) }))
-  const put = (rank: (c: Spot) => number, ok = (_: Spot) => true) => {
+  const put = (rank: (c: Spot) => number) => {
     for (const c of [...cells].sort((a, b) => rank(a) - rank(b))) {
       const k = `${c.x},${c.y}`
       if (objs.has(k) || k === `${w >> 1},${h - 1}`) continue
       objs.add(k)
-      if (joined(w, h, objs) && ok(c)) return c
+      if (joined(w, h, objs)) return c
       objs.delete(k)
     }
     throw new Error('room full')
@@ -62,13 +69,10 @@ export const layout = (world: World, room: Room, rows: Map<string, Slim>): Lay =
   found.forEach(({ m, p }) => {
     monsters[m] = put((c) => { const b = Math.floor((c.x - 1) / BAND); return ((b - p.band + 4) % 4) * 1000 + 10 * Math.abs(c.y - p.y) + Math.abs(c.x - (1 + BAND * b + 3)) })
   })
-  const items: Lay['items'] = []
-  const readable = (list: Lay['items']) => list.every((_, k) => cells.some((q) => !objs.has(`${q.x},${q.y}`) && reach({ w, h, monsters, items: list, doors: [] }, q).station === k))
-  found.forEach(({ m, p }) => p.items.forEach((field) => {
-    const i = BINDINGS.findIndex((b) => b.field === field)
-    const at = put((c) => dist(c, monsters[m]!), (c) => readable([...items, { ...BINDINGS[i]!, ...c, m, code: 0 }]))
-    items.push({ ...BINDINGS[i]!, ...at, m, code: m * BINDINGS.length + i })
-  }))
+  const owned = found.flatMap(({ m, p }) => p.items.map((field) => ({ m, i: BINDINGS.findIndex((b) => b.field === field) })))
+  const free = cells.filter((c) => !objs.has(`${c.x},${c.y}`) && `${c.x},${c.y}` !== `${w >> 1},${h - 1}`).sort((a, b) => mix(`${room.id}:${a.x},${a.y}`) - mix(`${room.id}:${b.x},${b.y}`))
+  const items: Lay['items'] = owned.map(({ m, i }, k) => ({ ...BINDINGS[i]!, ...free[k]!, m, code: m * BINDINGS.length + i }))
+  const spots = free.slice(0, 3 * owned.length).sort((a, b) => a.y - b.y || a.x - b.x).map((c) => ({ ...c, kind: mix(`${room.id}|${c.x},${c.y}`) % DECOR.length }))
   const used = new Set<string>()
   const doors = world.doors.flatMap((d): Gate[] => {
     if (d.a !== room.id && d.b !== room.id) return []
@@ -83,7 +87,7 @@ export const layout = (world: World, room: Room, rows: Map<string, Slim>): Lay =
     used.add(`${dx}${dy}${k}`)
     return [{ id: `${d.a}>${d.b}`, to, dx, dy, x: dx ? (dx > 0 ? w : -1) : k + 1, y: dy ? (dy > 0 ? h : -1) : k, hidden: d.kind === 'hidden', trunk: room.certain && to === trunk[trunk.indexOf(room.id) + 1], gate: to === world.gate }]
   })
-  return { w, h, doors, monsters, items }
+  return { w, h, doors, monsters, items, spots }
 }
 
 export const entry = (l: Lay, from?: string): Spot => {
@@ -95,7 +99,7 @@ export const step = (l: Lay, at: Spot, dx: number, dy: number): Spot | Gate => {
   const x = at.x + dx
   const y = at.y + dy
   const d = l.doors.find((g) => g.x === x && g.y === y)
-  const blocked = [...l.monsters, ...l.items].some((o) => o.x === x && o.y === y)
+  const blocked = l.monsters.some((o) => o.x === x && o.y === y)
   return d ?? (x < 0 || y < 0 || x >= l.w || y >= l.h || blocked ? at : { x, y })
 }
 
@@ -103,7 +107,7 @@ const near = (a: Spot, b: Spot) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - 
 
 export const reach = (l: Lay, at: Spot) => ({
   monsters: l.monsters.flatMap((m, i) => (near(m, at) ? [i] : [])),
-  station: l.items.reduce((k, o, i) => (near(o, at) && (k < 0 || dist(o, at) < dist(l.items[k]!, at)) ? i : k), -1),
+  station: l.items.findIndex((o) => o.x === at.x && o.y === at.y),
   hidden: l.doors.filter((d) => d.hidden && near(d, at)),
 })
 
@@ -129,14 +133,15 @@ const floor = (s: Scene) => {
   const stations = lay.items.map((st, i) => {
     const cx = px(st.x)
     const cy = px(st.y)
-    return { cx, cy, svg: `<g class="ftg-st" data-st="${i}"><ellipse class="ftg-ring" cx="${cx}" cy="${cy - 4}" rx="30" ry="30"/><ellipse cx="${cx}" cy="${cy + 16}" rx="24" ry="6" fill="#2B2620" opacity=".2"/><use href="#rg-i-plinth" x="${cx - 24}" y="${cy - 8}" width="48" height="30"/><use href="#rg-i-${ICON[st.station]}" x="${cx - 17}" y="${cy - 36}" width="34" height="34"/><use class="ftg-eye" href="#rg-i-eye" x="${cx + 12}" y="${cy - 2}" width="18" height="18"/></g>`, label: f(l.station, l[st.station]) }
+    return `<g class="ftg-st" data-st="${i}"><ellipse class="ftg-ring" cx="${cx}" cy="${cy - 4}" rx="30" ry="30"/><use href="#rg-i-${ICON[st.station]}" x="${cx - 17}" y="${cy - 30}" width="34" height="34"/></g>`
   })
+  const spots = lay.spots.map((p, i) => `<g class="ftg-spot" data-spot="${i}" transform="translate(${px(p.x)},${px(p.y)})">${DECOR[p.kind]}</g>`)
   const mons = lay.monsters.map((m, i) => {
     const cx = px(m.x)
     const cy = px(m.y)
     return `<g class="ftg-mon" data-mon="${i}"><ellipse class="ftg-ring" cx="${cx}" cy="${cy}" rx="36" ry="34"/><ellipse cx="${cx}" cy="${cy + 6}" rx="34" ry="26" fill="#EFE5CF" stroke="#2B2620" stroke-width="1.3" stroke-dasharray="4 5"/>${monster(s.monsters[i]!).replace('<svg ', `<svg x="${cx - 32}" y="${cy - 34}" width="64" height="57" `)}<use class="ftg-seal" href="#rg-i-seal" x="${cx + 12}" y="${cy + 8}" width="22" height="22"/></g>`
   })
-  return `<div class="ftg-slide"><svg class="ftg-floor" viewBox="0 0 ${W} ${H}" aria-hidden="true">${rect('#E3D6B6')}${rect('url(#rg-wallhatch)')}${rect('url(#rg-brick)')}${rect('#F4EEDD', P, P, fw, fh)}${rect('url(#rg-minor)', P, P, fw, fh)}${rect('url(#rg-major)', P, P, fw, fh)}<rect x="${P}" y="${P}" width="${fw}" height="${fh}" fill="none" stroke="#2B2620" stroke-width="2.5"/>${grid.map((v, i) => rect(LEVEL[v]!, col0 + Math.floor(i / 7) * 22, P + fh / 2 - 77 + (i % 7) * 22, 18, 18)).join('')}${doors.map((d) => d.svg).join('')}${stations.map((x) => x.svg).join('')}${mons.join('')}<use class="ftg-hero" href="#rg-hero" width="36" height="46"/></svg>${s.monsters.map((m, i) => hot(`m${i}`, f(l.monster, i + 1, describe(m, l)), px(lay.monsters[i]!.x) - 34, px(lay.monsters[i]!.y) - 34, 68, 68)).join('')}${stations.map((x, i) => hot(`s${i}`, x.label, x.cx - 28, x.cy - 40, 56, 62)).join('')}${doors.map((d) => hot(`d${d.i}`, l.door!, d.cx - 24, d.cy - 24, 48, 48)).join('')}</div>`
+  return `<div class="ftg-slide"><svg class="ftg-floor" viewBox="0 0 ${W} ${H}" aria-hidden="true">${rect('#E3D6B6')}${rect('url(#rg-wallhatch)')}${rect('url(#rg-brick)')}${rect('#F4EEDD', P, P, fw, fh)}${rect('url(#rg-minor)', P, P, fw, fh)}${rect('url(#rg-major)', P, P, fw, fh)}<rect x="${P}" y="${P}" width="${fw}" height="${fh}" fill="none" stroke="#2B2620" stroke-width="2.5"/>${grid.map((v, i) => rect(LEVEL[v]!, col0 + Math.floor(i / 7) * 22, P + fh / 2 - 77 + (i % 7) * 22, 18, 18)).join('')}${doors.map((d) => d.svg).join('')}${spots.join('')}${stations.join('')}${mons.join('')}<use class="ftg-hero" href="#rg-hero" width="36" height="46"/></svg>${s.monsters.map((m, i) => hot(`m${i}`, f(l.monster, i + 1, describe(m, l)), px(lay.monsters[i]!.x) - 34, px(lay.monsters[i]!.y) - 34, 68, 68)).join('')}${lay.spots.map((p, i) => hot(`h${i}`, l.hint!, px(p.x) - 30, px(p.y) - 30, 60, 60)).join('')}${doors.map((d) => hot(`d${d.i}`, l.door!, d.cx - 24, d.cy - 24, 48, 48)).join('')}</div>`
 }
 
 export const paint = (root: HTMLElement, s: Scene) => {
@@ -157,8 +162,10 @@ export const paint = (root: HTMLElement, s: Scene) => {
   q<SVGElement>('.ftg-hero').style.transform = `translate(${P + T * s.at.x + 14}px,${P + T * s.at.y + 8}px)`
   all('.ftg-mon').forEach((e, i) => { e.toggleAttribute('data-near', at.monsters.includes(i) && !done); e.toggleAttribute('data-picked', s.pick === i) })
   all('.ftg-st').forEach((e, i) => { e.toggleAttribute('data-near', i === at.station); e.toggleAttribute('data-read', s.read.includes(lay.items[i]!.code)) })
+  all('.ftg-spot').forEach((e, i) => e.toggleAttribute('data-dug', s.dug.has(`${s.room.id}|${lay.spots[i]!.x},${lay.spots[i]!.y}`)))
+  const mon = at.monsters.includes(s.aimed) ? s.aimed : (at.monsters[0] ?? -1)
   all('.ftg-door').forEach((e, i) => { e.toggleAttribute('data-hidden', lay.doors[i]!.hidden && !s.found.has(lay.doors[i]!.id)); e.toggleAttribute('data-lock', !passable(lay.doors[i]!, s)) })
-  memo(q('.ftg-panel'), done ? `r${s.pick}${s.hit}${s.gain}` : `p${s.room.id}${at.station}`, () => (done ? result(s) : panel(s, at.station)))
+  memo(q('.ftg-panel'), done ? `r${s.pick}${s.hit}${s.gain}` : `p${s.room.id}${at.station}|${mon}|${s.read.length}`, () => (done ? result(s) : panel(s, at.station, mon)))
   q('.ftg-hits').textContent = String(s.score)
   memo(q('.ftg-branch'), `${s.accused.size}`, () => branch(s))
   all('.ftg-items').forEach((e) => memo(e, `${[...s.bag]}`, () => collection(s.bag, s.l)))
