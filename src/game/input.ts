@@ -23,7 +23,7 @@ export const bindInput = (root: HTMLElement, h: Handlers) => {
 
   const onClick = (e: MouseEvent) => {
     const map = (e.target as Element).closest('.ftg-map')
-    const pin = map && [...map.querySelectorAll<HTMLElement>('[data-go]')].map((a) => { const b = a.getBoundingClientRect(); return { a, d: Math.hypot(b.x + b.width / 2 - e.clientX, b.y + b.height / 2 - e.clientY) } }).sort((x, y) => x.d - y.d)[0]
+    const pin = map && [...map.querySelectorAll<HTMLElement>('[data-cell]')].map((a) => { const b = a.getBoundingClientRect(); return { a, d: Math.hypot(b.x + b.width / 2 - e.clientX, b.y + b.height / 2 - e.clientY) } }).sort((x, y) => x.d - y.d)[0]
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act], [data-move], [data-walk], [data-go]') ?? (pin && pin.d < 24 ? pin.a : null)
     if (!el) return
     if (el.dataset.go) e.preventDefault()

@@ -103,6 +103,26 @@ export const step = (l: Lay, at: Spot, dx: number, dy: number): Spot | Gate => {
   return d ?? (x < 0 || y < 0 || x >= l.w || y >= l.h || blocked ? at : { x, y })
 }
 
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
+
+export const path = (l: Lay, from: Spot, goal: (p: Spot) => boolean, door?: Gate) => {
+  const seen = new Set([`${from.x},${from.y}`])
+  const queue = [{ p: from, m: [] as (readonly [number, number])[] }]
+  for (const { p, m } of queue) {
+    if (goal(p)) return m
+    for (const d of DIRS) {
+      const r = step(l, p, d[0], d[1])
+      if ('to' in r) {
+        if (r === door) return [...m, d]
+      } else if (!seen.has(`${r.x},${r.y}`)) {
+        seen.add(`${r.x},${r.y}`)
+        queue.push({ p: r, m: [...m, d] })
+      }
+    }
+  }
+  return null
+}
+
 const near = (a: Spot, b: Spot) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= 1
 
 export const reach = (l: Lay, at: Spot) => ({
@@ -130,11 +150,7 @@ const floor = (s: Scene) => {
     const cy = d.dy ? (d.dy > 0 ? P + fh : P) : px(d.y)
     return { cx, cy, svg: `<g class="ftg-door" transform="translate(${cx},${cy}) rotate(${d.dx > 0 ? 90 : d.dx < 0 ? -90 : d.dy > 0 ? 180 : 0})"><use class="ftg-arch" href="#rg-door"/><use class="ftg-crack" href="#rg-i-crack" x="-14" y="-30" width="28" height="28"/></g>`, i }
   })
-  const stations = lay.items.map((st, i) => {
-    const cx = px(st.x)
-    const cy = px(st.y)
-    return `<g class="ftg-st" data-st="${i}"><ellipse class="ftg-ring" cx="${cx}" cy="${cy - 4}" rx="30" ry="30"/><use href="#rg-i-${ICON[st.station]}" x="${cx - 17}" y="${cy - 30}" width="34" height="34"/></g>`
-  })
+  const stations = lay.items.map((_, i) => `<g class="ftg-st" data-st="${i}"></g>`)
   const spots = lay.spots.map((p, i) => `<g class="ftg-spot" data-spot="${i}" transform="translate(${px(p.x)},${px(p.y)})">${DECOR[p.kind]}</g>`)
   const mons = lay.monsters.map((m, i) => {
     const cx = px(m.x)
@@ -161,8 +177,18 @@ export const paint = (root: HTMLElement, s: Scene) => {
   room.style.setProperty('--cx', ((P + T * (s.at.x + 0.5)) / (lay.w * T + 2 * P)).toFixed(3))
   q<SVGElement>('.ftg-hero').style.transform = `translate(${P + T * s.at.x + 14}px,${P + T * s.at.y + 8}px)`
   all('.ftg-mon').forEach((e, i) => { e.toggleAttribute('data-near', at.monsters.includes(i) && !done); e.toggleAttribute('data-picked', s.pick === i) })
-  all('.ftg-st').forEach((e, i) => { e.toggleAttribute('data-near', i === at.station); e.toggleAttribute('data-read', s.read.includes(lay.items[i]!.code)) })
-  all('.ftg-spot').forEach((e, i) => e.toggleAttribute('data-dug', s.dug.has(`${s.room.id}|${lay.spots[i]!.x},${lay.spots[i]!.y}`)))
+  all('.ftg-st').forEach((e, i) => {
+    const st = lay.items[i]!
+    const read = s.read.includes(st.code)
+    e.toggleAttribute('data-near', i === at.station)
+    e.toggleAttribute('data-read', read)
+    if (read && !e.firstChild) e.innerHTML = `<ellipse class="ftg-ring" cx="${px(st.x)}" cy="${px(st.y) - 4}" rx="30" ry="30"/><use href="#rg-i-${ICON[st.station]}" x="${px(st.x) - 17}" y="${px(st.y) - 30}" width="34" height="34"/>`
+  })
+  all('.ftg-spot').forEach((e, i) => {
+    const dug = s.dug.has(`${s.room.id}|${lay.spots[i]!.x},${lay.spots[i]!.y}`)
+    e.toggleAttribute('data-dug', dug)
+    q(`[data-walk="h${i}"]`).ariaLabel = (dug ? s.l.checked : s.l.hint)!
+  })
   const mon = at.monsters.includes(s.aimed) ? s.aimed : (at.monsters[0] ?? -1)
   all('.ftg-door').forEach((e, i) => { e.toggleAttribute('data-hidden', lay.doors[i]!.hidden && !s.found.has(lay.doors[i]!.id)); e.toggleAttribute('data-lock', !passable(lay.doors[i]!, s)) })
   memo(q('.ftg-panel'), done ? `r${s.pick}${s.hit}${s.gain}` : `p${s.room.id}${at.station}|${mon}|${s.read.length}`, () => (done ? result(s) : panel(s, at.station, mon)))

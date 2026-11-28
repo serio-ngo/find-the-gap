@@ -3,7 +3,7 @@ import { ICON } from '../../src/game/cards.ts'
 import { hit } from '../../src/game/engine.ts'
 import { BINDINGS, clueOf } from '../../src/game/levels/observations.ts'
 import { world } from '../../src/game/levels/world.ts'
-import { reach } from '../../src/game/view.ts'
+import { path, reach, step, type Spot } from '../../src/game/view.ts'
 import { Run, byId, chartName, collected, expectEnd, near, open, phone, playButton, right, rowsById, run, strings, suites, trunk, wrong } from './helpers.ts'
 
 const l = strings.labels.en
@@ -42,13 +42,27 @@ test('an item stays hidden until you step on it, then shows its clue for every m
   }
 })
 
+test('a tap-walk reveals only the mark it ends on, never one it crosses', async ({ page }) => {
+  const r = await begin(page)
+  await r.go(t1!.id)
+  const routes = r.lay.spots.map((goal, h) => {
+    let at = r.at
+    const cells = path(r.lay, r.at, (p) => p.x === goal.x && p.y === goal.y)!.map(([dx, dy]) => (at = step(r.lay, at, dx, dy) as Spot))
+    return { h, crossed: cells.slice(0, -1).map((c) => reach(r.lay, c).station).filter((k) => k >= 0) }
+  })
+  const walk = routes.find((x) => x.crossed.length)!
+  await page.locator(`[data-walk="h${walk.h}"]`).dispatchEvent('click')
+  await expect(page.locator('.ftg-spot[data-dug]')).toHaveCount(1)
+  for (const k of walk.crossed) await expect(page.locator('.ftg-st').nth(k)).not.toHaveAttribute('data-read', '')
+})
+
 test('a monster beside you tells how many of its items are found', async ({ page }) => {
   const r = await begin(page)
   await r.go(t1!.id)
   const own = r.lay.items.filter((x) => x.m === 0).length
   await r.monster(0)
   expect(reach(r.lay, r.at).station).toBe(-1)
-  const got = r.lay.items.filter((x) => x.m === 0 && r.reads.get(t1!.id)?.includes(x.code)).length
+  const got = r.lay.items.filter((x) => x.m === 0 && r.reads.get(t1!.id)?.some((c) => c % BINDINGS.length === x.code % BINDINGS.length)).length
   await expect(page.locator('.ftg-sheet')).toHaveAccessibleName(l.found!.replace('{n}', '1').replace('{a}', String(got)).replace('{t}', String(own)))
   await expect(page.locator('.ftg-sheet .ftg-clue')).toHaveCount(own)
 })

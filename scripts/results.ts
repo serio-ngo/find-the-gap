@@ -84,7 +84,7 @@ export const summarize = async (stored: { version: string; level: number; mode: 
           tally(res.evidence, Object.fromEntries(rec.roles.map((r, i) => [r, rec.values[i]])), n, k === pick)
           tally(res.gap, { gap: rec.gap, typical: typical(rec) }, n, k === pick)
           tally(res.clues, clue(place(rec).items, (f) => f), n, k === pick)
-          tally(res.read, clue(place(rec).items.filter((f) => recs.some((_, o) => stations.includes(o * BINDINGS.length + index(f)))), station), n, k === pick)
+          tally(res.read, clue(BINDINGS.map((b) => b.field).filter((f) => recs.some((_, o) => stations.includes(o * BINDINGS.length + index(f)))), station), n, k === pick)
         })
         const gaps = recs.flatMap((r, k) => (r.gap ? [k] : []))
         if (gaps.length) {

@@ -1,7 +1,7 @@
 import { rooms } from './engine.ts'
 import { hash, monster } from './gen.ts'
 import { icon, itemOf } from './items.ts'
-import { clueOf } from './levels/observations.ts'
+import { BINDINGS, clueOf } from './levels/observations.ts'
 import type { Binding } from './levels/observations.ts'
 import type { Scene, Slim } from './view.ts'
 
@@ -44,7 +44,7 @@ export const panel = (s: Scene, k: number, mon = -1) => {
   const st = s.lay.items[k]
   if (!st && mon >= 0) {
     const own = s.lay.items.filter((x) => x.m === mon)
-    const got = own.filter((x) => s.read.includes(x.code))
+    const got = own.filter((x) => s.read.some((c) => c % BINDINGS.length === x.code % BINDINGS.length))
     return `<div class="ftg-sheet" role="group" aria-label="${f(s.l.found, mon + 1, got.length, own.length)}"><div class="ftg-col">${monster(s.monsters[mon]!)}<div class="ftg-clues">${got.map((x) => clue(x, s.monsters[mon]!, s.l).svg('ftg-clue')).join('')}${UNKNOWN.repeat(own.length - got.length)}</div></div></div>`
   }
   if (!st) return `<div class="ftg-idle" role="img" aria-label="${s.l.idle}"><svg viewBox="0 0 24 24"><use href="#rg-i-unknown"/></svg><svg viewBox="0 0 24 24"><use href="#rg-i-unknown"/></svg></div>`
@@ -81,6 +81,6 @@ export const map = (s: Scene) => {
     const [x, y] = c(r)
     const fill = r.id === s.world.gate ? (s.accused.size >= s.world.key ? '#E8C26A' : '#CDB98F') : seen(r.id) ? (r.relation ? TINT[r.relation] : '#F4EEDD') : 'none'
     const mark = `<rect x="${x - 4}" y="${y - 4}" width="8" height="8" rx="1.5" fill="${fill}" stroke="#2B2620" stroke-width="1"${seen(r.id) || r.id === s.world.gate ? '' : ' stroke-dasharray="2 2"'}/>${s.accused.has(r.id) ? `<circle cx="${x + 4}" cy="${y - 4}" r="2.2" fill="#A8326E"/>` : ''}${r.id === s.room.id ? `<circle cx="${x}" cy="${y}" r="2" fill="#127C80"/>` : ''}`
-    return seen(r.id) && r.id !== s.room.id ? `<a href="#" data-go="${r.id}" aria-label="${f(s.l.room, ids.indexOf(r.id) + 1)}">${mark}</a>` : mark
+    return seen(r.id) && r.id !== s.room.id ? `<a href="#" data-cell data-go="${r.id}" aria-label="${f(s.l.room, ids.indexOf(r.id) + 1)}">${mark}</a>` : `<g data-cell>${mark}</g>`
   }).join('')}</svg>`
 }
