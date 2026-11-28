@@ -69,10 +69,6 @@ export const layout = (world: World, room: Room, rows: Map<string, Slim>): Lay =
   found.forEach(({ m, p }) => {
     monsters[m] = put((c) => { const b = Math.floor((c.x - 1) / BAND); return ((b - p.band + 4) % 4) * 1000 + 10 * Math.abs(c.y - p.y) + Math.abs(c.x - (1 + BAND * b + 3)) })
   })
-  const owned = found.flatMap(({ m, p }) => p.items.map((field) => ({ m, i: BINDINGS.findIndex((b) => b.field === field) })))
-  const free = cells.filter((c) => !objs.has(`${c.x},${c.y}`) && `${c.x},${c.y}` !== `${w >> 1},${h - 1}`).sort((a, b) => mix(`${room.id}:${a.x},${a.y}`) - mix(`${room.id}:${b.x},${b.y}`))
-  const items: Lay['items'] = owned.map(({ m, i }, k) => ({ ...BINDINGS[i]!, ...free[k]!, m, code: m * BINDINGS.length + i }))
-  const spots = free.slice(0, 3 * owned.length).sort((a, b) => a.y - b.y || a.x - b.x).map((c) => ({ ...c, kind: mix(`${room.id}|${c.x},${c.y}`) % DECOR.length }))
   const used = new Set<string>()
   const doors = world.doors.flatMap((d): Gate[] => {
     if (d.a !== room.id && d.b !== room.id) return []
@@ -87,6 +83,10 @@ export const layout = (world: World, room: Room, rows: Map<string, Slim>): Lay =
     used.add(`${dx}${dy}${k}`)
     return [{ id: `${d.a}>${d.b}`, to, dx, dy, x: dx ? (dx > 0 ? w : -1) : k + 1, y: dy ? (dy > 0 ? h : -1) : k, hidden: d.kind === 'hidden', trunk: room.certain && to === trunk[trunk.indexOf(room.id) + 1], gate: to === world.gate }]
   })
+  const owned = found.flatMap(({ m, p }) => p.items.map((field) => ({ m, i: BINDINGS.findIndex((b) => b.field === field) })))
+  const free = cells.filter((c) => !objs.has(`${c.x},${c.y}`) && ![{ x: w >> 1, y: h - 1 }, ...doors.map((d) => ({ x: clamp(d.x, 0, w - 1), y: clamp(d.y, 0, h - 1) }))].some((e) => e.x === c.x && e.y === c.y)).sort((a, b) => mix(`${room.id}:${a.x},${a.y}`) - mix(`${room.id}:${b.x},${b.y}`))
+  const items: Lay['items'] = owned.map(({ m, i }, k) => ({ ...BINDINGS[i]!, ...free[k]!, m, code: m * BINDINGS.length + i }))
+  const spots = free.slice(0, 3 * owned.length).sort((a, b) => a.y - b.y || a.x - b.x).map((c) => ({ ...c, kind: mix(`${room.id}|${c.x},${c.y}`) % DECOR.length }))
   return { w, h, doors, monsters, items, spots }
 }
 

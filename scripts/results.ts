@@ -74,7 +74,7 @@ export const summarize = async (stored: { version: string; level: number; mode: 
         const gap = recs[right]!
         add(byPattern, typical(gap) ? 'typical' : 'atypical', ok, aiHit)
         add(byGap, gap.id, ok, aiHit)
-        recs.forEach((rec, m) => place(rec).items.forEach((f) => add(byStation, `${station(f)} ${stations.includes(m * BINDINGS.length + index(f)) ? 'read' : 'unread'}`, ok, aiHit)))
+        recs.forEach((rec) => place(rec).items.forEach((f) => add(byStation, `${station(f)} ${recs.some((_, o) => stations.includes(o * BINDINGS.length + index(f))) ? 'read' : 'unread'}`, ok, aiHit)))
         aim[ok ? 'hit' : 'miss'].push([ms!, dwell[right]!, mean(dwell.slice(0, n).filter((_, k) => k !== right)), switches!])
       } else {
         const res = (research[room.relation!] ??= { picks: 0, aim: { visits: 0, dwell: 0, expected: 0 }, evidence: {}, gap: {}, clues: {}, read: {} })
@@ -84,7 +84,7 @@ export const summarize = async (stored: { version: string; level: number; mode: 
           tally(res.evidence, Object.fromEntries(rec.roles.map((r, i) => [r, rec.values[i]])), n, k === pick)
           tally(res.gap, { gap: rec.gap, typical: typical(rec) }, n, k === pick)
           tally(res.clues, clue(place(rec).items, (f) => f), n, k === pick)
-          tally(res.read, clue(place(rec).items.filter((f) => stations.includes(k * BINDINGS.length + index(f))), station), n, k === pick)
+          tally(res.read, clue(place(rec).items.filter((f) => recs.some((_, o) => stations.includes(o * BINDINGS.length + index(f)))), station), n, k === pick)
         })
         const gaps = recs.flatMap((r, k) => (r.gap ? [k] : []))
         if (gaps.length) {

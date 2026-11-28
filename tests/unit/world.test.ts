@@ -7,7 +7,7 @@ import { buildWorld } from '../../scripts/world.ts'
 import { gapOf } from '../../src/game/levels/observations.ts'
 import { rows } from '../../src/game/levels/rows.ts'
 import { world } from '../../src/game/levels/world.ts'
-import { layout, reach, step } from '../../src/game/view.ts'
+import { entry, layout, reach, step } from '../../src/game/view.ts'
 
 const archive = 'C:/Users/Lenovo/Repos/lifecycle-runs'
 const levels = (name: string) => fileURLToPath(new URL(`../../src/game/levels/${name}`, import.meta.url))
@@ -64,6 +64,7 @@ describe('world', () => {
       }
       expect(lay.spots.every((p) => seen.has(`${p.x},${p.y}`))).toBe(true)
       expect(lay.items.map((o, k) => reach(lay, o).station === k && lay.spots.some((p) => p.x === o.x && p.y === o.y))).not.toContain(false)
+      expect(lay.doors.map((d) => entry(lay, d.to)).filter((e) => reach(lay, e).station >= 0)).toEqual([])
     }
   })
 
