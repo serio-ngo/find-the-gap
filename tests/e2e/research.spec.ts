@@ -116,3 +116,25 @@ test('the page carries the edition of the world', async ({ page }) => {
   await open(page)
   await expect(page.locator('.ftg')).toHaveAttribute('data-edition', await edition(world, rows))
 })
+
+test('a play sent part way when the tab is left is replaced by the complete play under the same receipt, after a failed send', async ({ page }) => {
+  await remember(page)
+  const bodies: { receipt: number; visits: number[][] }[] = []
+  await page.route('**/api/game/step', (r) => r.fulfill({ json: { fallback: true } }))
+  await page.route('**/api/game/result', (r) => {
+    bodies.push(r.request().postDataJSON())
+    return bodies.length === 1 ? r.fulfill({ status: 503 }) : r.fulfill({ status: 204 })
+  })
+  await open(page)
+  await playButton(page).click()
+  const r = new Run(page)
+  await r.accuseIn(trunk[0]!.id)
+  await page.evaluate(() => dispatchEvent(new Event('pagehide')))
+  await expect.poll(() => bodies.length).toBe(1)
+  await r.finish()
+  await expect.poll(() => bodies.length).toBe(2)
+  const [part, full] = bodies
+  expect(full!.receipt).toBe(part!.receipt)
+  expect(full!.visits.slice(0, part!.visits.length).map((v) => v[0])).toEqual(part!.visits.map((v) => v[0]))
+  expect(full!.visits.filter((v) => v[2] >= 0).length).toBeGreaterThan(part!.visits.length)
+})

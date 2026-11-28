@@ -13,11 +13,16 @@ export const visitRow = (v: VisitRecord) => [
   v.room, v.route, v.pick, ms(v.ms), Math.min(99, v.switches), +v.first, v.doors, ...pad(v.stations, 12, -1), ...pad(v.dwell, 4, 0).map(ms),
 ]
 
-export const sendResult = (api: string, body: unknown) => post(api, 'result', body, { keepalive: true }).then(() => {}, () => {})
+export const sendResult = (api: string, body: unknown) => post(api, 'result', body, { keepalive: true }).then((r) => r.ok, () => false)
 
-export const resultRequest = (visits: number[][], edition: string) => ({ v: 0, level: 1, visits, edition })
+export const newReceipt = () => {
+  const [hi, lo] = crypto.getRandomValues(new Uint32Array(2))
+  return (hi! % 0x1fffff) * 2 ** 32 + lo! + 2 ** 32
+}
 
-export const boardRequest = (visits: number[][], edition: string, name: string, sent: boolean) => ({ ...resultRequest(visits, edition), name, sent: +sent })
+export const resultRequest = (visits: number[][], edition: string, receipt: number) => ({ v: 0, level: 1, visits, edition, receipt })
+
+export const boardRequest = (visits: number[][], edition: string, name: string, receipt: number) => ({ ...resultRequest(visits, edition, receipt), name })
 
 export const askBoard = async (api: string, body: unknown): Promise<Board | null> => {
   try {
